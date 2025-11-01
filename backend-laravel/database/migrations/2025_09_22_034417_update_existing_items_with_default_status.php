@@ -11,9 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('items', function (Blueprint $table) {
-            $table->unsignedInteger('quantity')->default(1);
-        });
+        // Update existing items that don't have a status to 'Good'
+        \DB::table('items')->whereNull('status')->update(['status' => 'Good']);
     }
 
     /**
@@ -21,8 +20,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('items', function (Blueprint $table) {
-            $table->dropColumn('quantity');
-        });
+        // No need to reverse this data update
     }
 };

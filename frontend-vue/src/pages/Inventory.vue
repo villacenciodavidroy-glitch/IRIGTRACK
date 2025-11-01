@@ -1,12 +1,14 @@
 <script setup>
-import { ref, computed, onMounted  } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../composables/useItems'
 import axiosClient from '../axios'
-import { addDeletedItem } from '../utils/deletedItemsStorage'
+import SuccessModal from '../components/SuccessModal.vue'
+import { useDebouncedRef } from '../composables/useDebounce'
 
 const router = useRouter()
 const searchQuery = ref('')
+const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const currentPage = ref(1)
 const itemsPerPage = ref(8)
 const totalItems = ref(0)
@@ -41,17 +43,22 @@ const inventoryItems = computed(() => {
   }))
 })
 
-
-
-
-
-
+// Non-consumable items for the main inventory table
+const nonConsumableItems = computed(() => {
+  return inventoryItems.value.filter(i => (i.category || '').toLowerCase() !== 'consumables')
+})
 const filteredItems = computed(() => {
-  if (!searchQuery.value) return inventoryItems.value
+  const query = debouncedSearchQuery.value?.toLowerCase().trim()
+  if (!query) return nonConsumableItems.value
   
-  return inventoryItems.value.filter(item => {
-    return Object.values(item).some(value => 
-      value.toString().toLowerCase().includes(searchQuery.value.toLowerCase())
+  // Optimize search: only search relevant fields
+  return nonConsumableItems.value.filter(item => {
+    return (
+      (item.article || '').toLowerCase().includes(query) ||
+      (item.description || '').toLowerCase().includes(query) ||
+      (item.category || '').toLowerCase().includes(query) ||
+      (item.propertyAccountCode || '').toLowerCase().includes(query) ||
+      (item.location || '').toLowerCase().includes(query)
     )
   })
 })
@@ -59,6 +66,11 @@ const filteredItems = computed(() => {
 // Update total items based on filtered results
 const totalFilteredItems = computed(() => {
   return filteredItems.value.length
+})
+
+// Reset to first page when search query changes
+watch(debouncedSearchQuery, () => {
+  currentPage.value = 1
 })
 
 const paginatedItems = computed(() => {
@@ -79,6 +91,46 @@ const goToPage = (page) => {
 const changeItemsPerPage = (newValue) => {
   itemsPerPage.value = Number(newValue)
   currentPage.value = 1 // Reset to first page when changing items per page
+}
+
+// Separate view for Supply category
+const consumableItems = computed(() => {
+  return inventoryItems.value.filter(i => (i.category || '').toLowerCase() === 'supply')
+})
+
+const filteredConsumableItems = computed(() => {
+  const query = debouncedSearchQuery.value?.toLowerCase().trim()
+  if (!query) return consumableItems.value
+  
+  // Optimize search: only search relevant fields
+  return consumableItems.value.filter(item => {
+    return (
+      (item.article || '').toLowerCase().includes(query) ||
+      (item.description || '').toLowerCase().includes(query) ||
+      (item.category || '').toLowerCase().includes(query) ||
+      (item.propertyAccountCode || '').toLowerCase().includes(query) ||
+      (item.location || '').toLowerCase().includes(query)
+    )
+  })
+})
+
+const currentConsumablePage = ref(1)
+const itemsPerConsumablePage = ref(8)
+const totalConsumableFilteredItems = computed(() => filteredConsumableItems.value.length)
+const totalConsumablePages = computed(() => Math.ceil(totalConsumableFilteredItems.value / itemsPerConsumablePage.value) || 1)
+const paginatedConsumableItems = computed(() => {
+  const start = (currentConsumablePage.value - 1) * itemsPerConsumablePage.value
+  const end = start + itemsPerConsumablePage.value
+  return filteredConsumableItems.value.slice(start, end)
+})
+const goToConsumablePage = (page) => {
+  if (page >= 1 && page <= totalConsumablePages.value) {
+    currentConsumablePage.value = page
+  }
+}
+const changeConsumableItemsPerPage = (newValue) => {
+  itemsPerConsumablePage.value = Number(newValue)
+  currentConsumablePage.value = 1
 }
 
 const goToAddItem = () => {
@@ -105,6 +157,11 @@ const itemBeingDeleted = ref(null)
 const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
 const deleteReason = ref('')
+
+// State for success modal
+const showSuccessModal = ref(false)
+const successMessage = ref('')
+const successModalType = ref('success')
 
 // Open delete modal
 const openDeleteModal = (item) => {
@@ -209,14 +266,16 @@ const printInventory = () => {
   
   // Get current date and time for the report header
   const now = new Date()
-  const dateFormatted = now.toLocaleDateString('en-US', {
+  const dateFormatted = now.toLocaleDateString('en-PH', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: 'Asia/Manila'
   })
-  const timeFormatted = now.toLocaleTimeString('en-US', {
+  const timeFormatted = now.toLocaleTimeString('en-PH', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Asia/Manila'
   })
   
   // Create table rows from the filtered items
@@ -394,20 +453,19 @@ const deleteItem = async () => {
     
     console.log('Deleting item with UUID:', itemToDelete.value.uuid)
     
-    // Store the item in localStorage before deleting
-    const itemWithReason = {
-      ...itemToDelete.value,
-      deletionReason: deleteReason.value || 'User initiated deletion'
-    }
-    addDeletedItem(itemWithReason)
-    
-    // Call the delete API
-    const response = await axiosClient.delete(`/items/delete/${itemToDelete.value.uuid}`)
+    // Call the delete API with deletion reason
+    const response = await axiosClient.delete(`/items/delete/${itemToDelete.value.uuid}`, {
+      data: {
+        deletion_reason: deleteReason.value || 'User initiated deletion'
+      }
+    })
     
     console.log('Delete response:', response.data)
     
     // Show success message
-    alert(response.data?.message || 'Item deleted successfully')
+    successMessage.value = response.data?.message || 'Item deleted successfully'
+    successModalType.value = 'success'
+    showSuccessModal.value = true
     
     // Refresh the items list
     await fetchitems()
@@ -417,15 +475,26 @@ const deleteItem = async () => {
     
     // Show error message
     if (error.response?.data?.message) {
-      alert(error.response.data.message)
+      successMessage.value = error.response.data.message
+      successModalType.value = 'error'
+      showSuccessModal.value = true
     } else {
-      alert('Failed to delete item. Please try again.')
+      successMessage.value = 'Failed to delete item. Please try again.'
+      successModalType.value = 'error'
+      showSuccessModal.value = true
     }
   } finally {
     deleteLoading.value = false
     itemBeingDeleted.value = null
     closeDeleteModal()
   }
+}
+
+// Close success modal
+const closeSuccessModal = () => {
+  showSuccessModal.value = false
+  successMessage.value = ''
+  successModalType.value = 'success'
 }
 </script>
 
@@ -435,10 +504,6 @@ const deleteItem = async () => {
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
       <h1 class="text-xl sm:text-2xl font-semibold text-green-700">Inventory</h1>
       <div class="flex items-center gap-2 w-full sm:w-auto">
-        <button @click="printInventory" class="btn-primary flex-1 sm:flex-auto justify-center">
-          <span class="material-icons-outlined text-lg mr-1">print</span>
-          <span>Print</span>
-        </button>
         <button @click="goToAddItem" class="btn-primary flex-1 sm:flex-auto justify-center">
           <span class="material-icons-outlined text-lg mr-1">add</span>
           <span>Add New</span>
@@ -457,7 +522,7 @@ const deleteItem = async () => {
             v-model="searchQuery"
             type="text"
             placeholder="Search item..."
-            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
           >
         </div>
       </div>
@@ -473,7 +538,7 @@ const deleteItem = async () => {
     </div>
 
     <!-- Table Container -->
-    <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
+    <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
       <!-- Mobile View (Card Layout) -->
       <div class="block sm:hidden">
         <!-- Loading indicator -->
@@ -501,11 +566,11 @@ const deleteItem = async () => {
         </div>
         
         <!-- Card layout for mobile -->
-        <div v-else class="divide-y divide-gray-200">
+        <div v-else class="divide-y divide-gray-200 dark:divide-gray-700">
           <div 
             v-for="item in paginatedItems" 
             :key="item.id || item.propertyAccountCode" 
-            class="p-4 hover:bg-gray-50"
+            class="p-4 hover:bg-gray-50 dark:hover:bg-gray-800"
           >
             <div class="flex items-start gap-3 mb-3">
               <!-- Item image -->
@@ -515,12 +580,12 @@ const deleteItem = async () => {
               
               <!-- Item details -->
               <div class="flex-1 min-w-0">
-                <h3 class="text-sm font-medium text-gray-900 truncate">{{ item.article }}</h3>
-                <p class="text-xs text-gray-500 mt-1 truncate">{{ item.description }}</p>
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ item.article }}</h3>
+                <p class="text-xs text-gray-600 dark:text-gray-300 mt-1 truncate">{{ item.description }}</p>
                 <div class="flex items-center gap-2 mt-1">
-                  <span class="text-xs font-medium text-gray-500">{{ item.category }}</span>
-                  <span class="inline-block h-1 w-1 rounded-full bg-gray-300"></span>
-                  <span class="text-xs font-medium text-gray-500">{{ item.condition }}</span>
+                  <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ item.category }}</span>
+                  <span class="inline-block h-1 w-1 rounded-full bg-gray-400"></span>
+                  <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ item.condition }}</span>
                 </div>
               </div>
               
@@ -534,11 +599,18 @@ const deleteItem = async () => {
             </div>
             
             <!-- Action buttons -->
-            <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-              <div class="text-xs text-gray-500">
+            <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div class="text-xs text-gray-600 dark:text-gray-300">
                 <span class="font-medium">Location:</span> {{ item.location || 'N/A' }}
               </div>
-              <div class="flex justify-end">
+              <div class="flex justify-end gap-2">
+                <button 
+                  @click="editItem(item)" 
+                  class="p-1.5 rounded-md bg-blue-100 text-blue-600 hover:bg-blue-200"
+                  title="Edit item"
+                >
+                  <span class="material-icons-outlined text-sm">edit</span>
+                </button>
                 <button 
                   @click="openDeleteModal(item)" 
                   class="p-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-200"
@@ -581,32 +653,32 @@ const deleteItem = async () => {
         </div>
         
         <!-- Table with data -->
-        <table v-else class="min-w-full divide-y divide-gray-200 whitespace-nowrap">
+        <table v-else class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
           <thead>
-            <tr class="bg-gray-50">
-              <th class="sticky left-0 z-10 bg-gray-50 w-10 px-4 py-3">
-                <input type="checkbox" class="rounded border-gray-300">
+            <tr class="bg-gray-50 dark:bg-gray-800">
+              <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 w-10 px-4 py-3">
+                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
               </th>
-              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">QR CODE</th>
-              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IMAGE</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ARTICLE</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CATEGORY</th>
-              <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DESCRIPTION</th>
-              <!-- <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">QUANTITY</th> -->
-              <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PROPERTY ACCOUNT CODE</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UNIT VALUE</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DATE ACQUIRED</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">P.O. NUMBER</th>
-              <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">LOCATION</th>
-              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">CONDITION</th>
-              <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ISSUED TO</th>
-              <th class="sticky right-0 z-10 bg-gray-50 min-w-[100px] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ACTIONS</th>
+              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QR CODE</th>
+              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">IMAGE</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ARTICLE</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">CATEGORY</th>
+              <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DESCRIPTION</th>
+               <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QUANTITY</th>
+              <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">PROPERTY ACCOUNT CODE</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">UNIT VALUE</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DATE ACQUIRED</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">P.O. NUMBER</th>
+              <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">LOCATION</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">CONDITION</th>
+              <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ISSUED TO</th>
+              <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-800 min-w-[100px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ACTIONS</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
-            <tr v-for="item in paginatedItems" :key="item.id || item.propertyAccountCode" class="hover:bg-gray-50">
-              <td class="sticky left-0 z-10 bg-white hover:bg-gray-50 px-4 py-2">
-                <input type="checkbox" class="rounded border-gray-300">
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="item in paginatedItems" :key="item.id || item.propertyAccountCode" class="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <td class="sticky left-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2">
+                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
               </td>
               <td class="px-4 py-2">
                 <div 
@@ -622,62 +694,69 @@ const deleteItem = async () => {
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.article">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.article">
                   {{ item.article }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.category">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.category">
                   {{ item.category }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[200px]" :title="item.description">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.description">
                   {{ item.description }}
                 </div>
               </td>
-              <!-- <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[200px]" :title="item.quantity">
+               <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.quantity">
                   {{ item.quantity }}
                 </div>
-              </td> -->
+              </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[200px]" :title="item.propertyAccountCode">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.propertyAccountCode">
                   {{ item.propertyAccountCode }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.unitValue">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.unitValue">
                   {{ item.unitValue }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.dateAcquired">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.dateAcquired">
                   {{ item.dateAcquired }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.poNumber">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.poNumber">
                   {{ item.poNumber }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[150px]" :title="item.location">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[150px]" :title="item.location">
                   {{ item.location }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[120px]" :title="item.condition">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.condition">
                   {{ item.condition }}
                 </div>
               </td>
               <td class="px-4 py-2">
-                <div class="text-sm truncate max-w-[150px]" :title="item.issuedTo">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[150px]" :title="item.issuedTo">
                   {{ item.issuedTo }}
                 </div>
               </td>
-              <td class="sticky right-0 z-10 bg-white hover:bg-gray-50 px-4 py-2">
-                <div class="flex justify-center">
+              <td class="sticky right-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2">
+                <div class="flex justify-center gap-1">
+                  <button 
+                    @click="editItem(item)" 
+                    class="p-1 rounded-md bg-blue-100 text-blue-600 hover:bg-blue-200"
+                    title="Edit item"
+                  >
+                    <span class="material-icons-outlined text-sm">edit</span>
+                  </button>
                   <button 
                     @click="openDeleteModal(item)" 
                     class="p-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200"
@@ -695,17 +774,17 @@ const deleteItem = async () => {
       </div>
 
       <!-- Pagination - only show when not loading and has items -->
-      <div v-if="!loading && totalFilteredItems > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 gap-3 sm:gap-0">
+      <div v-if="!loading && totalFilteredItems > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <div class="text-sm text-gray-600">
+          <div class="text-sm text-gray-600 dark:text-gray-300">
             Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }} of {{ totalFilteredItems }}
           </div>
           <div class="flex items-center gap-2">
-            <label class="text-sm text-gray-600">Items per page:</label>
+            <label class="text-sm text-gray-600 dark:text-gray-300">Items per page:</label>
             <select 
               v-model="itemsPerPage" 
               @change="changeItemsPerPage($event.target.value)"
-              class="border rounded px-2 py-1 text-sm"
+              class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded px-2 py-1 text-sm"
             >
               <option value="8">8</option>
               <option value="16">16</option>
@@ -718,14 +797,14 @@ const deleteItem = async () => {
           <button 
             @click="goToPage(1)"
             :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             First
           </button>
           <button 
             @click="goToPage(currentPage - 1)"
             :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             &lt; Previous
           </button>
@@ -736,8 +815,8 @@ const deleteItem = async () => {
                 v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
                 @click="goToPage(page)"
                 :class="[
-                  'px-2 py-1 text-sm border rounded hover:bg-gray-50',
-                  currentPage === page ? 'bg-green-50 text-green-600 border-green-500' : ''
+                  'px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700',
+                  currentPage === page ? 'bg-green-600 text-white border-green-500' : ''
                 ]"
               >
                 {{ page }}
@@ -752,17 +831,155 @@ const deleteItem = async () => {
           <button 
             @click="goToPage(currentPage + 1)"
             :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             Next &gt;
           </button>
           <button 
             @click="goToPage(totalPages)"
             :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
           >
             Last
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supply Category Table -->
+    <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm mt-6">
+      <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Supply</h2>
+        <div class="text-sm text-gray-500 dark:text-gray-400">{{ totalConsumableFilteredItems }} items</div>
+      </div>
+
+      <div class="hidden sm:block overflow-x-auto">
+        <table v-if="paginatedConsumableItems.length" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-gray-800">
+              <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 w-10 px-4 py-3">
+                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
+              </th>
+              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QR CODE</th>
+              <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">IMAGE</th>
+              <th class="min-w-[160px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ARTICLE</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">CATEGORY</th>
+              <th class="min-w-[240px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DESCRIPTION</th>
+              <th class="min-w-[100px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QUANTITY</th>
+              <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">UNIT VALUE</th>
+              <th class="min-w-[140px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DATE ACQUIRED</th>
+              <th class="min-w-[140px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">LOCATION</th>
+              <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-800 min-w-[100px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="item in paginatedConsumableItems" :key="item.id || item.propertyAccountCode" class="hover:bg-gray-50 dark:hover:bg-gray-800">
+              <td class="sticky left-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2">
+                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
+              </td>
+              <td class="px-4 py-2">
+                <div 
+                  class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-md overflow-hidden inline-block"
+                  @click="openQrPreviewModal(item)"
+                >
+                  <img :src="item.qrCode" alt="QR Code" class="h-8 w-8 object-contain">
+                </div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-md overflow-hidden inline-block">
+                  <img :src="item.image" alt="Item" class="h-8 w-8 object-contain">
+                </div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.article">{{ item.article }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[140px]" :title="item.category">{{ item.category }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white truncate max-w-[320px]" :title="item.description">{{ item.description }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white">{{ item.quantity }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white">{{ item.unitValue }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white">{{ item.dateAcquired }}</div>
+              </td>
+              <td class="px-4 py-2">
+                <div class="text-sm text-gray-900 dark:text-white">{{ item.location }}</div>
+              </td>
+              <td class="sticky right-0 z-10 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 px-4 py-2">
+                <div class="flex justify-center gap-1">
+                  <button 
+                    @click="editItem(item)" 
+                    class="p-1 rounded-md bg-blue-100 text-blue-600 hover:bg-blue-200"
+                    title="Edit item"
+                  >
+                    <span class="material-icons-outlined text-sm">edit</span>
+                  </button>
+                  <button 
+                    @click="openDeleteModal(item)" 
+                    class="p-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200"
+                    title="Delete item"
+                    :disabled="deleteLoading && itemBeingDeleted === item.id"
+                  >
+                    <span v-if="!(deleteLoading && itemBeingDeleted === item.id)" class="material-icons-outlined text-sm">delete</span>
+                    <span v-else class="material-icons-outlined text-sm animate-spin">refresh</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div v-else class="flex flex-col justify-center items-center py-10">
+          <span class="material-icons-outlined text-4xl text-gray-400">inventory_2</span>
+          <p class="mt-2 text-gray-500">No supply items found</p>
+        </div>
+      </div>
+
+      <!-- Supply Pagination -->
+      <div v-if="!loading && totalConsumableFilteredItems > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div class="text-sm text-gray-600 dark:text-gray-300">
+            Result {{ (currentConsumablePage - 1) * itemsPerConsumablePage + 1 }}-{{ Math.min(currentConsumablePage * itemsPerConsumablePage, totalConsumableFilteredItems) }} of {{ totalConsumableFilteredItems }}
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600 dark:text-gray-300">Items per page:</label>
+            <select 
+              v-model="itemsPerConsumablePage" 
+              @change="changeConsumableItemsPerPage($event.target.value)"
+              class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded px-2 py-1 text-sm"
+            >
+              <option value="8">8</option>
+              <option value="16">16</option>
+              <option value="24">24</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex items-center justify-center sm:justify-end gap-1 flex-wrap">
+          <button @click="goToConsumablePage(1)" :disabled="currentConsumablePage === 1" class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">First</button>
+          <button @click="goToConsumablePage(currentConsumablePage - 1)" :disabled="currentConsumablePage === 1" class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">&lt; Previous</button>
+          <div class="flex items-center gap-1">
+            <template v-for="page in totalConsumablePages" :key="page">
+              <button 
+                v-if="page === 1 || page === totalConsumablePages || (page >= currentConsumablePage - 1 && page <= currentConsumablePage + 1)"
+                @click="goToConsumablePage(page)"
+                :class="[
+                  'px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700',
+                  currentConsumablePage === page ? 'bg-green-600 text-white border-green-500' : ''
+                ]"
+              >
+                {{ page }}
+              </button>
+              <span v-else-if="page === currentConsumablePage - 2 || page === currentConsumablePage + 2" class="px-2">...</span>
+            </template>
+          </div>
+          <button @click="goToConsumablePage(currentConsumablePage + 1)" :disabled="currentConsumablePage === totalConsumablePages" class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">Next &gt;</button>
+          <button @click="goToConsumablePage(totalConsumablePages)" :disabled="currentConsumablePage === totalConsumablePages" class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">Last</button>
         </div>
       </div>
     </div>
@@ -883,6 +1100,17 @@ const deleteItem = async () => {
         </div>
       </div>
     </div>
+
+    <!-- Success Modal -->
+    <SuccessModal
+      :isOpen="showSuccessModal"
+      :title="successModalType === 'success' ? 'Success' : 'Error'"
+      :message="successMessage"
+      buttonText="Continue"
+      :type="successModalType"
+      @confirm="closeSuccessModal"
+      @close="closeSuccessModal"
+    />
   </div>
 </template>
 

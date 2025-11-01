@@ -1,6 +1,10 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Bar } from 'vue-chartjs'
+import useAuth from '../composables/useAuth'
+import useItems from '../composables/useItems'
+import useCategories from '../composables/useCategories'
+import useUsers from '../composables/useUsers'
 
 import {
   Chart as ChartJS,
@@ -21,10 +25,59 @@ ChartJS.register(
   Legend
 )
 
+// Initialize auth composable
+const { user, loading: userLoading, error: userError, getUserDisplayName } = useAuth()
+
+// Initialize data composables
+const { items, fetchitems, loading: itemsLoading } = useItems()
+const { categories, fetchcategories } = useCategories()
+const { users, fetchusers } = useUsers()
+
+// Stats data
 const stats = ref({
-  totalItems: '6389',
-  category: '3',
-  admins: '2'
+  totalItems: 0,
+  category: 0,
+  admins: 0
+})
+
+const statsLoading = ref(true)
+const statsError = ref(null)
+const lastUpdated = ref(null)
+
+// Fetch all dashboard data
+const fetchDashboardData = async () => {
+  try {
+    statsLoading.value = true
+    statsError.value = null
+    
+    // Fetch all data in parallel
+    await Promise.all([
+      fetchitems(),
+      fetchcategories(),
+      fetchusers()
+    ])
+    
+    // Update stats with real data
+    stats.value = {
+      totalItems: items.value?.length || 0,
+      category: categories.value?.length || 0,
+      admins: users.value?.filter(user => user.role === 'admin' || user.role === 'super_admin')?.length || 0
+    }
+    
+    // Update last updated time
+    lastUpdated.value = new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })
+    
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error)
+    statsError.value = 'Failed to load dashboard data. Please try again.'
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// Fetch data when component mounts
+onMounted(() => {
+  fetchDashboardData()
 })
 
 const chartData = ref({
@@ -86,7 +139,23 @@ const chartOptions = ref({
 <template>
   <div class="animate-fadeIn">
     <!-- Welcome Message -->
-    <h2 class="text-xl text-gray-600 mb-4 sm:mb-6 dark:text-gray-300">Hello, JGludo</h2>
+    <h2 class="text-xl text-gray-600 mb-4 sm:mb-6 dark:text-gray-300">
+      Hello, {{ userLoading ? '...' : (userError ? 'User' : getUserDisplayName()) }}
+    </h2>
+
+    <!-- Error Message -->
+    <div v-if="statsError" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 sm:mb-6">
+      <div class="flex items-center">
+        <span class="material-icons-outlined text-red-500 mr-2">error</span>
+        <p class="text-red-700 text-sm">{{ statsError }}</p>
+        <button 
+          @click="fetchDashboardData" 
+          class="ml-auto text-red-600 hover:text-red-800 text-sm font-medium"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
 
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6">
@@ -97,7 +166,10 @@ const chartOptions = ref({
         </div>
         <div class="ml-3 sm:ml-4">
           <p class="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Total Items</p>
-          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">{{ stats.totalItems }}</h3>
+          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
+            <span v-if="statsLoading" class="animate-pulse">...</span>
+            <span v-else>{{ stats.totalItems }}</span>
+          </h3>
         </div>
       </div>
 
@@ -107,8 +179,11 @@ const chartOptions = ref({
           <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl sm:text-2xl">category</span>
         </div>
         <div class="ml-3 sm:ml-4">
-          <p class="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Category</p>
-          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">{{ stats.category }}</h3>
+          <p class="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Categories</p>
+          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
+            <span v-if="statsLoading" class="animate-pulse">...</span>
+            <span v-else>{{ stats.category }}</span>
+          </h3>
         </div>
       </div>
 
@@ -119,9 +194,17 @@ const chartOptions = ref({
         </div>
         <div class="ml-3 sm:ml-4">
           <p class="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Admins</p>
-          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">{{ stats.admins }}</h3>
+          <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-white">
+            <span v-if="statsLoading" class="animate-pulse">...</span>
+            <span v-else>{{ stats.admins }}</span>
+          </h3>
         </div>
       </div>
+    </div>
+
+    <!-- Last Updated Info -->
+    <div v-if="lastUpdated && !statsLoading" class="text-xs text-gray-500 dark:text-gray-400 mb-4 text-center">
+      Last updated: {{ lastUpdated }}
     </div>
 
     <!-- Action Buttons -->
@@ -134,6 +217,14 @@ const chartOptions = ref({
         <span class="material-icons-outlined mr-1 sm:mr-2 text-base sm:text-xl">assessment</span>
         <span class="whitespace-nowrap">Reporting</span>
       </router-link>
+      <button 
+        @click="fetchDashboardData" 
+        :disabled="statsLoading"
+        class="bg-blue-600 text-white p-2 sm:p-3 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Refresh Data"
+      >
+        <span class="material-icons-outlined text-base sm:text-xl" :class="{ 'animate-spin': statsLoading }">refresh</span>
+      </button>
     </div>
 
     <!-- Chart Section -->

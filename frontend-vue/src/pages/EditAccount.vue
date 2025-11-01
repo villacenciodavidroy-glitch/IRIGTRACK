@@ -1,24 +1,24 @@
 <template>
-  <div class="min-h-screen bg-gray-50 p-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 md:p-6">
     <!-- Header -->
-    <div class="flex items-center gap-3 mb-8">
-      <button @click="goBack" class="inline-flex items-center text-gray-600 hover:text-gray-800">
-        <span class="material-icons-outlined">arrow_back</span>
-        <span class="ml-1">Back</span>
+    <div class="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 md:mb-8">
+      <button @click="goBack" class="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 px-2 py-1 sm:px-0 transition-colors">
+        <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
+        <span class="ml-1 text-sm sm:text-base">Back</span>
       </button>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl flex justify-center items-center py-12">
-      <div class="flex items-center gap-3">
-        <span class="material-icons-outlined animate-spin text-green-600">refresh</span>
-        <span>Loading user data...</span>
+    <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 max-w-3xl mx-auto flex justify-center items-center py-8 sm:py-12">
+      <div class="flex items-center gap-2 sm:gap-3">
+        <span class="material-icons-outlined animate-spin text-green-600 text-xl sm:text-2xl">refresh</span>
+        <span class="text-sm sm:text-base text-gray-800 dark:text-gray-200">Loading user data...</span>
       </div>
     </div>
 
     <!-- Main Form -->
-    <div v-else class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl">
-      <h2 class="text-lg font-medium text-gray-800 mb-6">Edit Account</h2>
+    <div v-else class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 max-w-3xl mx-auto">
+      <h2 class="text-base sm:text-lg font-medium text-gray-800 dark:text-gray-200 mb-4 sm:mb-6">Edit Account</h2>
       
       <form @submit.prevent="handleSubmit" class="space-y-5">
         <!-- Account Type -->
@@ -42,7 +42,7 @@
                 {{ type.label }}
               </option>
             </select>
-            <p v-if="errors.role" class="mt-1 text-sm text-red-600">{{ errors.role[0] }}</p>
+            <p v-if="errors.role" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.role[0] }}</p>
           </div>
         </div>
 
@@ -55,9 +55,9 @@
               @dragover.prevent="dragOver = true"
               @dragleave.prevent="dragOver = false"
               @drop.prevent="handleFileDrop"
-              class="flex flex-col items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 rounded-md appearance-none cursor-pointer"
+              class="flex flex-col items-center justify-center w-full h-32 px-4 transition bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-md appearance-none cursor-pointer"
               :class="{ 
-                'border-dashed hover:border-gray-400': !selectedFile && !previewUrl,
+                'border-dashed hover:border-gray-400 dark:hover:border-gray-500': !selectedFile && !previewUrl,
                 'border-solid border-green-500': selectedFile || previewUrl,
                 'border-blue-400 border-solid': dragOver
               }"
@@ -69,25 +69,25 @@
                   alt="Preview"
                 />
                 <div class="flex flex-col">
-                  <span class="text-sm font-medium text-gray-900">
+                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {{ selectedFile ? selectedFile.name : 'Current Image' }}
                   </span>
-                  <span class="text-xs text-gray-500">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
                     {{ selectedFile ? formatFileSize(selectedFile.size) : 'Click to change' }}
                   </span>
                 </div>
                 <button
                   @click.stop="clearFile"
-                  class="p-1 text-gray-500 hover:text-gray-700"
+                  class="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                   title="Remove file"
                 >
                   <span class="material-icons-outlined">close</span>
                 </button>
               </div>
               <div v-else class="flex items-center space-x-2">
-                <span class="material-icons-outlined text-gray-400">cloud_upload</span>
-                <span class="font-medium text-gray-600">
-                  <span class="text-green-600 hover:underline">Choose file</span> or drag and drop
+                <span class="material-icons-outlined text-gray-400 dark:text-gray-500">cloud_upload</span>
+                <span class="font-medium text-gray-600 dark:text-gray-300">
+                  <span class="text-green-600 dark:text-green-400 hover:underline">Choose file</span> or drag and drop
                 </span>
               </div>
               <input
@@ -98,8 +98,8 @@
                 class="hidden"
               >
             </div>
-            <p class="mt-2 text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-            <p v-if="errors.image" class="mt-1 text-sm text-red-600">{{ errors.image[0] }}</p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">PNG, JPG, GIF up to 10MB</p>
+            <p v-if="errors.image" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.image[0] }}</p>
           </div>
         </div>
 
@@ -117,7 +117,7 @@
               placeholder="Enter full name"
               required
             >
-            <p v-if="errors.fullname" class="mt-1 text-sm text-red-600">{{ errors.fullname[0] }}</p>
+            <p v-if="errors.fullname" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.fullname[0] }}</p>
           </div>
         </div>
 
@@ -135,7 +135,7 @@
               placeholder="Enter username"
               required
             >
-            <p v-if="errors.username" class="mt-1 text-sm text-red-600">{{ errors.username[0] }}</p>
+            <p v-if="errors.username" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.username[0] }}</p>
           </div>
         </div>
 
@@ -153,7 +153,7 @@
               placeholder="Enter email address"
               required
             >
-            <p v-if="errors.email" class="mt-1 text-sm text-red-600">{{ errors.email[0] }}</p>
+            <p v-if="errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.email[0] }}</p>
           </div>
         </div>
 
@@ -179,12 +179,12 @@
               </option>
             </select>
           </div>
-          <p v-if="errors.location_id" class="mt-1 text-sm text-red-600">{{ errors.location_id[0] }}</p>
+          <p v-if="errors.location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.location_id[0] }}</p>
         </div>
 
         <!-- Password Section -->
-        <div class="border-t border-gray-200 pt-4 mt-6">
-          <h3 class="text-md font-medium mb-4">Change Password (Optional)</h3>
+        <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-6">
+          <h3 class="text-md font-medium mb-4 text-gray-800 dark:text-gray-200">Change Password (Optional)</h3>
           
           <!-- Password -->
           <div class="form-group">
@@ -200,7 +200,7 @@
                 placeholder="Enter new password (leave blank to keep current)"
               >
             </div>
-            <p v-if="errors.password" class="mt-1 text-sm text-red-600">{{ errors.password[0] }}</p>
+            <p v-if="errors.password" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.password[0] }}</p>
           </div>
 
           <!-- Confirm Password -->
@@ -223,7 +223,7 @@
 
         <!-- General Error Message -->
         <div v-if="errors.general" class="mt-4">
-          <p class="text-sm text-red-600">{{ errors.general[0] }}</p>
+          <p class="text-sm text-red-600 dark:text-red-400">{{ errors.general[0] }}</p>
         </div>
 
         <!-- Submit Button -->
@@ -460,11 +460,11 @@ onMounted(() => {
 }
 
 .form-label {
-  @apply block text-sm font-medium text-gray-700;
+  @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
 }
 
 .form-input, .form-select {
-  @apply block w-full pl-12 pr-3 py-2.5 text-gray-900 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500;
+  @apply block w-full pl-12 pr-3 py-2.5 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500;
 }
 
 /* Add new styles for the icon container */
@@ -481,5 +481,14 @@ onMounted(() => {
 
 .material-icons-outlined {
   @apply text-xl leading-none;
+}
+
+/* Dark mode specific adjustments */
+.dark .form-input:disabled {
+  @apply bg-gray-600 text-gray-400;
+}
+
+.dark .form-select:disabled {
+  @apply bg-gray-600 text-gray-400;
 }
 </style>

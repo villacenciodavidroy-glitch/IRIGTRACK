@@ -7,12 +7,15 @@ use App\Http\Requests\V1\UpdateUserRequest;
 use App\Http\Resources\V1\UserCollection;
 use App\Http\Resources\V1\UserResource;
 use App\Models\User;
+use App\Traits\LogsActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
+    use LogsActivity;
+    
     /**
      * Display a listing of the resource.
      */
@@ -34,21 +37,8 @@ class UserController extends Controller
      */
     public function show(string $id)
     {
-        $user = User::findOrFail($id);
-
-    // Optionally, you can use a Resource for more control
-    return response()->json([
-        'data' => [
-            'id' => $user->id,
-            'fullname' => $user->fullname,
-            'username' => $user->username,
-            'email' => $user->email,
-            'role' => $user->role,
-            'image' => $user->image,
-            'location' => $user->location,
-            'created_at' => $user->created_at,
-        ]
-    ]);
+        $user = User::with('location')->findOrFail($id);
+        return new UserResource($user);
     }
 
     /**
@@ -61,11 +51,13 @@ class UserController extends Controller
         // Get validated data
         $validatedData = $request->validated();
         
-        // Handle password separately if it's being updated
+        // Check if password is being updated
+        $passwordChanged = false;
         if (isset($validatedData['password'])) {
             $validatedData['password'] = Hash::make($validatedData['password']);
             // Remove password_confirmation from data to be saved
             unset($validatedData['password_confirmation']);
+            $passwordChanged = true;
         }
         
         // Handle image upload if present
@@ -83,6 +75,19 @@ class UserController extends Controller
         // Update user with validated data
         $user->update($validatedData);
         
+        // Log specific activity based on what was updated
+        if ($passwordChanged) {
+            // Log password reset specifically
+            $currentUser = $request->user();
+            $description = $currentUser && $currentUser->id === $user->id 
+                ? "Password reset for their own account" 
+                : "Password reset for user '{$user->fullname}' (ID: {$user->id})";
+            $this->logActivity($request, 'Password Reset', $description);
+        } else {
+            // Log general user update
+            $this->logUserActivity($request, 'Updated', $user->fullname, $user->id);
+        }
+        
         // Return the updated user
         return new UserResource($user);
     }
@@ -90,7 +95,7 @@ class UserController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, Request $request)
     {
         $user = User::findOrFail($id);
         
@@ -107,8 +112,55 @@ class UserController extends Controller
         // Delete the user
         $user->delete();
         
+        // Log user deletion
+        $this->logUserActivity($request, 'Deleted', $user->fullname, $user->id);
+        
         return response()->json([
             'message' => 'User deleted successfully',
+            'status' => 'success'
+        ], 200);
+    }
+    
+    /**
+     * Get all deleted users
+     */
+    public function getDeletedUsers()
+    {
+        $deletedUsers = User::onlyTrashed()
+            ->with('location')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'data' => $deletedUsers,
+            'status' => 'success'
+        ], 200);
+    }
+
+    /**
+     * Restore a deleted user
+     */
+    public function restoreUser($id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+        $user->restore();
+
+        return response()->json([
+            'message' => 'User restored successfully',
+            'status' => 'success'
+        ], 200);
+    }
+
+    /**
+     * Permanently delete a user
+     */
+    public function forceDeleteUser($id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+        $user->forceDelete();
+
+        return response()->json([
+            'message' => 'User permanently deleted successfully',
             'status' => 'success'
         ], 200);
     }

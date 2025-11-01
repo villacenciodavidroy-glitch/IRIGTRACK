@@ -1,21 +1,33 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import useAuth from '../composables/useAuth'
+import useNotifications from '../composables/useNotifications'
+import LogoutModal from '../components/LogoutModal.vue'
 
 const router = useRouter()
 const route = useRoute()
 
-const user = ref({
-  name: 'Jessie John U. Gludo',
-  avatar: '../assets/avatar.jpg'
+// Use the auth composable to get user data
+const { user, loading: userLoading, error: userError, fetchCurrentUser, getUserDisplayName, logout } = useAuth()
+
+// Use the notifications composable
+const { notifications, unreadCount, fetchNotifications, markAsRead, refreshNotifications } = useNotifications()
+
+// Fallback user data for when API is loading
+const fallbackUser = ref({
+  name: 'Loading...',
+  avatar: '/src/assets/avatar.svg'
 })
 
 const isSidebarOpen = ref(false)
 const isProfileDropdownOpen = ref(false)
 const isNotificationsOpen = ref(false)
+const isLogoutModalOpen = ref(false)
 const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 const submenuStates = ref({})
 const isMobile = ref(window.innerWidth < 1024)
+const avatarError = ref(false)
 
 const currentTime = ref(new Date())
 const currentDate = ref(new Date())
@@ -38,6 +50,28 @@ const navigation = [
     ]
   }
 ]
+
+// Computed property for user display name
+const userDisplayName = computed(() => {
+  if (userLoading.value) {
+    return 'Loading...'
+  }
+  if (userError.value) {
+    return 'User'
+  }
+  return getUserDisplayName()
+})
+
+// Computed property for user avatar
+const userAvatar = computed(() => {
+  if (avatarError.value) {
+    return '/src/assets/avatar.svg'
+  }
+  if (user.value && user.value.image) {
+    return user.value.image
+  }
+  return '/src/assets/avatar.svg'
+})
 
 // Computed property for sidebar classes
 const sidebarClasses = computed(() => {
@@ -72,6 +106,10 @@ const toggleDarkMode = () => {
 
 const toggleSubmenu = (itemId) => {
   submenuStates.value[itemId] = !submenuStates.value[itemId]
+}
+
+const handleImageError = () => {
+  avatarError.value = true
 }
 
 const isSubmenuOpen = (itemId) => {
@@ -135,14 +173,39 @@ const formatPhDate = (date) => {
   })
 }
 
-// Format time with AM/PM
+// Format time with AM/PM in Philippines timezone
 const formatTime = (date) => {
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString('en-PH', {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
-    hour12: true
+    hour12: true,
+    timeZone: 'Asia/Manila'
   })
+}
+
+// Handle logout
+const handleLogout = () => {
+  isProfileDropdownOpen.value = false
+  isLogoutModalOpen.value = true
+}
+
+// Handle logout confirmation
+const confirmLogout = async () => {
+  try {
+    await logout()
+    isLogoutModalOpen.value = false
+  } catch (error) {
+    console.error('Logout error:', error)
+    // Even if there's an error, try to redirect to login
+    await router.push('/login')
+    isLogoutModalOpen.value = false
+  }
+}
+
+// Handle logout cancellation
+const cancelLogout = () => {
+  isLogoutModalOpen.value = false
 }
 
 onMounted(() => {
@@ -155,6 +218,9 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   handleResize() // Initialize on mount
   startClock()
+  
+  // Fetch notifications when component mounts
+  fetchNotifications(5) // Fetch only 5 for the dropdown
 })
 
 onBeforeUnmount(() => {
@@ -249,7 +315,7 @@ onBeforeUnmount(() => {
 
       <!-- User Info at Bottom -->
       <div class="mt-auto border-t border-gray-200 dark:border-gray-700 p-4">
-        <div class="text-green-600 dark:text-green-400 font-medium">{{ user.name }}</div>
+        <div class="text-green-600 dark:text-green-400 font-medium">{{ userDisplayName }}</div>
         <div class="text-gray-600 dark:text-gray-400 text-sm mt-1">
           {{ formatPhDate(currentDate) }} at {{ formatTime(currentTime) }}
         </div>
@@ -310,8 +376,8 @@ onBeforeUnmount(() => {
               aria-label="Notifications"
             >
               <span class="material-icons-outlined text-xl sm:text-2xl dark:text-gray-300">notifications</span>
-              <span class="absolute top-0 right-0 h-3.5 w-3.5 sm:h-4 sm:w-4 bg-red-500 rounded-full text-[10px] sm:text-xs text-white flex items-center justify-center">
-                13
+              <span v-if="unreadCount > 0" class="absolute top-0 right-0 h-3.5 w-3.5 sm:h-4 sm:w-4 bg-red-500 rounded-full text-[10px] sm:text-xs text-white flex items-center justify-center">
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
               </span>
             </button>
 
@@ -320,23 +386,43 @@ onBeforeUnmount(() => {
               v-if="isNotificationsOpen"
               class="absolute right-0 mt-2 w-64 sm:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-2 z-50 notifications-dropdown max-h-[80vh] overflow-y-auto"
             >
-              <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-green-400">Supply Notifications</h3>
+              <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Recent Notifications</h3>
+                <button 
+                  @click="refreshNotifications"
+                  class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  title="Refresh notifications"
+                >
+                  <span class="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">refresh</span>
+                </button>
               </div>
               
               <!-- Notification Items -->
               <div class="max-h-[400px] overflow-y-auto">
-                <router-link 
-                  to="/analytics" 
-                  class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer flex items-start gap-3 block"
-                  @click="isNotificationsOpen = false"
+                <div v-if="notifications.length === 0" class="px-4 py-3 text-center">
+                  <p class="text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                </div>
+                
+                <div
+                  v-for="notification in notifications.slice(0, 5)"
+                  :key="notification.id"
+                  @click="markAsRead(notification.id); isNotificationsOpen = false"
+                  class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer flex items-start gap-3"
+                  :class="{ 'bg-blue-50 dark:bg-blue-900/20': !notification.isRead }"
                 >
-                  <div class="flex-shrink-0 w-2 h-2 mt-2 bg-red-500 rounded-full"></div>
-                  <div>
-                    <p class="text-sm text-gray-800 dark:text-gray-300">Low Supply</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Need to restock item</p>
+                  <div class="flex-shrink-0 w-2 h-2 mt-2 rounded-full"
+                       :class="notification.priority === 'high' ? 'bg-red-500' : 
+                               notification.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'">
                   </div>
-                </router-link>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm text-gray-800 dark:text-gray-300 font-medium">{{ notification.title }}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ notification.message }}</p>
+                    <div class="flex items-center justify-between mt-1">
+                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ notification.user }}</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ notification.time }}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- View All Link -->
@@ -359,10 +445,15 @@ onBeforeUnmount(() => {
               @click="toggleProfileDropdown"
               aria-label="Profile menu"
             >
+              <div v-if="avatarError" class="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">
+                {{ userDisplayName.charAt(0).toUpperCase() }}
+              </div>
               <img
-                :src="user.avatar"
+                v-else
+                :src="userAvatar"
                 alt="Profile"
                 class="h-7 w-7 sm:h-8 sm:w-8 rounded-full object-cover"
+                @error="handleImageError"
               />
             </button>
 
@@ -373,29 +464,33 @@ onBeforeUnmount(() => {
             >
               <router-link 
                 to="/profile"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
                 @click="isProfileDropdownOpen = false"
               >
+                <span class="material-icons-outlined mr-2 text-sm">person</span>
                 Profile
               </router-link>
               <router-link
                 to="/activity-log"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
                 @click="isProfileDropdownOpen = false"
               >
+                <span class="material-icons-outlined mr-2 text-sm">history</span>
                 Activity Log
               </router-link>
               <router-link
                 to="/history/deleted-items"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
                 @click="isProfileDropdownOpen = false"
               >
+                <span class="material-icons-outlined mr-2 text-sm">folder</span>
                 History
               </router-link>
               <button
-                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                @click="() => { isProfileDropdownOpen = false; /* Add logout logic here */ }"
+                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
+                @click="handleLogout"
               >
+                <span class="material-icons-outlined mr-2 text-sm">logout</span>
                 Log out
               </button>
             </div>
@@ -413,7 +508,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 dark:text-gray-400 gap-2">
           <div class="flex items-center space-x-2">
             <span class="material-icons-outlined text-green-600 dark:text-green-400">person</span>
-            <span class="font-medium text-green-600 dark:text-green-400">{{ user.name }}</span>
+            <span class="font-medium text-green-600 dark:text-green-400">{{ userDisplayName }}</span>
           </div>
           <div class="flex items-center space-x-4">
             <div>{{ formatPhDate(currentDate) }}</div>
@@ -423,6 +518,14 @@ onBeforeUnmount(() => {
       </footer>
 
     </div>
+
+    <!-- Logout Confirmation Modal -->
+    <LogoutModal 
+      :is-open="isLogoutModalOpen"
+      :is-loading="userLoading"
+      @confirm="confirmLogout"
+      @cancel="cancelLogout"
+    />
   </div>
 </template>
 

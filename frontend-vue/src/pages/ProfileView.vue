@@ -1,6 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
+import SuccessModal from '../components/SuccessModal.vue'
+
+const router = useRouter()
 
 const user = ref({
   fullName: '',
@@ -12,6 +16,11 @@ const user = ref({
 })
 const selectedFile = ref(null)
 const loading = ref(false)
+
+// State for success modal
+const showSuccessModal = ref(false)
+const successMessage = ref('')
+const successModalType = ref('success')
 
 onMounted(async () => {
   const userId = localStorage.getItem('userId')
@@ -81,18 +90,34 @@ if (user.password) {
       user.value.username = res.data.data.username;
       user.value.email = res.data.data.email;
       user.value.location = res.data.data.location.location;
+      user.value.password = res.data.data.password;
       user.value.image = `${backendUrl}/${res.data.data.image}`;
-    alert('Profile updated successfully!');
+    successMessage.value = 'Profile updated successfully!';
+    successModalType.value = 'success';
+    showSuccessModal.value = true;
     console.log(user)
      console.log(res.data.data )
   }
   } catch (e) {
-    alert('Failed to update profile.');
+    successMessage.value = 'Failed to update profile.';
+    successModalType.value = 'error';
+    showSuccessModal.value = true;
     console.error('Update Error:', e.response ? e.response.data : e);
   } finally {
     loading.value = false;
   }
 };
+
+// Close success modal
+const closeSuccessModal = () => {
+  showSuccessModal.value = false
+  successMessage.value = ''
+  successModalType.value = 'success'
+}
+
+const goToDashboard = () => {
+  router.push('/dashboard')
+}
 
 </script>
 
@@ -110,8 +135,8 @@ if (user.password) {
 
     <div class="flex flex-col lg:flex-row gap-8">
       <!-- Left Column - Form -->
-      <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h1 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Admin</h1>
+      <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Admin</h1>
         <p class="text-gray-600 dark:text-gray-400 mb-6">Profile</p>
 
         <form class="space-y-6" @submit.prevent="saveProfile">
@@ -142,16 +167,6 @@ if (user.password) {
             <input
               type="text"
               v-model="user.fullName"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300"
-            />
-          </div>
-
-          <!-- Username -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
-            <input
-              type="text"
-              v-model="user.username"
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300"
             />
           </div>
@@ -228,10 +243,6 @@ if (user.password) {
               <p class="text-gray-800 dark:text-gray-200">{{ user.fullName }}</p>
             </div>
             <div>
-              <label class="block text-sm text-gray-500 dark:text-gray-400">User Name</label>
-              <p class="text-gray-800 dark:text-gray-200">{{ user.username }}</p>
-            </div>
-            <div>
               <label class="block text-sm text-gray-500 dark:text-gray-400">Email</label>
               <p class="text-gray-800 dark:text-gray-200">{{ user.email }}</p>
             </div>
@@ -239,6 +250,17 @@ if (user.password) {
         </div>
       </div>
     </div>
+
+    <!-- Success Modal -->
+    <SuccessModal
+      :isOpen="showSuccessModal"
+      :title="successModalType === 'success' ? 'Success' : 'Error'"
+      :message="successMessage"
+      buttonText="Continue"
+      :type="successModalType"
+      @confirm="closeSuccessModal"
+      @close="closeSuccessModal"
+    />
   </div>
 </template>
 

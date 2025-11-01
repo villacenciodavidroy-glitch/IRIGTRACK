@@ -4,16 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Item extends Model
 {
     /** @use HasFactory<\Database\Factories\ItemFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'uuid', 'unit', 'description', 'pac', 'unit_value', 'date_acquired', 'po_number', 'category_id', 'location_id',
-        'condition_id', 'condition_number_id', 'user_id', 'image_path'
+        'condition_id', 'condition_number_id', 'user_id', 'image_path', 'quantity', 'deletion_reason'
     ];
 
      protected static function booted()
@@ -30,7 +31,17 @@ class Item extends Model
 
     public function qrCode()
     {
-        return $this->hasOne(QRCode::class);
+        return $this->hasOne(QRCode::class)->where('is_active', true)->latest();
+    }
+
+    public function qrCodes()
+    {
+        return $this->hasMany(QRCode::class);
+    }
+
+    public function activeQrCode()
+    {
+        return $this->hasOne(QRCode::class)->where('is_active', true)->latest();
     }
 
     public function location()

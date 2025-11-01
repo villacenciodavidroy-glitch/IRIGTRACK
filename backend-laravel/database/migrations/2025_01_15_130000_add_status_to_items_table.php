@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            $table->unsignedInteger('quantity')->default(1);
+            $table->enum('status', ['Excellent', 'Good', 'Poor', 'Maintenance'])->default('Good')->after('condition_number_id');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            $table->dropColumn('quantity');
+            $table->dropColumn('status');
         });
     }
 };

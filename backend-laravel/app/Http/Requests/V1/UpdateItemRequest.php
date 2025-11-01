@@ -26,6 +26,7 @@ class UpdateItemRequest extends FormRequest
             'description' => 'sometimes|string|max:1000',
             'pac' => 'sometimes|string|max:50',
             'unit_value' => 'sometimes|numeric|min:0',
+            'quantity' => 'sometimes|integer|min:1',
             'date_acquired' => 'sometimes|date|before_or_equal:today',
             'po_number' => 'sometimes|string|max:50',
             'category_id' => 'sometimes|exists:categories,id',

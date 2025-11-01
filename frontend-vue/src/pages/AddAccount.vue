@@ -1,17 +1,17 @@
 <template>
   
-    <div class="min-h-screen bg-gray-50 p-6">
+    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 md:p-6">
       <!-- Header -->
-      <div class="flex items-center gap-3 mb-8">
-        <button @click="goBack" class="inline-flex items-center text-gray-600 hover:text-gray-800">
-          <span class="material-icons-outlined">arrow_back</span>
-          <span class="ml-1">Back</span>
+      <div class="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 md:mb-8">
+        <button @click="goBack" class="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 px-2 py-1 sm:px-0 transition-colors">
+          <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
+          <span class="ml-1 text-sm sm:text-base">Back</span>
         </button>
       </div>
 
       <!-- Main Form -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl">
-        <h2 class="text-lg font-medium text-gray-800 mb-6">Add new account</h2>
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 max-w-3xl mx-auto">
+        <h2 class="text-base sm:text-lg font-medium text-gray-800 dark:text-white mb-4 sm:mb-6">Add new account</h2>
         
         <form @submit.prevent="handleSubmit" class="space-y-5">
           <!-- Account Type -->
@@ -111,23 +111,6 @@
             </div>
           </div>
 
-          <!-- Username -->
-          <div class="form-group">
-            <label class="form-label">Username</label>
-            <div class="relative">
-              <span class="absolute left-0 top-0 text-gray-400">
-                <span class="material-icons-outlined">alternate_email</span>
-              </span>
-              <input 
-                type="text" 
-                v-model="formData.username"
-                class="form-input"
-                placeholder="Enter username"
-                required
-              >
-              <p v-if="errors.username" class="mt-1 text-sm text-red-600">{{ errors.username[0] }}</p>
-            </div>
-          </div>
 
           <!-- Email -->
           <div class="form-group">
@@ -158,7 +141,6 @@
                 v-model="formData.location"
                 class="form-select"
                 required
-                @change="(e) => console.log('Location changed:', e.target.value)"
               >
                 <option value="" disabled>Select location</option>
                 <option 
@@ -207,11 +189,11 @@
                 class="form-input"
                 placeholder="Confirm password"
                 required
-                @input="errors.password = []"
+                @input="errors.password_confirmation = []"
               >
               
             </div>
-            <p v-if="errors.password" class="mt-1 text-sm text-red-600">{{ errors.password[0] }}</p>
+            <p v-if="errors.password_confirmation" class="mt-1 text-sm text-red-600">{{ errors.password_confirmation[0] }}</p>
           </div>
 
           <!-- General Error Message -->
@@ -232,17 +214,30 @@
           </div>
         </form>
       </div>
+
+      <!-- Success Modal -->
+      <SuccessModal
+        :isOpen="showSuccessModal"
+        :title="successModalType === 'success' ? 'Success' : 'Error'"
+        :message="successMessage"
+        buttonText="Continue"
+        :type="successModalType"
+        @confirm="closeSuccessModal"
+        @close="closeSuccessModal"
+      />
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import axiosClient from '../axios'
 import useLocations from '../composables/useLocations'
+import SuccessModal from '../components/SuccessModal.vue'
 
 const router = useRouter()
+const route = useRoute()
 const errors = ref({})
 const dragOver = ref(false)
 const selectedFile = ref(null)
@@ -250,11 +245,15 @@ const previewUrl = ref(null)
 const fileInput = ref(null)
 const isSubmitting = ref(false)
 
+// State for success modal
+const showSuccessModal = ref(false)
+const successMessage = ref('')
+const successModalType = ref('success')
+
 const formData = ref({
   accountType: '',
   avatar: null,
   fullname: '',
-  username: '',
   email: '',
   location: '',
   password: '',
@@ -268,6 +267,25 @@ const accountTypes = ref([
 ])
 
 const { locations } = useLocations(formData)
+
+// Set account type from URL parameter
+onMounted(() => {
+  console.log('=== COMPONENT MOUNTED ===')
+  console.log('Route query:', route.query)
+  console.log('Current form data:', formData.value)
+  
+  const accountTypeFromUrl = route.query.type
+  console.log('Account type from URL:', accountTypeFromUrl)
+  
+  if (accountTypeFromUrl && (accountTypeFromUrl === 'admin' || accountTypeFromUrl === 'user')) {
+    formData.value.accountType = accountTypeFromUrl
+    console.log('Account type set to:', formData.value.accountType)
+  } else {
+    console.log('No valid account type found in URL')
+  }
+  
+  console.log('Final form data after URL processing:', formData.value)
+})
 
 // const locations = ref([])
 
@@ -349,36 +367,68 @@ const goBack = () => {
 
 const validatePasswords = () => {
   if (formData.value.password !== formData.value.confirmPassword) {
-    errors.value.password = ['Passwords do not match']
+    errors.value.password_confirmation = ['Passwords do not match']
     return false
   }
   if (formData.value.password.length < 8) {
     errors.value.password = ['Password must be at least 8 characters long']
     return false
   }
+  // Clear any previous errors if validation passes
+  errors.value.password = []
+  errors.value.password_confirmation = []
   return true
 }
 
 const handleSubmit = async () => {
+  console.log('=== FORM SUBMISSION STARTED ===')
+  console.log('isSubmitting:', isSubmitting.value)
+  
   if (isSubmitting.value) return
   
   try {
     isSubmitting.value = true
     errors.value = {}
 
-    // Validate passwords
-    if (!validatePasswords()) {
+    console.log('Form data before validation:', formData.value)
+
+    // Validate all required fields
+    if (!formData.value.accountType) {
+      console.log('ERROR: Account type not set')
+      errors.value.account_type = ['Please select an account type']
       isSubmitting.value = false
       return
     }
 
-    // Check if location is selected
+    if (!formData.value.fullname.trim()) {
+      console.log('ERROR: Full name not set')
+      errors.value.fullname = ['Full name is required']
+      isSubmitting.value = false
+      return
+    }
+
+    if (!formData.value.email.trim()) {
+      console.log('ERROR: Email not set')
+      errors.value.email = ['Email is required']
+      isSubmitting.value = false
+      return
+    }
+
     if (!formData.value.location) {
-      console.error('No location selected')
+      console.log('ERROR: Location not set')
       errors.value.location = ['Please select a location']
       isSubmitting.value = false
       return
     }
+
+    // Validate passwords
+    if (!validatePasswords()) {
+      console.log('ERROR: Password validation failed')
+      isSubmitting.value = false
+      return
+    }
+
+    console.log('All validations passed, proceeding with submission...')
 
     // Create FormData object for file upload
     const formDataToSend = new FormData()
@@ -386,17 +436,36 @@ const handleSubmit = async () => {
     // Append all form fields
     formDataToSend.append('role', formData.value.accountType)
     formDataToSend.append('fullname', formData.value.fullname)
-    formDataToSend.append('username', formData.value.username)
     formDataToSend.append('email', formData.value.email)
     formDataToSend.append('location_id', formData.value.location)
     formDataToSend.append('password', formData.value.password)
+    formDataToSend.append('password_confirmation', formData.value.confirmPassword)
     
     // Append the image file if it exists
     if (formData.value.avatar) {
       formDataToSend.append('image', formData.value.avatar)
     }
 
-    console.log('About to send form data with image')
+    // Debug: Log form data being sent
+    console.log('Form data being sent:', {
+      role: formData.value.accountType,
+      fullname: formData.value.fullname,
+      email: formData.value.email,
+      location_id: formData.value.location,
+      password: formData.value.password,
+      password_confirmation: formData.value.confirmPassword,
+      hasImage: !!formData.value.avatar
+    })
+
+    console.log('Sending request to /register endpoint...')
+
+    // Test API connectivity first
+    try {
+      const testResponse = await axiosClient.get('/')
+      console.log('API connectivity test:', testResponse.data)
+    } catch (testError) {
+      console.error('API connectivity test failed:', testError)
+    }
 
     // Send request to Laravel API with proper headers for multipart form data
     const response = await axiosClient.post('/register', formDataToSend, {
@@ -406,22 +475,74 @@ const handleSubmit = async () => {
     })
 
     if (response.data) {
-      console.log('Account created successfully:', response.data)
-      router.push('/admin')
+      console.log('Registration successful:', response.data)
+      successMessage.value = 'Account created successfully!'
+      successModalType.value = 'success'
+      showSuccessModal.value = true
+      
+      // Reset form after successful creation
+      setTimeout(() => {
+        formData.value = {
+          accountType: '',
+          avatar: null,
+          fullname: '',
+          email: '',
+          location: '',
+          password: '',
+          confirmPassword: ''
+        }
+        selectedFile.value = null
+        previewUrl.value = null
+        if (fileInput.value) {
+          fileInput.value.value = ''
+        }
+        errors.value = {}
+      }, 2000)
     }
   } catch (error) {
-    console.error('Full error object:', error)
-    console.error('Error response data:', error.response?.data)
+    console.error('Registration error:', error)
+    console.error('Error response:', error.response)
+    console.error('Error status:', error.response?.status)
+    console.error('Error data:', error.response?.data)
+    
     if (error.response?.data?.errors) {
       errors.value = error.response.data.errors
-    } else {
-      errors.value = {
-        general: ['An unexpected error occurred. Please try again.']
+      console.error('Validation errors:', error.response.data.errors)
+      
+      // Show specific error messages
+      if (error.response.data.errors.email) {
+        successMessage.value = `Email error: ${error.response.data.errors.email[0]}`
+        successModalType.value = 'error'
+        showSuccessModal.value = true
+      } else if (error.response.data.errors.password) {
+        successMessage.value = `Password error: ${error.response.data.errors.password[0]}`
+        successModalType.value = 'error'
+        showSuccessModal.value = true
+      } else if (error.response.data.errors.location_id) {
+        successMessage.value = `Location error: ${error.response.data.errors.location_id[0]}`
+        successModalType.value = 'error'
+        showSuccessModal.value = true
       }
+    } else if (error.response?.data?.message) {
+      successMessage.value = error.response.data.message
+      successModalType.value = 'error'
+      showSuccessModal.value = true
+    } else {
+      successMessage.value = `An unexpected error occurred: ${error.message}`
+      successModalType.value = 'error'
+      showSuccessModal.value = true
     }
   } finally {
     isSubmitting.value = false
+    console.log('=== FORM SUBMISSION COMPLETED ===')
   }
+}
+
+// Close success modal
+const closeSuccessModal = () => {
+  showSuccessModal.value = false
+  successMessage.value = ''
+  successModalType.value = 'success'
 }
 </script>
 

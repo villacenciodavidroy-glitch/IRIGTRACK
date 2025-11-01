@@ -12,6 +12,7 @@ import DeletedItems from '../pages/DeletedItems.vue'
 import DeletedAccounts from '../pages/DeletedAccounts.vue'
 import NotFound from '../pages/NotFound.vue'
 import AddSupply from '../pages/AddSupply.vue'
+import EditItems from '../pages/EditItems.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -66,6 +67,11 @@ const router = createRouter({
       ]
     },
     {
+      path: '/test-edit/:uuid',
+      name: 'TestEdit',
+      component: () => import('../pages/TestEdit.vue')
+    },
+    {
       path: '/analytics',
       name: 'Analytics',
       component: Analytics
@@ -99,6 +105,16 @@ const router = createRouter({
       path: '/restock',
       name: 'Restock',
       component: Restock
+    },
+    {
+      path: '/reports',
+      name: 'Reports',
+      component: () => import('../pages/reports/index.vue')
+    },
+    {
+      path: '/reports/serviceable-items',
+      name: 'ServiceableItems',
+      component: () => import('../pages/reports/serviceable-items.vue')
     },
     {
       path: '/:pathMatch(.*)*',

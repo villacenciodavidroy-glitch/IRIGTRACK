@@ -14,6 +14,7 @@ import AddAccount from './pages/AddAccount.vue'
 import EditAccount from './pages/EditAccount.vue'
 import Reporting from './pages/reports/index.vue'
 import DesktopMonitoring from './pages/reports/desktop.vue'
+import ServiceableItems from './pages/reports/serviceable-items.vue'
 import SuppliesOverview from './pages/SuppliesOverview.vue'
 import UsageOverview from './pages/UsageOverview.vue'
 import QRGeneration from './pages/QRGeneration.vue'
@@ -21,6 +22,7 @@ import ActivityLog from './pages/ActivityLog.vue'
 import Profile from './pages/ProfileView.vue'
 import DeletedItems from './pages/DeletedItems.vue'
 import DeletedAccounts from './pages/DeletedAccounts.vue'
+import Notifications from './pages/Notifications.vue'
 
 const routes = [
     {
@@ -117,9 +119,29 @@ const routes = [
                 component: DesktopMonitoring
             },
             {
+                path: '/reports/serviceable-items',
+                name: 'ServiceableItems',
+                component: ServiceableItems
+            },
+            {
+                path: '/reports/monitoring-assets',
+                name: 'MonitoringAssets',
+                component: () => import('./pages/reports/monitoring-assets.vue')
+            },
+            {
                 path: '/QRGeneration',
                 name: 'QRGeneration',
                 component: QRGeneration
+            },
+            {
+                path: '/edit-item/:uuid',
+                name: 'EditItem',
+                component: () => import('./pages/EditItem.vue')
+            },
+            {
+                path: '/notifications',
+                name: 'Notifications',
+                component: Notifications
             }
         ]
     },
@@ -149,6 +171,40 @@ const routes = [
 const router = createRouter({
     history: createWebHistory(),
     routes
+})
+
+// Navigation guard to prevent back navigation from login page
+router.beforeEach((to, from, next) => {
+    // If trying to navigate away from login page using browser back button
+    if (from.name === 'Login' && to.name === undefined) {
+        // Stay on login page
+        next('/login')
+        return
+    }
+    
+    // If trying to navigate to login page, prevent back navigation
+    if (to.name === 'Login') {
+        // Push a new state to prevent back navigation
+        window.history.pushState(null, '', window.location.href)
+        
+        // Add popstate listener
+        const handlePopState = () => {
+            window.history.pushState(null, '', window.location.href)
+        }
+        
+        window.addEventListener('popstate', handlePopState)
+        
+        // Store the handler for cleanup
+        router._loginPopStateHandler = handlePopState
+    } else {
+        // Remove the popstate listener when leaving login page
+        if (router._loginPopStateHandler) {
+            window.removeEventListener('popstate', router._loginPopStateHandler)
+            router._loginPopStateHandler = null
+        }
+    }
+    
+    next()
 })
 
 export default router 

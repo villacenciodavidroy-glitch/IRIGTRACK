@@ -11,19 +11,22 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\ItemCollection;
 use App\Services\V1\ItemService;
 use App\Services\V1\QrCodeService;
+use App\Traits\LogsActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class ItemController extends Controller
 {
+    use LogsActivity;
+    
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
         try {
-            // Get all non-deleted items
-            $items = Item::all();
+            // Get all non-deleted items with QR code relationship
+            $items = Item::with('qrCode')->get();
             return new ItemCollection($items);
         } catch (\Exception $e) {
             \Log::error('Error fetching items: ' . $e->getMessage());
@@ -40,8 +43,8 @@ class ItemController extends Controller
     public function getActiveItems()
     {
         try {
-            // Get all items without checking deleted_at for now
-            $items = Item::all();
+            // Get all items with QR code relationship
+            $items = Item::with('qrCode')->get();
             
             return response()->json([
                 'message' => 'Active items retrieved successfully',
@@ -77,6 +80,9 @@ class ItemController extends Controller
 
         $itemWithQrCode = $qrCodeService->generateQrCode($newItem);
 
+        // Log item creation
+        $this->logItemActivity($request, 'Created', $newItem->name, $newItem->uuid);
+
         return new ItemResource($itemWithQrCode);
 
         // Validate the incoming request
@@ -98,6 +104,7 @@ class ItemController extends Controller
      */
     public function show(Item $item)
     {
+        $item->load('qrCode');
         return new ItemResource($item);
     }
 
@@ -116,6 +123,9 @@ class ItemController extends Controller
         if ($image) {
             $itemService->handleImageUpload($item, $image);
         }
+        
+        // Log item update
+        $this->logItemActivity($request, 'Updated', $item->name, $item->uuid);
         
         // Return the updated item
         return new ItemResource($item);
@@ -143,22 +153,22 @@ class ItemController extends Controller
                 }
             }
             
-            // Delete associated QR code if exists
-            if ($item->qrCode) {
-                $item->qrCode->delete();
-            }
+            // Get deletion reason from request
+            $deletionReason = $request->input('deletion_reason', 'No reason provided');
             
-            // Delete associated image if exists
-            if ($item->image_path) {
-                Storage::disk('public')->delete($item->image_path);
-            }
-            
-            // Delete the item (hard delete for now)
+            // Soft delete the item with reason
+            $item->update([
+                'deletion_reason' => $deletionReason
+            ]);
             $item->delete();
+            
+            // Log item deletion
+            $this->logItemActivity($request, 'Deleted', $item->name, $item->uuid);
             
             return response()->json([
                 'message' => 'Item deleted successfully',
-                'status' => 'success'
+                'status' => 'success',
+                'deleted_item' => new ItemResource($item)
             ], 200);
         } catch (\Exception $e) {
             \Log::error('Error deleting item: ' . $e->getMessage());
@@ -195,11 +205,16 @@ class ItemController extends Controller
     public function getDeletedItems()
     {
         try {
-            // For now, return an empty array since we don't have soft deletes yet
+            // Get all soft-deleted items with their relationships
+            $deletedItems = Item::onlyTrashed()
+                ->with(['location', 'condition', 'condition_number', 'category', 'user'])
+                ->orderBy('deleted_at', 'desc')
+                ->get();
+            
             return response()->json([
                 'message' => 'Deleted items retrieved successfully',
                 'status' => 'success',
-                'data' => []
+                'data' => ItemResource::collection($deletedItems)
             ], 200);
         } catch (\Exception $e) {
             \Log::error('Error retrieving deleted items: ' . $e->getMessage());
@@ -213,13 +228,32 @@ class ItemController extends Controller
     /**
      * Restore a deleted item
      */
-    public function restoreItem($uuid)
+    public function restoreItem($uuid, Request $request)
     {
         try {
-            // For now, just return a success message
+            // Check if the item exists in the trashed items
+            $item = Item::onlyTrashed()->where('uuid', $uuid)->first();
+            
+            if (!$item) {
+                return response()->json([
+                    'message' => 'Item not found in deleted items. It may have been permanently deleted.',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Restore the item
+            $item->restore();
+            
+            // Clear the deletion reason
+            $item->update(['deletion_reason' => null]);
+            
+            // Log item restoration
+            $this->logItemActivity($request, 'Restored', $item->name, $item->uuid);
+            
             return response()->json([
-                'message' => 'Item restore functionality will be available once soft deletes are implemented',
-                'status' => 'success'
+                'message' => 'Item restored successfully. It will appear in the inventory.',
+                'status' => 'success',
+                'item' => new ItemResource($item)
             ], 200);
         } catch (\Exception $e) {
             \Log::error('Error restoring item: ' . $e->getMessage());
@@ -236,9 +270,31 @@ class ItemController extends Controller
     public function forceDelete($uuid)
     {
         try {
-            // For now, just return a success message
+            // Find the soft-deleted item
+            $item = Item::onlyTrashed()->where('uuid', $uuid)->first();
+            
+            if (!$item) {
+                return response()->json([
+                    'message' => 'Item not found in deleted items.',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Delete associated QR code if exists
+            if ($item->qrCode) {
+                $item->qrCode->delete();
+            }
+            
+            // Delete associated image if exists
+            if ($item->image_path) {
+                Storage::disk('public')->delete($item->image_path);
+            }
+            
+            // Permanently delete the item
+            $item->forceDelete();
+            
             return response()->json([
-                'message' => 'Permanent delete functionality will be available once soft deletes are implemented',
+                'message' => 'Item permanently deleted successfully',
                 'status' => 'success'
             ], 200);
         } catch (\Exception $e) {
@@ -278,10 +334,67 @@ class ItemController extends Controller
         'status' => 'borrowed',
     ]);
 
+    // Log the borrow activity with detailed information
+    $this->logBorrowActivity(
+        $request,
+        'Borrowed',
+        $item->name,
+        $request->quantity,
+        $request->borrowed_by
+    );
+
     return response()->json([
         'message' => 'Item borrowed successfully.',
         'remaining_quantity' => $item->quantity,
         'borrow' => $borrow,
     ], 200);
 }
+
+    /**
+     * Validate and update QR code for an item
+     */
+    public function validateQRCode(Request $request, $uuid)
+    {
+        try {
+            // Find the item by UUID with QR code relationship
+            $item = Item::with('qrCode')->where('uuid', $uuid)->first();
+            
+            if (!$item) {
+                return response()->json([
+                    'message' => 'Item not found.',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Generate and save new QR code (version will auto-increment)
+            $qrCodeService = new QrCodeService();
+            $newQrCode = $qrCodeService->validateAndUpdateQrCode($item);
+            
+            // Refresh the item to get updated QR code with relationship
+            $item->refresh();
+            $item->load('qrCode');
+            
+            // Log the activity
+            $this->logItemActivity($request, 'QR Code Validated', $item->description, $item->uuid);
+            
+            return response()->json([
+                'message' => 'QR code validated and updated successfully',
+                'status' => 'success',
+                'data' => new ItemResource($item),
+                'qr_code_data' => [
+                    'id' => $newQrCode->id,
+                    'version' => $newQrCode->version,
+                    'is_active' => $newQrCode->is_active,
+                    'image_path' => asset('storage/' . $newQrCode->image_path)
+                ]
+            ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error validating QR code: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to validate QR code: ' . $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
 }

@@ -1,19 +1,19 @@
 
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 md:p-6">
     <!-- Header -->
-    <div class="flex items-center gap-3 mb-8">
-      <button @click="goBack" class="inline-flex items-center text-gray-600 hover:text-gray-800">
-        <span class="material-icons-outlined">arrow_back</span>
-        <span class="ml-1">Back</span>
+    <div class="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6 md:mb-8">
+      <button @click="goBack" class="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 px-2 py-1 sm:px-0 transition-colors">
+        <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
+        <span class="ml-1 text-sm sm:text-base">Back</span>
       </button>
       <!-- <h1 class="text-xl font-semibold text-gray-800">Items</h1> -->
     </div>
 
     <!-- Main Form -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-3xl">
-      <h2 class="text-lg font-medium text-gray-800 mb-6">Add new item</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 max-w-3xl mx-auto">
+      <h2 class="text-base sm:text-lg font-medium text-gray-800 dark:text-white mb-4 sm:mb-6">Add new item</h2>
       <form @submit.prevent="handleSubmit" class="space-y-6">
         <!-- Article -->
         <div class="form-group">
@@ -80,6 +80,24 @@
               <span class="material-icons-outlined">payments</span>
             </span>
             <input type="text" v-model="formData.unitValue" class="form-input !pl-12" placeholder="32,200.00" required>
+          </div>
+        </div>
+
+        <!-- Quantity -->
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <div class="relative flex items-center">
+            <span class="absolute left-4 text-gray-400">
+              <span class="material-icons-outlined">inventory</span>
+            </span>
+            <input 
+              type="number" 
+              v-model="formData.quantity" 
+              class="form-input !pl-12" 
+              placeholder="Enter quantity" 
+              min="1"
+              required
+            >
           </div>
         </div>
 
@@ -178,6 +196,7 @@
           </div>
         </div>
 
+
         <!-- Image Upload -->
         <div class="form-group">
             <label class="form-label">image</label>
@@ -253,6 +272,17 @@
           </div>
       </form>
     </div>
+
+    <!-- Success Modal -->
+    <SuccessModal
+      :isOpen="showSuccessModal"
+      :title="successModalType === 'success' ? 'Success' : 'Error'"
+      :message="successMessage"
+      buttonText="Continue"
+      :type="successModalType"
+      @confirm="closeSuccessModal"
+      @close="closeSuccessModal"
+    />
   </div>
 </template>
 
@@ -265,6 +295,7 @@ import usecategories from '../composables/useCategories'
 import useConditionNumbers from '../composables/useConditionNumbers'
 import axiosClient from '../axios'
 import useUsers from '../composables/useUsers'
+import SuccessModal from '../components/SuccessModal.vue'
 import { computed } from 'vue'
 
 
@@ -276,12 +307,18 @@ const previewUrl = ref(null)
 const fileInput = ref(null)
 const isSubmitting = ref(false)
 
+// State for success modal
+const showSuccessModal = ref(false)
+const successMessage = ref('')
+const successModalType = ref('success')
+
 const formData = ref({
   unit: '',
   category: '',
   description: '',
   propertyAccountCode: '',
   unitValue: '',
+  quantity: 1,
   dateAcquired: '',
   poNumber: '',
   location: '',
@@ -408,6 +445,7 @@ const handleSubmit = async () => {
     }
   }
 
+
     
 
     
@@ -419,6 +457,7 @@ const handleSubmit = async () => {
     formDataToSend.append('description', formData.value.description)
     formDataToSend.append('pac', formData.value.propertyAccountCode)
     formDataToSend.append('unit_value', formData.value.unitValue)
+    formDataToSend.append('quantity', formData.value.quantity)
     formDataToSend.append('date_acquired', formData.value.dateAcquired)
     formDataToSend.append('po_number', formData.value.poNumber)
     formDataToSend.append('category_id', formData.value.category)
@@ -432,6 +471,7 @@ const handleSubmit = async () => {
       description: formData.value.description,
       pac: formData.value.propertyAccountCode,
       unit_value: formData.value.unitValue,
+      quantity: formData.value.quantity,
       date_acquired: formData.value.dateAcquired,
       po_number: formData.value.poNumber,
       category_id: formData.value.category,
@@ -491,12 +531,22 @@ const handleSubmit = async () => {
       }
     }
     
-    // Show alert with error message for better visibility
-    alert('Error creating item: ' + (error.response?.data?.message || 'An unexpected error occurred. Please check the form and try again.'))
+    // Show error message
+    successMessage.value = 'Error creating item: ' + (error.response?.data?.message || 'An unexpected error occurred. Please check the form and try again.')
+    successModalType.value = 'error'
+    showSuccessModal.value = true
   } finally {
     isSubmitting.value = false
   }
 }
+
+// Close success modal
+const closeSuccessModal = () => {
+  showSuccessModal.value = false
+  successMessage.value = ''
+  successModalType.value = 'success'
+}
+
 // Assuming categories are like: [{ id: 1, category: 'Supply' }, ...]
 const isSupplyCategory = computed(() => {
   const selected = categories.value.find(cat => 

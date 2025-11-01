@@ -27,6 +27,7 @@ class StoreItemRequest extends FormRequest
             'description' => 'required|string|max:1000',
             'pac' => 'required|string|max:50',
             'unit_value' => 'required|numeric|min:0',
+            'quantity' => 'required|integer|min:1',
             'date_acquired' => 'required|date|before_or_equal:today',
             'po_number' => 'required|string|max:50',
             'category_id' => 'required|exists:categories,id',

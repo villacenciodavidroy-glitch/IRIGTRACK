@@ -7,154 +7,119 @@ export default function useNotifications() {
   const error = ref('')
   const unreadCount = ref(0)
 
-  // Fetch notifications from activity logs
-  const fetchNotifications = async (limit = 10) => {
+  // Fetch unread count from database
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await axiosClient.get('/notifications/unread-count')
+      if (response.data.success) {
+        unreadCount.value = response.data.count || 0
+      }
+    } catch (err) {
+      console.error('Error fetching unread count:', err)
+      // Fallback to calculating from local notifications
+      unreadCount.value = notifications.value.filter(n => !n.isRead).length
+    }
+  }
+
+  // Fetch notifications from notifications table (low stock alerts)
+  const fetchNotifications = async (limit = 20) => {
     try {
       loading.value = true
       error.value = ''
       
-      const response = await axiosClient.get(`/activity-logs?per_page=${limit}`)
+      const response = await axiosClient.get(`/notifications?per_page=${limit}`)
       
       if (response.data.success) {
-        notifications.value = response.data.data.map(log => ({
-          id: log.id,
-          type: getNotificationType(log.action),
-          title: getNotificationTitle(log.action),
-          message: log.description || getDefaultMessage(log.action),
-          user: log.name,
-          role: log.role,
-          timestamp: log.created_at || new Date(`${log.date} ${log.time}`).toISOString(),
-          date: log.date,
-          time: log.time,
-          action: log.action,
-          isRead: false,
-          priority: getNotificationPriority(log.action)
+        notifications.value = response.data.data.map(notification => ({
+          id: notification.id,
+          type: notification.type || 'low_stock',
+          title: notification.title || 'Low Stock Alert',
+          message: notification.message,
+          user: notification.item?.unit || 'System',
+          role: 'System',
+          timestamp: notification.timestamp || notification.created_at,
+          date: notification.date,
+          time: notification.time,
+          action: 'Low Stock Alert',
+          isRead: notification.isRead ?? false,
+          priority: notification.priority || 'high',
+          item: notification.item
         }))
         
-        // Calculate unread count
-        unreadCount.value = notifications.value.filter(n => !n.isRead).length
+        // Update unread count from database (more accurate than calculating from fetched items)
+        await fetchUnreadCount()
       } else {
         error.value = response.data.message || 'Failed to fetch notifications'
       }
     } catch (err) {
       console.error('Error fetching notifications:', err)
       error.value = err.response?.data?.message || 'Failed to fetch notifications'
+      // Initialize with empty array on error
+      notifications.value = []
     } finally {
       loading.value = false
     }
   }
 
-  // Get notification type based on action
-  const getNotificationType = (action) => {
-    const actionLower = action.toLowerCase()
-    
-    if (actionLower.includes('login') || actionLower.includes('logout')) {
-      return 'auth'
-    } else if (actionLower.includes('create') || actionLower.includes('add')) {
-      return 'create'
-    } else if (actionLower.includes('update') || actionLower.includes('edit')) {
-      return 'update'
-    } else if (actionLower.includes('delete') || actionLower.includes('remove')) {
-      return 'delete'
-    } else if (actionLower.includes('borrow') || actionLower.includes('return')) {
-      return 'borrow'
-    } else if (actionLower.includes('restore')) {
-      return 'restore'
-    } else {
-      return 'info'
-    }
+  // Get notification type - all are low stock
+  const getNotificationType = (type) => {
+    return type || 'low_stock'
   }
 
-  // Get notification title based on action
-  const getNotificationTitle = (action) => {
-    const actionLower = action.toLowerCase()
-    
-    if (actionLower.includes('login')) {
-      return 'User Login'
-    } else if (actionLower.includes('logout')) {
-      return 'User Logout'
-    } else if (actionLower.includes('create') && actionLower.includes('item')) {
-      return 'New Item Added'
-    } else if (actionLower.includes('create') && actionLower.includes('user')) {
-      return 'New User Created'
-    } else if (actionLower.includes('update') && actionLower.includes('item')) {
-      return 'Item Updated'
-    } else if (actionLower.includes('update') && actionLower.includes('user')) {
-      return 'User Updated'
-    } else if (actionLower.includes('delete') && actionLower.includes('item')) {
-      return 'Item Deleted'
-    } else if (actionLower.includes('delete') && actionLower.includes('user')) {
-      return 'User Deleted'
-    } else if (actionLower.includes('borrow')) {
-      return 'Item Borrowed'
-    } else if (actionLower.includes('return')) {
-      return 'Item Returned'
-    } else if (actionLower.includes('restore')) {
-      return 'Item Restored'
-    } else {
-      return action
-    }
-  }
-
-  // Get default message based on action
-  const getDefaultMessage = (action) => {
-    const actionLower = action.toLowerCase()
-    
-    if (actionLower.includes('login')) {
-      return 'User has logged into the system'
-    } else if (actionLower.includes('logout')) {
-      return 'User has logged out of the system'
-    } else if (actionLower.includes('create') && actionLower.includes('item')) {
-      return 'A new item has been added to the inventory'
-    } else if (actionLower.includes('create') && actionLower.includes('user')) {
-      return 'A new user account has been created'
-    } else if (actionLower.includes('update') && actionLower.includes('item')) {
-      return 'Item details have been updated'
-    } else if (actionLower.includes('update') && actionLower.includes('user')) {
-      return 'User profile has been updated'
-    } else if (actionLower.includes('delete') && actionLower.includes('item')) {
-      return 'An item has been deleted from the inventory'
-    } else if (actionLower.includes('delete') && actionLower.includes('user')) {
-      return 'A user account has been deleted'
-    } else if (actionLower.includes('borrow')) {
-      return 'An item has been borrowed'
-    } else if (actionLower.includes('return')) {
-      return 'An item has been returned'
-    } else if (actionLower.includes('restore')) {
-      return 'A deleted item has been restored'
-    } else {
-      return `Action performed: ${action}`
-    }
-  }
-
-  // Get notification priority based on action
-  const getNotificationPriority = (action) => {
-    const actionLower = action.toLowerCase()
-    
-    if (actionLower.includes('delete') || actionLower.includes('logout')) {
-      return 'high'
-    } else if (actionLower.includes('create') || actionLower.includes('borrow')) {
-      return 'medium'
-    } else {
-      return 'low'
-    }
+  // Get notification title - all are low stock alerts
+  const getNotificationTitle = (title) => {
+    return title || 'Low Stock Alert'
   }
 
   // Mark notification as read
-  const markAsRead = (notificationId) => {
-    const notification = notifications.value.find(n => n.id === notificationId)
-    if (notification) {
-      notification.isRead = true
-      unreadCount.value = notifications.value.filter(n => !n.isRead).length
+  const markAsRead = async (notificationId) => {
+    try {
+      const response = await axiosClient.put(`/notifications/${notificationId}/read`)
+      
+      if (response.data.success) {
+        const notification = notifications.value.find(n => n.id === notificationId)
+        if (notification) {
+          notification.isRead = true
+        }
+        // Update unread count from database (more accurate)
+        await fetchUnreadCount()
+        return true
+      }
+      return false
+    } catch (err) {
+      console.error('Error marking notification as read:', err)
+      // Still update locally even if API fails
+      const notification = notifications.value.find(n => n.id === notificationId)
+      if (notification) {
+        notification.isRead = true
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
+      return false
     }
   }
 
   // Mark all notifications as read
-  const markAllAsRead = () => {
-    notifications.value.forEach(notification => {
-      notification.isRead = true
-    })
-    unreadCount.value = 0
+  const markAllAsRead = async () => {
+    try {
+      // Get all unread notifications BEFORE updating
+      const unreadNotifications = notifications.value.filter(n => !n.isRead)
+      
+      // Update all notifications in the local array
+      notifications.value.forEach(notification => {
+        notification.isRead = true
+      })
+      
+      // Update all unread notifications in database
+      for (const notification of unreadNotifications) {
+        await axiosClient.put(`/notifications/${notification.id}/read`).catch(() => {})
+      }
+      
+      // Refresh unread count from database (more accurate)
+      await fetchUnreadCount()
+    } catch (err) {
+      console.error('Error marking all as read:', err)
+      unreadCount.value = 0
+    }
   }
 
   // Get notifications by type
@@ -179,7 +144,12 @@ export default function useNotifications() {
 
   // Refresh notifications
   const refreshNotifications = async () => {
-    await fetchNotifications(5) // Refresh with 5 notifications for dropdown
+    await fetchNotifications(20)
+  }
+
+  // Refresh unread count only (lighter than fetching all notifications)
+  const refreshUnreadCount = async () => {
+    await fetchUnreadCount()
   }
 
   return {
@@ -188,7 +158,9 @@ export default function useNotifications() {
     error,
     unreadCount,
     fetchNotifications,
+    fetchUnreadCount,
     refreshNotifications,
+    refreshUnreadCount,
     markAsRead,
     markAllAsRead,
     getNotificationsByType,

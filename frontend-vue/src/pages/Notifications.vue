@@ -1,10 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import useNotifications from '../composables/useNotifications'
 import useAuth from '../composables/useAuth'
-import { useDebouncedRef } from '../composables/useDebounce'
-
 const router = useRouter()
 const { user } = useAuth()
 
@@ -21,89 +19,13 @@ const {
   getUnreadNotifications
 } = useNotifications()
 
-// Filter and search
-const searchQuery = ref('')
-const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
-const filterType = ref('all')
-const filterPriority = ref('all')
-const filterDateRange = ref('all')
+// Pagination
 const currentPage = ref(1)
 const itemsPerPage = ref(20)
 
-// Available filter options
-const notificationTypes = [
-  { value: 'all', label: 'All Types' },
-  { value: 'auth', label: 'Authentication' },
-  { value: 'create', label: 'Created' },
-  { value: 'update', label: 'Updated' },
-  { value: 'delete', label: 'Deleted' },
-  { value: 'borrow', label: 'Borrowed' },
-  { value: 'restore', label: 'Restored' },
-  { value: 'info', label: 'Information' }
-]
-
-const priorityLevels = [
-  { value: 'all', label: 'All Priorities' },
-  { value: 'high', label: 'High Priority' },
-  { value: 'medium', label: 'Medium Priority' },
-  { value: 'low', label: 'Low Priority' }
-]
-
-const dateRanges = [
-  { value: 'all', label: 'All Time' },
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' }
-]
-
-// Computed properties
+// Computed properties - no filtering, just pagination
 const filteredNotifications = computed(() => {
-  let filtered = notifications.value
-
-  // Search filter (using debounced query)
-  const query = debouncedSearchQuery.value?.toLowerCase().trim()
-  if (query) {
-    filtered = filtered.filter(notification => 
-      (notification.title || '').toLowerCase().includes(query) ||
-      (notification.message || '').toLowerCase().includes(query) ||
-      (notification.user || '').toLowerCase().includes(query) ||
-      (notification.action || '').toLowerCase().includes(query)
-    )
-  }
-
-  // Type filter
-  if (filterType.value !== 'all') {
-    filtered = filtered.filter(notification => notification.type === filterType.value)
-  }
-
-  // Priority filter
-  if (filterPriority.value !== 'all') {
-    filtered = filtered.filter(notification => notification.priority === filterPriority.value)
-  }
-
-  // Date range filter
-  if (filterDateRange.value !== 'all') {
-    const now = new Date()
-    let startDate
-
-    switch (filterDateRange.value) {
-      case 'today':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        break
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-        break
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-        break
-    }
-
-    if (startDate) {
-      filtered = filtered.filter(notification => new Date(notification.timestamp) >= startDate)
-    }
-  }
-
-  return filtered
+  return notifications.value
 })
 
 const paginatedNotifications = computed(() => {
@@ -127,14 +49,17 @@ const notificationStats = computed(() => {
   return { total, unread, today }
 })
 
-// Methods
-const clearFilters = () => {
-  searchQuery.value = ''
-  filterType.value = 'all'
-  filterPriority.value = 'all'
-  filterDateRange.value = 'all'
-  currentPage.value = 1
+// Handle notification click - mark as read and navigate to Analytics
+const handleNotificationClick = async (notification) => {
+  // Mark as read
+  if (!notification.isRead) {
+    await markAsRead(notification.id)
+  }
+  // Navigate to Analytics page
+  router.push({ name: 'Analytics' })
 }
+
+// Methods
 
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
@@ -165,6 +90,7 @@ const getPriorityColor = (priority) => {
 
 const getTypeIcon = (type) => {
   switch (type) {
+    case 'low_stock': return 'warning'
     case 'auth': return 'login'
     case 'create': return 'add_circle'
     case 'update': return 'edit'
@@ -188,10 +114,6 @@ const formatRelativeTime = (timestamp) => {
   return time.toLocaleDateString()
 }
 
-// Watch for filter changes to reset pagination
-watch([searchQuery, filterType, filterPriority, filterDateRange], () => {
-  currentPage.value = 1
-})
 
 // Lifecycle
 onMounted(() => {
@@ -216,13 +138,6 @@ onMounted(() => {
           >
             <span class="material-icons-outlined mr-2 text-sm">done_all</span>
             Mark All Read
-          </button>
-          <button
-            @click="clearFilters"
-            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center"
-          >
-            <span class="material-icons-outlined mr-2 text-sm">clear</span>
-            Clear Filters
           </button>
         </div>
       </div>
@@ -261,50 +176,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="mb-6 space-y-4">
-      <!-- Search -->
-      <div class="flex flex-col sm:flex-row gap-4">
-        <div class="flex-1">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search notifications..."
-            class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-          />
-        </div>
-        
-        <div class="flex flex-col sm:flex-row gap-2">
-          <select
-            v-model="filterType"
-            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-          >
-            <option v-for="type in notificationTypes" :key="type.value" :value="type.value">
-              {{ type.label }}
-            </option>
-          </select>
-          
-          <select
-            v-model="filterPriority"
-            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-          >
-            <option v-for="priority in priorityLevels" :key="priority.value" :value="priority.value">
-              {{ priority.label }}
-            </option>
-          </select>
-          
-          <select
-            v-model="filterDateRange"
-            class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-          >
-            <option v-for="range in dateRanges" :key="range.value" :value="range.value">
-              {{ range.label }}
-            </option>
-          </select>
-        </div>
-      </div>
-    </div>
-
     <!-- Error Message -->
     <div v-if="error" class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
       {{ error }}
@@ -326,7 +197,7 @@ onMounted(() => {
       <div
         v-for="notification in paginatedNotifications"
         :key="notification.id"
-        @click="markAsRead(notification.id)"
+        @click="handleNotificationClick(notification)"
         class="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
         :class="{ 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800': !notification.isRead }"
       >
@@ -366,7 +237,11 @@ onMounted(() => {
             
             <div class="flex items-center justify-between mt-2">
               <div class="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                <span class="flex items-center">
+                <span v-if="notification.item" class="flex items-center">
+                  <span class="material-icons-outlined mr-1 text-sm">inventory_2</span>
+                  Item: {{ notification.item.unit }} (Qty: {{ notification.item.quantity }})
+                </span>
+                <span v-else class="flex items-center">
                   <span class="material-icons-outlined mr-1 text-sm">person</span>
                   {{ notification.user }} ({{ notification.role }})
                 </span>

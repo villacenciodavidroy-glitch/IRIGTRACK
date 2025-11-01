@@ -12,7 +12,19 @@ const route = useRoute()
 const { user, loading: userLoading, error: userError, fetchCurrentUser, getUserDisplayName, logout } = useAuth()
 
 // Use the notifications composable
-const { notifications, unreadCount, fetchNotifications, markAsRead, refreshNotifications } = useNotifications()
+const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, refreshNotifications, refreshUnreadCount } = useNotifications()
+
+// Handle notification click in dropdown - mark as read and navigate to Analytics
+const handleNotificationClick = async (notification) => {
+  // Mark as read if not already read
+  if (!notification.isRead) {
+    await markAsRead(notification.id)
+  }
+  // Close the dropdown
+  isNotificationsOpen.value = false
+  // Navigate to Analytics page
+  router.push({ name: 'Analytics' })
+}
 
 // Fallback user data for when API is loading
 const fallbackUser = ref({
@@ -208,7 +220,7 @@ const cancelLogout = () => {
   isLogoutModalOpen.value = false
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (isDarkMode.value) {
     document.documentElement.classList.add('dark')
   }
@@ -219,8 +231,19 @@ onMounted(() => {
   handleResize() // Initialize on mount
   startClock()
   
+  // Fetch unread count from database immediately (for badge)
+  await fetchUnreadCount()
+  
   // Fetch notifications when component mounts
-  fetchNotifications(5) // Fetch only 5 for the dropdown
+  await fetchNotifications(5) // Fetch only 5 for the dropdown
+  
+  // Refresh unread count periodically (every 30 seconds) to keep badge updated
+  const unreadCountInterval = setInterval(async () => {
+    await refreshUnreadCount()
+  }, 30000) // 30 seconds
+  
+  // Store interval ID for cleanup
+  window.unreadCountInterval = unreadCountInterval
 })
 
 onBeforeUnmount(() => {
@@ -228,6 +251,12 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', closeNotifications)
   document.removeEventListener('click', closeSidebarOnOutsideClick)
   window.removeEventListener('resize', handleResize)
+  
+  // Clear unread count refresh interval
+  if (window.unreadCountInterval) {
+    clearInterval(window.unreadCountInterval)
+    delete window.unreadCountInterval
+  }
 })
 </script>
 
@@ -371,12 +400,16 @@ onBeforeUnmount(() => {
           <!-- Notifications -->
           <div class="relative">
             <button 
-              class="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/50 notifications-button"
+              class="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/50 notifications-button relative"
               @click="toggleNotifications"
               aria-label="Notifications"
             >
               <span class="material-icons-outlined text-xl sm:text-2xl dark:text-gray-300">notifications</span>
-              <span v-if="unreadCount > 0" class="absolute top-0 right-0 h-3.5 w-3.5 sm:h-4 sm:w-4 bg-red-500 rounded-full text-[10px] sm:text-xs text-white flex items-center justify-center">
+              <!-- Dynamic notification badge from database -->
+              <span 
+                v-if="unreadCount > 0" 
+                class="absolute top-0 right-0 h-4 w-4 sm:h-5 sm:w-5 bg-red-500 rounded-full text-[10px] sm:text-xs text-white flex items-center justify-center font-semibold shadow-lg"
+              >
                 {{ unreadCount > 99 ? '99+' : unreadCount }}
               </span>
             </button>
@@ -406,7 +439,7 @@ onBeforeUnmount(() => {
                 <div
                   v-for="notification in notifications.slice(0, 5)"
                   :key="notification.id"
-                  @click="markAsRead(notification.id); isNotificationsOpen = false"
+                  @click="handleNotificationClick(notification)"
                   class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer flex items-start gap-3"
                   :class="{ 'bg-blue-50 dark:bg-blue-900/20': !notification.isRead }"
                 >

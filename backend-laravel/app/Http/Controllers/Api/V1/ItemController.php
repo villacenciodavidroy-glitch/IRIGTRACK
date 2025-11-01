@@ -12,6 +12,7 @@ use App\Http\Resources\V1\ItemCollection;
 use App\Services\V1\ItemService;
 use App\Services\V1\QrCodeService;
 use App\Traits\LogsActivity;
+use App\Jobs\CheckLowStockJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -81,7 +82,18 @@ class ItemController extends Controller
         $itemWithQrCode = $qrCodeService->generateQrCode($newItem);
 
         // Log item creation
-        $this->logItemActivity($request, 'Created', $newItem->name, $newItem->uuid);
+        $this->logItemActivity($request, 'Created', $newItem->unit ?? $newItem->description, $newItem->uuid);
+
+        // Refresh item to get latest data
+        $newItem->refresh();
+
+        // Execute job immediately to check for low stock (especially for supply items)
+        try {
+            $job = new CheckLowStockJob();
+            $job->handle();
+        } catch (\Exception $e) {
+            \Log::error("CheckLowStockJob failed: " . $e->getMessage());
+        }
 
         return new ItemResource($itemWithQrCode);
 
@@ -125,7 +137,18 @@ class ItemController extends Controller
         }
         
         // Log item update
-        $this->logItemActivity($request, 'Updated', $item->name, $item->uuid);
+        $this->logItemActivity($request, 'Updated', $item->unit ?? $item->description, $item->uuid);
+        
+        // Refresh item to get latest data after update
+        $item->refresh();
+        
+        // Execute job immediately to check for low stock (especially when quantity changes)
+        try {
+            $job = new CheckLowStockJob();
+            $job->handle();
+        } catch (\Exception $e) {
+            \Log::error("CheckLowStockJob failed: " . $e->getMessage());
+        }
         
         // Return the updated item
         return new ItemResource($item);
@@ -163,7 +186,7 @@ class ItemController extends Controller
             $item->delete();
             
             // Log item deletion
-            $this->logItemActivity($request, 'Deleted', $item->name, $item->uuid);
+            $this->logItemActivity($request, 'Deleted', $item->unit ?? $item->description, $item->uuid);
             
             return response()->json([
                 'message' => 'Item deleted successfully',
@@ -248,7 +271,7 @@ class ItemController extends Controller
             $item->update(['deletion_reason' => null]);
             
             // Log item restoration
-            $this->logItemActivity($request, 'Restored', $item->name, $item->uuid);
+            $this->logItemActivity($request, 'Restored', $item->unit ?? $item->description, $item->uuid);
             
             return response()->json([
                 'message' => 'Item restored successfully. It will appear in the inventory.',
@@ -338,10 +361,18 @@ class ItemController extends Controller
     $this->logBorrowActivity(
         $request,
         'Borrowed',
-        $item->name,
+        $item->unit ?? $item->description,
         $request->quantity,
         $request->borrowed_by
     );
+
+    // Execute job immediately to check for low stock after borrowing
+    try {
+        $job = new CheckLowStockJob();
+        $job->handle();
+    } catch (\Exception $e) {
+        \Log::error("CheckLowStockJob failed: " . $e->getMessage());
+    }
 
     return response()->json([
         'message' => 'Item borrowed successfully.',

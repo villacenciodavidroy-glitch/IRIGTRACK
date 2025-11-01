@@ -31,6 +31,16 @@ class Notification extends Model
     protected $fillable = [
         'item_id',
         'message',
+        'is_read',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_read' => 'boolean',
     ];
 
     /**

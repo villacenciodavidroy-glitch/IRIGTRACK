@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ConditionNumberController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
+use App\Http\Controllers\Api\V1\NotificationController;
 
 Route::get('/', function () {
     return response()->json([
@@ -43,6 +44,10 @@ Route::post('/items', [ItemController::class, 'store']);
 Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 Route::get('/activity-logs/statistics', [ActivityLogController::class, 'statistics']);
 Route::post('/activity-logs', [ActivityLogController::class, 'store']);
+Route::get('/notifications', [NotificationController::class, 'index']);
+Route::get('/notifications/statistics', [NotificationController::class, 'statistics']);
+Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 
 // QR Code Validation endpoint outside v1 group
 Route::post('/items/{uuid}/validate-qr', [ItemController::class, 'validateQRCode']);
@@ -91,5 +96,11 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     Route::get('activity-logs', [ActivityLogController::class, 'index']);
     Route::get('activity-logs/statistics', [ActivityLogController::class, 'statistics']);
     Route::post('activity-logs', [ActivityLogController::class, 'store']);
+
+    // NOTIFICATIONS
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::get('notifications/statistics', [NotificationController::class, 'statistics']);
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::put('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 
 });

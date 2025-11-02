@@ -418,13 +418,8 @@ const handleSubmit = async () => {
 
     console.log('Sending update request for user ID:', userId.value)
 
-    // Send PATCH request to Laravel API
-    const response = await axiosClient.post(`/users/${userId.value}`, formDataToSend, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'X-HTTP-Method-Override': 'PATCH' // Some servers might need this
-      }
-    })
+    // Send PUT request to Laravel API (axios will handle Content-Type automatically for FormData)
+    const response = await axiosClient.put(`/users/${userId.value}`, formDataToSend)
 
     if (response.data) {
       console.log('Account updated successfully:', response.data)

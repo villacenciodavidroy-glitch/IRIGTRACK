@@ -68,7 +68,7 @@ class UserController extends Controller
             }
             
             // Store new image
-            $path = $request->file('image')->store('user_images', 'public');
+            $path = $request->file('image')->store('images', 'public');
             $validatedData['image'] = $path;
         }
         

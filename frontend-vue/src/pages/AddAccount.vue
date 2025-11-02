@@ -137,24 +137,29 @@
               <span class="absolute left-0 top-0 text-gray-400">
                 <span class="material-icons-outlined">location_on</span>
               </span>
-              <select 
-                v-model="formData.location"
+              <select
+                v-model.number="formData.location"
                 class="form-select"
+                :class="{ 'text-gray-400': formData.location === null }"
+                :disabled="locationsLoading || isSubmitting"
                 required
               >
-                <option value="" disabled>Select location</option>
+                <option :value="null" disabled hidden>Select location</option>
                 <option 
                   v-for="location in locations" 
-                  :key="location.id" 
-                  :value="location.id || location.location_id"
+                  :key="location.id || location.location_id" 
+                  :value="Number(location.id || location.location_id)"
                 >
                   {{ location.location }}
                 </option>
               </select>
-              
-              
+              <p v-if="locationsLoading" class="mt-1 text-xs text-yellow-600 dark:text-yellow-400">Loading locations...</p>
+              <p v-if="!locationsLoading && locations.length === 0" class="mt-1 text-xs text-red-600 dark:text-red-400">
+                No locations available. Please add locations first.
+              </p>
             </div>
             <p v-if="errors.location" class="mt-1 text-sm text-red-600">{{ errors.location[0] }}</p>
+            <p v-if="errors.location_id" class="mt-1 text-sm text-red-600">{{ errors.location_id[0] }}</p>
           </div>
 
           <!-- Password -->
@@ -255,7 +260,7 @@ const formData = ref({
   avatar: null,
   fullname: '',
   email: '',
-  location: '',
+  location: null, // Initialize as null for placeholder
   password: '',
   confirmPassword: ''
 })
@@ -266,14 +271,24 @@ const accountTypes = ref([
   { value: 'user', label: 'User' }
 ])
 
-const { locations } = useLocations(formData)
+const { locations, fetchLocations, loading: locationsLoading } = useLocations(formData)
 
-// Set account type from URL parameter
-onMounted(() => {
+// Set account type from URL parameter and fetch locations
+onMounted(async () => {
   console.log('=== COMPONENT MOUNTED ===')
   console.log('Route query:', route.query)
   console.log('Current form data:', formData.value)
   
+  // Fetch locations first
+  try {
+    await fetchLocations(1, 1000)
+    console.log('Locations loaded:', locations.value.length)
+    console.log('Available locations:', locations.value)
+  } catch (error) {
+    console.error('Error fetching locations:', error)
+  }
+  
+  // Set account type from URL parameter
   const accountTypeFromUrl = route.query.type
   console.log('Account type from URL:', accountTypeFromUrl)
   
@@ -467,12 +482,8 @@ const handleSubmit = async () => {
       console.error('API connectivity test failed:', testError)
     }
 
-    // Send request to Laravel API with proper headers for multipart form data
-    const response = await axiosClient.post('/register', formDataToSend, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    // Send request to Laravel API (axios will handle Content-Type automatically for FormData)
+    const response = await axiosClient.post('/register', formDataToSend)
 
     if (response.data) {
       console.log('Registration successful:', response.data)
@@ -487,7 +498,7 @@ const handleSubmit = async () => {
           avatar: null,
           fullname: '',
           email: '',
-          location: '',
+          location: null, // Reset to null for placeholder
           password: '',
           confirmPassword: ''
         }

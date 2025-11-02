@@ -1,5 +1,5 @@
 <template>
-  <div class="usage-overview-container p-3 sm:p-4 md:p-6">
+  <div class="usage-overview-container">
     <!-- Back Button -->
     <button @click="goBack" class="back-button mb-4 sm:mb-6 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
       <i class="fas fa-arrow-left"></i>
@@ -35,7 +35,7 @@
             Current
           </span>
         </div>
-        <div class="h-[250px] sm:h-[300px]">
+        <div class="h-[250px] sm:h-[300px] w-full overflow-hidden">
           <Bar :data="q1Data" :options="getBarOptions(isCurrentQuarter(q1Key))" />
         </div>
         <div v-if="q1Data.labels.length === 1 && q1Data.labels[0] === 'No data'" class="text-center text-gray-500 dark:text-gray-400 text-sm mt-2">
@@ -54,7 +54,7 @@
             Current
           </span>
         </div>
-        <div class="h-[250px] sm:h-[300px]">
+        <div class="h-[250px] sm:h-[300px] w-full overflow-hidden">
           <Bar :data="q2Data" :options="getBarOptions(isCurrentQuarter(q2Key))" />
         </div>
         <div v-if="q2Data.labels.length === 1 && q2Data.labels[0] === 'No data'" class="text-center text-gray-500 dark:text-gray-400 text-sm mt-2">
@@ -73,7 +73,7 @@
             Current
           </span>
         </div>
-        <div class="h-[250px] sm:h-[300px]">
+        <div class="h-[250px] sm:h-[300px] w-full overflow-hidden">
           <Bar :data="q3Data" :options="getBarOptions(isCurrentQuarter(q3Key))" />
         </div>
         <div v-if="q3Data.labels.length === 1 && q3Data.labels[0] === 'No data'" class="text-center text-gray-500 dark:text-gray-400 text-sm mt-2">
@@ -92,7 +92,7 @@
             Current
           </span>
         </div>
-        <div class="h-[250px] sm:h-[300px]">
+        <div class="h-[250px] sm:h-[300px] w-full overflow-hidden">
           <Bar :data="q4Data" :options="getBarOptions(isCurrentQuarter(q4Key))" />
         </div>
         <div v-if="q4Data.labels.length === 1 && q4Data.labels[0] === 'No data'" class="text-center text-gray-500 dark:text-gray-400 text-sm mt-2">
@@ -138,9 +138,9 @@
         <div class="flex items-start">
           <i class="fas fa-info-circle text-blue-600 dark:text-blue-400 mt-0.5 mr-2"></i>
           <div class="flex-1">
-            <p class="text-blue-800 dark:text-blue-200 text-sm font-medium">
+            <!-- <p class="text-blue-800 dark:text-blue-200 text-sm font-medium">
               ✅ Forecasts Generated Successfully
-            </p>
+            </p> -->
             <p class="text-blue-600 dark:text-blue-300 text-xs mt-1">
               <span v-if="forecastItems.some(item => item.method === 'linear_regression') && !forecastError">
                 Using Python ML Linear Regression to predict next quarter's (3 months) usage based on historical Q1–Q4 data.
@@ -160,15 +160,15 @@
           <i class="fas fa-exclamation-triangle text-yellow-600 dark:text-yellow-400 mt-0.5 mr-2"></i>
           <div class="flex-1">
             <p class="text-yellow-800 dark:text-yellow-200 text-sm font-medium">{{ forecastError }}</p>
-            <p class="text-yellow-600 dark:text-yellow-300 text-xs mt-2" v-if="forecastError.includes('unavailable')">
-              To use Python ML API:
+            <div class="text-yellow-600 dark:text-yellow-300 text-xs mt-2" v-if="forecastError.includes('unavailable')">
+              <p class="mb-1">To use Python ML API:</p>
               <ul class="list-disc list-inside mt-1 space-y-1">
                 <li>Windows: Run <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">start_ml_api.bat</code></li>
                 <li>Linux/Mac: Run <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">./start_ml_api.sh</code></li>
                 <li>Or manually: <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">python ml_api_server.py</code></li>
               </ul>
-              The server should run on <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{ PY_API_BASE }}</code>
-            </p>
+              <p class="mt-1">The server should run on <code class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{ PY_API_BASE }}</code></p>
+            </div>
             <p class="text-yellow-600 dark:text-yellow-300 text-xs mt-2" v-else>
               Forecasts are using Laravel Linear Regression fallback. Check console for details.
             </p>
@@ -177,13 +177,13 @@
       </div>
 
       <!-- Forecast Chart -->
-      <div v-if="!forecastLoading" class="w-full max-w-md mx-auto h-[250px] sm:h-[300px] mb-4">
+      <div v-if="!forecastLoading" class="w-full max-w-md mx-auto h-[250px] sm:h-[300px] mb-4 overflow-hidden">
         <Pie :data="forecastData" :options="pieOptions" />
       </div>
 
       <!-- Forecast Details Table -->
-      <div v-if="!forecastLoading && forecastItems.length > 0" class="mt-6 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <div v-if="!forecastLoading && forecastItems.length > 0" class="mt-6 overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+        <table class="w-full divide-y divide-gray-200 dark:divide-gray-700" style="min-width: 600px;">
           <thead class="bg-gray-50 dark:bg-gray-700">
             <tr>
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
@@ -535,20 +535,19 @@ const fetchForecastPredictions = async () => {
         }
       })
       
-      // Show info message about fallback
+      // Only show info message in console, not as UI error since fallback is working
       if (mlError.code === 'ECONNREFUSED' || mlError.code === 'ERR_NETWORK') {
-        forecastError.value = `Python ML API unavailable at ${PY_API_BASE}. Please start the Python ML API server. Using Laravel Linear Regression fallback.`
-        console.error('❌ Python ML API Connection Failed:', {
-          url: `${PY_API_BASE}/predict/consumables/linear`,
-          error: mlError.message,
-          code: mlError.code,
-          hint: 'Run: start_ml_api.bat (Windows) or ./start_ml_api.sh (Linux/Mac)'
-        })
+        console.info('ℹ️ Python ML API unavailable at ' + PY_API_BASE + '. Using Laravel Linear Regression fallback (fully functional).')
+        console.info('💡 To enable Python ML API, run: start_ml_api.bat (Windows) or ./start_ml_api.sh (Linux/Mac)')
+        // Don't set forecastError - fallback is working fine, just log for debugging
+        // forecastError.value = null // Ensure no error shown since fallback works
       } else {
-        forecastError.value = `Python ML API error: ${mlError.message}. Using Laravel Linear Regression fallback.`
+        // Only show error in console for other errors
+        console.warn('⚠️ Python ML API error:', mlError.message, '- Using Laravel Linear Regression fallback')
+        // forecastError.value = null // Don't show UI error since fallback works
       }
       
-      console.log('⚠️ Using Laravel Linear Regression forecasts (Python ML API unavailable)')
+      console.log('✅ Using Laravel Linear Regression forecasts (fallback working correctly)')
     }
     
     
@@ -612,68 +611,68 @@ onMounted(async () => {
 
 <style scoped>
 .usage-overview-container {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.75rem;
+  margin: 0;
   background-color: #f9fafb;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 2rem;
+@media (min-width: 640px) {
+  .usage-overview-container {
+    padding: 1rem;
+  }
 }
 
-.bg-white {
-  background-color: white;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  height: 400px;
-  display: flex;
-  flex-direction: column;
+@media (min-width: 768px) {
+  .usage-overview-container {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
 }
 
-.text-2xl {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 2rem;
+/* Ensure all child elements respect container width */
+.usage-overview-container > * {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.text-lg {
-  font-size: 1.25rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 1rem;
-}
-
+/* Chart containers should be responsive */
 .chart-container {
-  flex: 1;
   position: relative;
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
-.w-full {
+/* Table overflow handling */
+.usage-overview-container table {
   width: 100%;
-  height: 300px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  table-layout: auto;
 }
 
-.max-w-md {
-  max-width: 32rem;
+/* Responsive chart wrapper */
+.usage-overview-container .h-\[250px\] {
+  max-width: 100%;
+  overflow: hidden;
 }
 
-.mb-8 {
-  margin-bottom: 2rem;
+.usage-overview-container .h-\[300px\] {
+  max-width: 100%;
+  overflow: hidden;
 }
 
-.shadow-sm {
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+/* Ensure grid doesn't overflow */
+@media (max-width: 1024px) {
+  .usage-overview-container .grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
+/* Back button styling */
 .back-button {
   display: inline-flex;
   align-items: center;
@@ -690,9 +689,5 @@ onMounted(async () => {
 
 .back-button:hover {
   background-color: #e5e7eb;
-}
-
-.mr-2 {
-  margin-right: 0.5rem;
 }
 </style> 

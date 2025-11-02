@@ -302,117 +302,7 @@
 
     <!-- Predictive Analytics Charts Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <!-- ML-Powered Usage Prediction -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm h-[450px] border border-green-200 dark:border-green-700">
-        <div class="flex items-center gap-3 mb-4">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">ML-Powered Usage Prediction</h2>
-          <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs rounded-full font-medium">XGBoost + CatBoost</span>
-        </div>
-        <div class="h-[350px]">
-          <Line :data="mlUsagePredictionData" :options="mlPredictionOptions" />
-        </div>
-        <div class="mt-4 flex justify-between text-sm text-gray-600 dark:text-gray-300">
-          <span>Historical Data</span>
-          <span>ML Predictions</span>
-          <span>Confidence: 94.2%</span>
-        </div>
-      </div>
 
-      <!-- Predictive Maintenance Schedule -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm h-[450px] border border-yellow-200 dark:border-yellow-700">
-        <div class="flex items-center gap-3 mb-4">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Predictive Maintenance Schedule</h2>
-          <span class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-xs rounded-full font-medium">CatBoost</span>
-        </div>
-        <div class="h-[350px]">
-          <Bar :data="maintenanceScheduleData" :options="maintenanceOptions" />
-        </div>
-        <div class="mt-4 flex justify-between text-sm text-gray-600 dark:text-gray-300">
-          <span>Equipment Type</span>
-          <span>ML Accuracy: 91.8%</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Advanced Forecasting Dashboard -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm mb-8 border border-blue-200 dark:border-blue-700">
-      <div class="flex items-center gap-3 mb-6">
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Advanced Forecasting Dashboard</h2>
-        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm rounded-full font-medium">Multi-Model Ensemble</span>
-      </div>
-      
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <!-- Model Performance -->
-        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-          <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Model Performance</h3>
-          <div class="space-y-3">
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">XGBoost</span>
-              <div class="flex items-center gap-2">
-                <div class="w-20 h-2 bg-gray-200 dark:bg-gray-600 rounded-full">
-                  <div class="w-4/5 h-2 bg-orange-500 rounded-full"></div>
-                </div>
-                <span class="text-sm font-medium text-gray-900 dark:text-white">94.2%</span>
-              </div>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">CatBoost</span>
-              <div class="flex items-center gap-2">
-                <div class="w-20 h-2 bg-gray-200 dark:bg-gray-600 rounded-full">
-                  <div class="w-4/5 h-2 bg-purple-500 rounded-full"></div>
-                </div>
-                <span class="text-sm font-medium text-gray-900 dark:text-white">91.8%</span>
-              </div>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">Linear Regression</span>
-              <div class="flex items-center gap-2">
-                <div class="w-20 h-2 bg-gray-200 dark:bg-gray-600 rounded-full">
-                  <div class="w-3/4 h-2 bg-green-500 rounded-full"></div>
-                </div>
-                <span class="text-sm font-medium text-gray-900 dark:text-white">89.5%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Prediction Confidence -->
-        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-          <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Prediction Confidence</h3>
-          <div class="text-center">
-            <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">92.1%</div>
-            <p class="text-sm text-gray-600 dark:text-gray-300">Overall Accuracy</p>
-            <div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              <p>Next 30 days: 94.2%</p>
-              <p>Next 90 days: 89.8%</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Data Freshness -->
-        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-          <h3 class="font-semibold text-gray-900 dark:text-white mb-3">Data Freshness</h3>
-          <div class="space-y-2">
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">Last Update</span>
-              <span class="text-sm font-medium text-green-600 dark:text-green-400">2 min ago</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">Training Data</span>
-              <span class="text-sm font-medium text-gray-900 dark:text-white">12 months</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-600 dark:text-gray-300">API Status</span>
-              <span class="text-sm font-medium text-green-600 dark:text-green-400">Online</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Main Forecasting Chart -->
-      <div class="h-[400px]">
-        <Line :data="advancedForecastData" :options="advancedForecastOptions" />
-      </div>
     </div>
 
     <!-- All Items Lifespan Management Table -->
@@ -780,6 +670,7 @@ const PY_API_BASE = import.meta.env.VITE_PY_API_BASE_URL || 'http://127.0.0.1:50
 // Prediction state
 const lrConsumableForecast = ref([]) // Linear Regression results for supply
 const xgbLifespanForecast = ref([])  // XGBoost results for equipment lifespan
+const lifespanPredictions = ref([])  // New lifespan predictions with remaining_years
 const apiLoading = ref(false)
 const apiError = ref(null)
 // Category helper: treat Supply category as supply
@@ -787,7 +678,6 @@ const isConsumableCategory = (category) => {
   const c = (category || '').toLowerCase()
   return c === 'supply' || c.includes('supply')
 }
-
 
 const showRestockModal = ref(false)
 const showExpiringModal = ref(false)
@@ -807,23 +697,70 @@ const allItemsLifespan = computed(() => {
       const acquisitionDate = new Date(item.date_acquired)
       const today = new Date()
       const daysSinceAcquisition = Math.floor((today - acquisitionDate) / (1000 * 60 * 60 * 24))
-      let expectedLifespan = (() => {
-        const pred = xgbLifespanForecast.value.find(p => (p.name || '').toLowerCase() === (item.unit || '').toLowerCase())
-        if (pred?.expected_lifespan_days != null) return parseInt(pred.expected_lifespan_days)
-        if ((item.category || '') === 'Desktop' || (item.category || '') === 'ICT') return 1095
-        if (isConsumableCategory(item.category)) return 365
-        return 1095
-      })()
-      const remainingLifespan = Math.max(0, expectedLifespan - daysSinceAcquisition)
-      const lifespanEndDate = new Date(acquisitionDate.getTime() + (expectedLifespan * 24 * 60 * 60 * 1000))
+      const yearsInUse = daysSinceAcquisition / 365.25
+      
+      // Use remaining_years from database if available, otherwise calculate from acquisition date
+      let remainingYears = null
+      let expectedLifespan = null
+      let remainingLifespanDays = 0
+      
+      if (item.remaining_years != null && typeof item.remaining_years === 'number') {
+        // Use database value
+        remainingYears = item.remaining_years
+        remainingLifespanDays = Math.round(remainingYears * 365)
+        
+        // Calculate expected lifespan from remaining_years + years_in_use
+        if (item.lifespan_estimate != null) {
+          expectedLifespan = Math.round(item.lifespan_estimate * 365)
+        } else {
+          expectedLifespan = Math.round((remainingYears + yearsInUse) * 365)
+        }
+      } else {
+        // Fallback: calculate from acquisition date (legacy behavior)
+        expectedLifespan = (() => {
+          const pred = xgbLifespanForecast.value.find(p => (p.name || '').toLowerCase() === (item.unit || '').toLowerCase())
+          if (pred?.expected_lifespan_days != null) return parseInt(pred.expected_lifespan_days)
+          if ((item.category || '') === 'Desktop' || (item.category || '') === 'ICT') return 1095
+          return 1095
+        })()
+        remainingLifespanDays = Math.max(0, expectedLifespan - daysSinceAcquisition)
+        remainingYears = remainingLifespanDays / 365.25
+      }
+      
+      // Calculate lifespan end date
+      const lifespanEndDate = new Date(acquisitionDate.getTime() + ((remainingYears || (expectedLifespan / 365.25)) * 365.25 * 24 * 60 * 60 * 1000))
+      
+      // Status classes and recommendations based on remaining years
       let statusClass = 'bg-green-500'
       let lifespanClass = 'text-green-600'
       let recommendation = 'Good condition'
       let recommendationClass = 'text-green-600'
+      
+      if (remainingYears != null) {
+        if (remainingYears <= 0.082) { // <= 30 days
+          statusClass = 'bg-red-500'
+          lifespanClass = 'text-red-600'
+          recommendation = 'URGENT: Replace immediately'
+          recommendationClass = 'text-red-600'
+        } else if (remainingYears <= 0.164) { // <= 60 days (approximately 2 months)
+          statusClass = 'bg-orange-500'
+          lifespanClass = 'text-orange-600'
+          recommendation = 'Plan replacement soon'
+          recommendationClass = 'text-orange-600'
+        } else if (remainingYears <= 0.5) { // <= 6 months
+          statusClass = 'bg-yellow-500'
+          lifespanClass = 'text-yellow-600'
+          recommendation = 'Monitor closely'
+          recommendationClass = 'text-yellow-600'
+        }
+      }
+      
       let confidence = (() => {
-        const pred = xgbLifespanForecast.value.find(p => (p.name || '').toLowerCase() === (item.unit || '').toLowerCase())
-        return typeof pred?.confidence === 'number' ? pred.confidence : 92
+        const pred = lifespanPredictions.value.find(p => p.item_id === item.id)
+        // Confidence based on having prediction data
+        return pred ? 92 : 85
       })()
+      
       return {
         name: item.unit || 'Unknown Item',
         description: item.description || '',
@@ -834,12 +771,13 @@ const allItemsLifespan = computed(() => {
         acquisitionDate: acquisitionDate.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
         daysSinceAcquisition,
         expectedLifespan,
-        remainingLifespan,
+        remainingLifespan: remainingLifespanDays,
+        remainingYears: remainingYears != null ? parseFloat(remainingYears.toFixed(1)) : null,
         itemType: isConsumableCategory(item.category) ? 'Supply' : 'Non-Consumable',
         statusClass,
         lifespanEndDate: lifespanEndDate.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
         lifespanClass,
-        daysUntilEnd: `${remainingLifespan} days`,
+        daysUntilEnd: `${remainingLifespanDays} days`,
         recommendation,
         recommendationClass,
         confidence,
@@ -854,8 +792,17 @@ const allItemsLifespan = computed(() => {
 // Computed data based on real inventory
 const endingSoonItems = computed(() => {
   return (allItemsLifespan.value || [])
-    .filter(item => Number(item.remainingLifespan) <= 30)
-    .sort((a, b) => Number(a.remainingLifespan) - Number(b.remainingLifespan))
+    .filter(item => {
+      // Filter items with remaining lifespan <= 30 days
+      // Use remainingLifespan (in days) or calculate from remainingYears
+      const remainingDays = item.remainingLifespan ?? (item.remainingYears ? item.remainingYears * 365 : 999)
+      return remainingDays <= 30
+    })
+    .sort((a, b) => {
+      const daysA = a.remainingLifespan ?? (a.remainingYears ? a.remainingYears * 365 : 999)
+      const daysB = b.remainingLifespan ?? (b.remainingYears ? b.remainingYears * 365 : 999)
+      return daysA - daysB
+    })
 })
 
 const endingLifespanCount = computed(() => endingSoonItems.value.length)
@@ -1194,7 +1141,7 @@ const lineOptions = ref({
       ticks: {
         font: {
           size: 12
-        }
+        } 
       }
     }
   }
@@ -1532,7 +1479,55 @@ const buildConsumablePayload = () => {
   }
 }
 
+// Helper function to extract numeric value from condition_number string (e.g., "A1" -> 1, "3" -> 3)
+const extractConditionNumber = (conditionNumberStr) => {
+  if (!conditionNumberStr) return 0
+  const match = conditionNumberStr.toString().match(/\d+/)
+  return match ? parseInt(match[0]) : 0
+}
+
+// Build payload for lifespan prediction API
 const buildLifespanPayload = () => {
+  const equipment = (items.value || [])
+    .filter(i => !isConsumableCategory(i?.category))
+  
+  return {
+    items: equipment.map(i => {
+      // Calculate years in use from date_acquired
+      const acquisitionDate = i.date_acquired ? new Date(i.date_acquired) : new Date()
+      const today = new Date()
+      const yearsInUse = (today - acquisitionDate) / (1000 * 60 * 60 * 24 * 365.25)
+      
+      // Get maintenance count from item or estimate from maintenance_records if available
+      // Note: maintenance_records might not be loaded, so we use maintenance_count if available
+      const maintenanceCount = i.maintenance_count ?? 0
+      
+      // Extract condition number numeric value
+      // Try to get from condition string (format: "Condition (A1)" or similar)
+      // Or use condition_number_id to lookup, but for now we'll parse from condition string
+      let conditionNumber = 0
+      if (i.condition && typeof i.condition === 'string') {
+        // Extract numeric value from condition string like "Serviceable (A1)" -> 1
+        conditionNumber = extractConditionNumber(i.condition)
+      }
+      
+      // Get last maintenance reason from item or maintenance_reason field
+      const lastReason = i.maintenance_reason || ''
+      
+      return {
+        item_id: i.id,
+        category: i.category || 'Unknown',
+        years_in_use: Math.max(0, yearsInUse),
+        maintenance_count: maintenanceCount,
+        condition_number: conditionNumber,
+        last_reason: lastReason
+      }
+    })
+  }
+}
+
+// Build payload for XGBoost lifespan prediction (legacy - keeping for compatibility)
+const buildXgbLifespanPayload = () => {
   const equipment = (items.value || [])
     .filter(i => !isConsumableCategory(i?.category))
   return {
@@ -1551,17 +1546,67 @@ const fetchPredictions = async () => {
   apiError.value = null
   try {
     // Linear Regression for supply low-stock forecast
-    const [lrRes, xgbRes] = await Promise.all([
+    // New lifespan prediction API call
+    // XGBoost (legacy - keeping for compatibility)
+    const [lrRes, lifespanRes, xgbRes] = await Promise.all([
       axios.post(`${PY_API_BASE}/predict/consumables/linear`, buildConsumablePayload(), { timeout: 10000 }).catch(() => null),
-      axios.post(`${PY_API_BASE}/predict/equipment-lifespan/xgboost`, buildLifespanPayload(), { timeout: 12000 }).catch(() => null)
+      axios.post(`${PY_API_BASE}/predict/items/lifespan`, buildLifespanPayload(), { timeout: 10000 }).catch(() => null),
+      axios.post(`${PY_API_BASE}/predict/equipment-lifespan/xgboost`, buildXgbLifespanPayload(), { timeout: 12000 }).catch(() => null)
     ])
 
+    // Process Linear Regression results for supply
     if (lrRes?.data?.forecast) {
       lrConsumableForecast.value = lrRes.data.forecast
     } else {
       lrConsumableForecast.value = []
     }
 
+    // Process new lifespan predictions and update items in database
+    if (lifespanRes?.data?.success && lifespanRes.data.predictions) {
+      lifespanPredictions.value = lifespanRes.data.predictions
+      
+      // Prepare predictions for batch update - need to map item_id to uuid
+      const predictionsToUpdate = lifespanRes.data.predictions.map(pred => {
+        const item = items.value.find(i => i.id === pred.item_id)
+        if (!item || !item.uuid) return null
+        return {
+          uuid: item.uuid,
+          remaining_years: pred.remaining_years,
+          lifespan_estimate: pred.lifespan_estimate
+        }
+      }).filter(p => p !== null)
+      
+      // Batch update items with remaining_years via Laravel API
+      if (predictionsToUpdate.length > 0) {
+        try {
+          console.log(`Updating ${predictionsToUpdate.length} items with lifespan predictions...`)
+          const updateResponse = await axiosClient.post('/v1/items/update-lifespan-predictions', {
+            predictions: predictionsToUpdate
+          })
+          
+          if (updateResponse.data && updateResponse.data.status === 'success') {
+            console.log(`✅ Successfully updated ${updateResponse.data.updated_count} items with remaining_years`)
+            if (updateResponse.data.errors && updateResponse.data.errors.length > 0) {
+              console.warn('⚠️ Some items failed to update:', updateResponse.data.errors)
+            }
+          }
+          
+          // Refresh items to get updated remaining_years from database
+          await fetchitems()
+          console.log('✅ Items refreshed with updated remaining_years from database')
+        } catch (updateError) {
+          console.error('❌ Error updating items with lifespan predictions:', updateError)
+          console.error('Update error details:', updateError.response?.data || updateError.message)
+          // Don't fail the whole operation if batch update fails
+        }
+      } else {
+        console.warn('⚠️ No predictions to update (predictionsToUpdate is empty)')
+      }
+    } else {
+      lifespanPredictions.value = []
+    }
+
+    // Process XGBoost results (legacy)
     if (xgbRes?.data?.lifespan_predictions) {
       xgbLifespanForecast.value = xgbRes.data.lifespan_predictions
       if (typeof xgbRes.data.accuracy === 'number') {

@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
 import SuccessModal from '../components/SuccessModal.vue'
+import useLocations from '../composables/useLocations'
 
 const router = useRouter()
 
@@ -11,11 +12,17 @@ const user = ref({
   username: '',
   email: '',
   location: '',
+  location_id: null,
   image: '',
-  password: ''
+  password: '',
+  password_confirmation: ''
 })
 const selectedFile = ref(null)
 const loading = ref(false)
+const imageTimestamp = ref(Date.now()) // Add timestamp for cache busting
+
+// Fetch locations from database
+const { locations, fetchLocations, loading: locationsLoading } = useLocations()
 
 // State for success modal
 const showSuccessModal = ref(false)
@@ -24,89 +31,148 @@ const successModalType = ref('success')
 
 onMounted(async () => {
   const userId = localStorage.getItem('userId')
-  const backendUrl = 'http://localhost:8000/storage';
+  
+  // Fetch locations first
   try {
-  const res = await axiosClient.get(`/users/${userId}`)
-  if(res.status == 200){
-    console.log("Success")
-    console.log(res.data)
-     
-  user.value.fullName = res.data.data.fullname
-  user.value.username = res.data.data.username
-  user.value.email = res.data.data.email
-  user.value.location = res.data.data.location.location
-  user.value.image = `${backendUrl}/${res.data.data.image}`
-  
-  } else{
-console.log('API Response:', res.data)  // <- Confirm actual data shape
- 
-  
-  console.log('User Data:', user.value)  // <- Confirm reactivity works
+    await fetchLocations(1, 1000) // Fetch all locations (1000 per page)
+  } catch (error) {
+    console.error('Error fetching locations:', error)
   }
   
-} catch (e) {
-  console.error('API Error:', e.response ? e.response.data : e)
-}
+  // Fetch user data
+  try {
+    const res = await axiosClient.get(`/users/${userId}`)
+    if(res.status == 200){
+      console.log("Success")
+      console.log(res.data)
+       
+      user.value.fullName = res.data.data.fullname
+      user.value.username = res.data.data.username
+      user.value.email = res.data.data.email
+      user.value.location_id = res.data.data.location_id || null
+      user.value.location = res.data.data.location?.location || ''
+      user.value.image = `${res.data.data.image}`
+      imageTimestamp.value = Date.now() // Initialize timestamp
+    } else {
+      console.log('API Response:', res.data)
+      console.log('User Data:', user.value)
+    }
+  } catch (e) {
+    console.error('API Error:', e.response ? e.response.data : e)
+  }
 })
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
   if (file) {
     selectedFile.value = file;
+    
+    // Preview the selected image immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      user.value.image = e.target.result;
+    };
+    reader.readAsDataURL(file);
   }
 };
 
 const saveProfile = async () => {
-  loading.value = true;
-  const userId = localStorage.getItem('userId');
-   const formData = new FormData();
+  const userId = localStorage.getItem('userId')
+  if (!userId) return
 
-formData.append('fullname', user.value.fullName);
-formData.append('username', user.value.username);
-formData.append('email', user.value.email);
-formData.append('location', user.value.location);
- 
-
-  if (selectedFile.value) {
-    formData.append('image', selectedFile.value);
+  if (!user.value) {
+    console.error('user.value is undefined')
+    return
   }
-   
-if (user.password) {
-  formData.append('password', user.password)
-  formData.append('password_confirmation', user.password_confirmation)
-}
 
-  console.log(formData)
+  loading.value = true
+
+  const formData = new FormData()
+  formData.append('fullname', user.value.fullName ?? '')
+  formData.append('username', user.value.username ?? '')
+  formData.append('email', user.value.email ?? '')
+  
+  // Convert location name to location_id
+  let locationIdToSend = user.value.location_id
+  
+  // If location_id is not set but location name is, find the ID from fetched locations
+  if (!locationIdToSend && user.value.location) {
+    const foundLocation = locations.value.find(loc => 
+      loc.location?.toLowerCase() === user.value.location?.toLowerCase()
+    )
+    if (foundLocation) {
+      locationIdToSend = foundLocation.id || foundLocation.location_id
+    }
+  }
+  
+  // Only append location_id if we have a valid ID
+  if (locationIdToSend) {
+    formData.append('location_id', locationIdToSend)
+    console.log('Sending location_id:', locationIdToSend, 'for location:', user.value.location)
+  }
+
+  // Append image if a new file is selected
+  if (selectedFile.value && selectedFile.value instanceof File) {
+    formData.append('image', selectedFile.value)
+  }
+  
+  // Only append password if it's being changed
+  if (user.value.password && user.value.password.trim()) {
+    formData.append('password', user.value.password)
+    formData.append('password_confirmation', user.value.password_confirmation || user.value.password)
+  }
 
   try {
-    const res = await axiosClient.put(`/users/${userId}`, formData);
-    if(res.status == 200){
-       console.log(user.value.fullName)
-       
-    // Update user info after successful update
+    const res = await axiosClient.put(`/users/${userId}`, formData)
+
+    if (res.status === 200 && res.data.success) {
+      // ✅ Update image with timestamp to force refresh
+      if (res.data.data.image) {
+        user.value.image = `${res.data.data.image}?t=${Date.now()}`
+        imageTimestamp.value = Date.now()
+      }
+
+      // Update user data after successful update
+      user.value.fullName = res.data.data.fullname
+      user.value.username = res.data.data.username
+      user.value.email = res.data.data.email
+      user.value.location_id = res.data.data.location_id
+      user.value.location = res.data.data.location?.location || ''
+      
+      // Clear password fields
+      user.value.password = ''
+      user.value.password_confirmation = ''
+      
+      // Reset selected file
+      selectedFile.value = null
+      
+      // Reset file input
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) {
+        fileInput.value = ''
+      }
+
+      successMessage.value = 'Profile updated successfully!'
+      successModalType.value = 'success'
+      showSuccessModal.value = true
+    }
+  } catch (err) {
+    console.error('Save error', err.response ? err.response.data : err)
     
-      const backendUrl = 'http://localhost:8000/storage';
-      user.value.fullName = res.data.data.fullname;
-      user.value.username = res.data.data.username;
-      user.value.email = res.data.data.email;
-      user.value.location = res.data.data.location.location;
-      user.value.password = res.data.data.password;
-      user.value.image = `${backendUrl}/${res.data.data.image}`;
-    successMessage.value = 'Profile updated successfully!';
-    successModalType.value = 'success';
-    showSuccessModal.value = true;
-    console.log(user)
-     console.log(res.data.data )
-  }
-  } catch (e) {
-    successMessage.value = 'Failed to update profile.';
-    successModalType.value = 'error';
-    showSuccessModal.value = true;
-    console.error('Update Error:', e.response ? e.response.data : e);
+    // Show specific error messages
+    if (err.response?.data?.errors) {
+      const errors = err.response.data.errors
+      const errorMessages = Object.values(errors).flat().join(', ')
+      successMessage.value = errorMessages || 'Failed to update profile. Please check the form.'
+    } else {
+      successMessage.value = err.response?.data?.message || 'Failed to update profile.'
+    }
+    successModalType.value = 'error'
+    showSuccessModal.value = true
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 // Close success modal
 const closeSuccessModal = () => {
@@ -118,11 +184,9 @@ const closeSuccessModal = () => {
 const goToDashboard = () => {
   router.push('/dashboard')
 }
-
 </script>
 
 <template>
-  <!-- <pre> {{  formData }}</pre> -->
   <div class="p-4 sm:p-6 lg:p-8">
     <!-- Back to Dashboard Button -->
     <button 
@@ -135,14 +199,14 @@ const goToDashboard = () => {
 
     <div class="flex flex-col lg:flex-row gap-8">
       <!-- Left Column - Form -->
-      <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
-        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Admin</h1>
+      <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h1 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Admin</h1>
         <p class="text-gray-600 dark:text-gray-400 mb-6">Profile</p>
 
-        <form class="space-y-6" @submit.prevent="saveProfile">
-          <!-- image Upload -->
+        <form class="space-y-6" @submit.prevent="saveProfile" enctype="multipart/form-data">
+          <!-- Image Upload -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">image</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Profile Image</label>
             <div class="flex items-center">
               <label class="relative cursor-pointer">
                 <input
@@ -161,6 +225,7 @@ const goToDashboard = () => {
             </div>
           </div>
 
+          <!-- Your other form fields remain the same -->
           <!-- Full Name -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
@@ -186,15 +251,26 @@ const goToDashboard = () => {
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Location</label>
             <select
               v-model="user.location"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300"
+              :disabled="locationsLoading"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="" disabled>Select Location</option>
-             <option value="Panabo">Panabo</option>
-              <option value="Tagum">Tagum</option>
-              <option value="Davao">Davao</option>
-              <option value="ICT">ICT</option>
+              <option
+                v-for="location in locations"
+                :key="location.id || location.location_id"
+                :value="location.location"
+              >
+                {{ location.location }}
+              </option>
             </select>
+            <p v-if="locationsLoading" class="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+              Loading locations...
+            </p>
+            <p v-if="!locationsLoading && locations.length === 0" class="mt-1 text-xs text-red-600 dark:text-red-400">
+              No locations available. Please add locations first.
+            </p>
           </div>
+
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
             <input
@@ -203,7 +279,7 @@ const goToDashboard = () => {
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300"
             />
           </div>
-          <!-- Confirm Password -->
+
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confirm Password</label>
             <input
@@ -212,6 +288,7 @@ const goToDashboard = () => {
               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300"
             />
           </div>
+
           <button
             type="submit"
             class="mt-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
@@ -229,14 +306,16 @@ const goToDashboard = () => {
           
           <div class="flex justify-center mb-6">
             <div class="relative">
+              <!-- Add timestamp to image URL to prevent caching -->
               <img
-                :src="user.image"
+                :src="user.image + '?t=' + imageTimestamp"
                 alt="Profile"
                 class="w-32 h-32 rounded-full object-cover border-4 border-white dark:border-gray-600"
               />
               <span class="absolute bottom-0 right-0 bg-green-500 rounded-full w-6 h-6 border-2 border-white dark:border-gray-600"></span>
             </div>
           </div>
+          
           <div class="space-y-4">
             <div>
               <label class="block text-sm text-gray-500 dark:text-gray-400">Full Name</label>
@@ -263,7 +342,3 @@ const goToDashboard = () => {
     />
   </div>
 </template>
-
-<style scoped>
-/* Add any component-specific styles here */
-</style> 

@@ -475,11 +475,8 @@ const register = async () => {
           formDataToSend.append('image', formData.value.image)
         }
 
-        const response = await axiosClient.post('/register', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        })
+        // Send request (axios will handle Content-Type automatically for FormData)
+        const response = await axiosClient.post('/register', formDataToSend)
 
         if (response.data && response.data.success) {
           successMessage.value = 'Account created successfully! You can now log in.'

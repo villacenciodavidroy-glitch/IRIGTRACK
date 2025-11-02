@@ -14,7 +14,16 @@ class Item extends Model
 
     protected $fillable = [
         'uuid', 'unit', 'description', 'pac', 'unit_value', 'date_acquired', 'po_number', 'category_id', 'location_id',
-        'condition_id', 'condition_number_id', 'user_id', 'image_path', 'quantity', 'deletion_reason', 'maintenance_reason'
+        'condition_id', 'condition_number_id', 'user_id', 'image_path', 'quantity', 'deletion_reason', 'maintenance_reason',
+        'maintenance_count', 'lifespan_estimate', 'remaining_years'
+    ];
+
+    protected $casts = [
+        'maintenance_count' => 'integer',
+        'lifespan_estimate' => 'float',
+        'remaining_years' => 'float',
+        'unit_value' => 'decimal:2',
+        'quantity' => 'integer',
     ];
 
      protected static function booted()

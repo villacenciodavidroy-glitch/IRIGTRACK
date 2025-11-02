@@ -523,12 +523,8 @@ const handleSubmit = async () => {
     console.log('About to send form data with image')
     console.log(formData) 
 
-    // Send request to Laravel API with proper headers for multipart form data
-    const response = await axiosClient.post('/items', formDataToSend, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
+    // Send request to Laravel API (axios will handle Content-Type automatically for FormData)
+    const response = await axiosClient.post('/items', formDataToSend)
 
     if (response.data) {
       console.log('item created successfully:', response.data)

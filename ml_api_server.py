@@ -27,6 +27,7 @@ def health_check():
         'version': '1.0.0',
         'endpoints': {
             'predict_consumables': '/predict/consumables/linear',
+            'predict_lifespan': '/predict/items/lifespan',
             'health': '/health'
         }
     })
@@ -185,6 +186,136 @@ def predict_consumables():
             'message': 'Failed to generate forecasts'
         }), 500
 
+@app.route('/predict/items/lifespan', methods=['POST'])
+def predict_items_lifespan():
+    """
+    Predict remaining lifespan (in years) for items based on usage and maintenance
+    
+    Expected request format:
+    {
+        "items": [
+            {
+                "item_id": 1,
+                "category": "Desktop",
+                "years_in_use": 2.5,
+                "maintenance_count": 1,
+                "condition_number": 3,
+                "last_reason": "Wear"
+            }
+        ]
+    }
+    
+    Returns:
+    {
+        "success": true,
+        "predictions": [
+            {
+                "item_id": 1,
+                "remaining_years": 5.2,
+                "lifespan_estimate": 8.0
+            }
+        ]
+    }
+    """
+    try:
+        data = request.json
+        if not data or 'items' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid request format. Expected "items" array.'
+            }), 400
+        
+        items = data.get('items', [])
+        logger.info(f"Received lifespan prediction request for {len(items)} items")
+        
+        predictions = []
+        
+        for item in items:
+            item_id = item.get('item_id')
+            category = item.get('category', 'Unknown')
+            years_in_use = float(item.get('years_in_use', 0))
+            maintenance_count = int(item.get('maintenance_count', 0))
+            condition_number = int(item.get('condition_number', 0))
+            last_reason = item.get('last_reason', '').lower()
+            
+            # Calculate base remaining lifespan: 8 years max minus years in use
+            base_lifespan = 8.0 - years_in_use
+            
+            # Determine penalty based on maintenance_count, condition_number, and last_reason
+            penalty = 0.0
+            
+            # Base penalty if maintenance_count >= 2 OR condition_number >= 4
+            if maintenance_count >= 2 or condition_number >= 4:
+                # Random penalty between 0.5 and 1.5 years
+                base_penalty = np.random.uniform(0.5, 1.5)
+                penalty = base_penalty
+                
+                # Additional penalty multiplier based on maintenance reason severity
+                reason_multiplier = 1.0
+                if last_reason:
+                    if 'wet' in last_reason or 'water' in last_reason:
+                        # Water damage is severe - reduce lifespan significantly
+                        reason_multiplier = 1.5
+                    elif 'electrical' in last_reason or 'short' in last_reason or 'circuit' in last_reason:
+                        # Electrical issues are critical
+                        reason_multiplier = 1.4
+                    elif 'overheat' in last_reason or 'over heat' in last_reason or 'thermal' in last_reason:
+                        # Overheating indicates serious problems
+                        reason_multiplier = 1.3
+                    elif 'wear' in last_reason or 'worn' in last_reason:
+                        # Wear is expected over time, moderate impact
+                        reason_multiplier = 1.1
+                    # 'Other' or unknown reasons get no additional multiplier (1.0)
+                
+                # Apply the reason multiplier to the base penalty
+                penalty = base_penalty * reason_multiplier
+                
+                # Also add a small base penalty if maintenance_count is high
+                if maintenance_count >= 3:
+                    penalty += 0.3
+                elif maintenance_count >= 4:
+                    penalty += 0.5
+            
+            # Calculate remaining lifespan with penalty
+            remaining_years = base_lifespan - penalty
+            
+            # Clip between 0.5 and 8 years
+            remaining_years = np.clip(remaining_years, 0.5, 8.0)
+            
+            # Round to 1 decimal place
+            remaining_years = round(remaining_years, 1)
+            
+            # Total lifespan estimate (years_in_use + remaining_years)
+            lifespan_estimate = round(years_in_use + remaining_years, 1)
+            
+            predictions.append({
+                'item_id': item_id,
+                'remaining_years': remaining_years,
+                'lifespan_estimate': lifespan_estimate,
+                'years_in_use': round(years_in_use, 1),
+                'penalty_applied': round(penalty, 1) if penalty > 0 else 0.0,
+                'last_reason': item.get('last_reason', '') if item.get('last_reason') else None
+            })
+            
+            logger.info(f"Lifespan prediction for item {item_id}: {remaining_years} years remaining (penalty: {penalty:.1f}, reason: {item.get('last_reason', 'N/A')})")
+        
+        logger.info(f"Successfully generated lifespan predictions for {len(predictions)} items")
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions,
+            'total_items': len(predictions),
+            'method': 'lifespan_calculation'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error generating lifespan predictions: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to generate lifespan predictions'
+        }), 500
+
 if __name__ == '__main__':
     host = '0.0.0.0'
     port = 5000
@@ -196,6 +327,7 @@ if __name__ == '__main__':
     print(f'🌐 Listening on: http://{host}:{port}')
     print(f'✅ Health check: GET http://{host}:{port}/health')
     print(f'🔮 Forecast endpoint: POST http://{host}:{port}/predict/consumables/linear')
+    print(f'⏱️  Lifespan endpoint: POST http://{host}:{port}/predict/items/lifespan')
     print('=' * 60)
     print('Press Ctrl+C to stop the server')
     print()

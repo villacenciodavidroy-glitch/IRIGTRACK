@@ -90,6 +90,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     // General resource routes last
     Route::apiResource('items', ItemController::class);
     Route::post('items/{uuid}/borrow', [ItemController::class, 'borrowItem']);
+    Route::post('items/update-lifespan-predictions', [ItemController::class, 'updateLifespanPredictions']);
 
     Route::apiResource('locations', LocationController::class);
 

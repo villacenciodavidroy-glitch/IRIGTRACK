@@ -74,6 +74,9 @@ class ItemResource extends JsonResource
             'condition_id' => $this->condition_id,
             'condition_number_id' => $this->condition_number_id,
             'maintenance_reason' => $this->maintenance_reason,
+            'maintenance_count' => $this->maintenance_count ?? 0,
+            'lifespan_estimate' => $this->lifespan_estimate,
+            'remaining_years' => $this->remaining_years,
             'deleted_at' => $this->deleted_at,
             'deletion_reason' => $this->deletion_reason
         ];

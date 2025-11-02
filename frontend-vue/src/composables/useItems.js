@@ -20,7 +20,7 @@ export default function useItems() {
     
     try {
       console.log(`Fetching active items... (Attempt ${retryCount.value + 1})`)
-      const response = await axiosClient.get('/items/active')
+      const response = await axiosClient.get('/items')
       console.log('Items response:', response)
       
       if (response.data && response.data.data) {

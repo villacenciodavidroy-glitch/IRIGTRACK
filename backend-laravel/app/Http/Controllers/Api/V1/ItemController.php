@@ -254,6 +254,98 @@ class ItemController extends Controller
     }
 
     /**
+     * Batch update items with lifespan predictions
+     * 
+     * Expected request format:
+     * {
+     *     "predictions": [
+     *         {
+     *             "uuid": "item-uuid",
+     *             "remaining_years": 5.2,
+     *             "lifespan_estimate": 8.0
+     *         }
+     *     ]
+     * }
+     */
+    public function updateLifespanPredictions(Request $request)
+    {
+        try {
+            $predictions = $request->input('predictions', []);
+            
+            if (empty($predictions)) {
+                return response()->json([
+                    'message' => 'No predictions provided',
+                    'status' => 'error'
+                ], 400);
+            }
+            
+            $updated = 0;
+            $errors = [];
+            
+            foreach ($predictions as $prediction) {
+                try {
+                    $uuid = $prediction['uuid'] ?? null;
+                    $remainingYears = $prediction['remaining_years'] ?? null;
+                    $lifespanEstimate = $prediction['lifespan_estimate'] ?? null;
+                    
+                    if (!$uuid) {
+                        $errors[] = 'Missing UUID in prediction';
+                        continue;
+                    }
+                    
+                    $item = Item::where('uuid', $uuid)->first();
+                    
+                    if (!$item) {
+                        $errors[] = "Item not found with UUID: {$uuid}";
+                        continue;
+                    }
+                    
+                    // Build update data - always update if value is provided (even if 0)
+                    $updateData = [];
+                    if (isset($prediction['remaining_years'])) {
+                        $updateData['remaining_years'] = (float) $remainingYears;
+                    }
+                    if (isset($prediction['lifespan_estimate'])) {
+                        $updateData['lifespan_estimate'] = (float) $lifespanEstimate;
+                    }
+                    
+                    if (!empty($updateData)) {
+                        // Update the item
+                        $item->update($updateData);
+                        
+                        // Log the update for debugging
+                        \Log::info("Updated item {$uuid} ({$item->unit}) with remaining_years: {$updateData['remaining_years']}, lifespan_estimate: {$updateData['lifespan_estimate']}");
+                        
+                        $updated++;
+                    } else {
+                        \Log::warning("No update data provided for item {$uuid}");
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Error updating item {$uuid}: " . $e->getMessage();
+                    \Log::error("Error updating lifespan prediction for item {$uuid}: " . $e->getMessage(), [
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+            
+            return response()->json([
+                'message' => "Successfully updated {$updated} items",
+                'status' => 'success',
+                'updated_count' => $updated,
+                'total_predictions' => count($predictions),
+                'errors' => $errors
+            ], 200);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error batch updating lifespan predictions: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update lifespan predictions: ' . $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy($identifier, Request $request)

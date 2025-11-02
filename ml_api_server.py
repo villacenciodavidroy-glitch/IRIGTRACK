@@ -10,13 +10,195 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import logging
+import os
+from catboost import CatBoostRegressor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend requests
+# Enable CORS with specific configuration for frontend requests
+CORS(app, 
+     origins=["http://localhost:5174", "http://localhost:5173", "http://127.0.0.1:5174", "http://127.0.0.1:5173"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"],
+     supports_credentials=True)
+
+# Handle OPTIONS requests explicitly
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({})
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization")
+        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
+        response.headers.add('Access-Control-Allow-Credentials', "true")
+        return response
+
+# Global variable to store the CatBoost model
+lifespan_model = None
+MODEL_PATH = os.getenv('LIFESPAN_MODEL_PATH', None)
+
+def load_lifespan_model():
+    """
+    Load the CatBoost lifespan prediction model.
+    Checks multiple locations for the model file.
+    """
+    global lifespan_model
+    
+    if lifespan_model is not None:
+        return lifespan_model
+    
+    # Possible model file locations
+    possible_paths = [
+        MODEL_PATH,  # Environment variable path
+        'catboost_lifespan_model.cbm',
+        'models/catboost_lifespan_model.cbm',
+        'fastapi_lifespan_api/ml/models/catboost_lifespan_model.cbm',
+        os.path.join(os.path.dirname(__file__), 'catboost_lifespan_model.cbm'),
+        os.path.join(os.path.dirname(__file__), 'models', 'catboost_lifespan_model.cbm'),
+    ]
+    
+    model_path = None
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            model_path = path
+            break
+    
+    if model_path is None:
+        logger.warning("CatBoost model file not found. Model-based predictions will not be available.")
+        logger.info(f"Checked paths: {possible_paths}")
+        return None
+    
+    try:
+        logger.info(f"Loading CatBoost model from: {model_path}")
+        lifespan_model = CatBoostRegressor()
+        lifespan_model.load_model(model_path)
+        logger.info("✅ CatBoost model loaded successfully")
+        return lifespan_model
+    except Exception as e:
+        logger.error(f"Failed to load CatBoost model: {str(e)}")
+        return None
+
+# Load model on module import (lazy loading - will load on first prediction request)
+# Model will be loaded when first prediction is requested
+
+def prepare_features_for_prediction(items):
+    """
+    Convert JSON items to DataFrame with proper feature engineering.
+    One-hot encodes category and last_reason to match training data.
+    
+    Args:
+        items: List of item dictionaries with fields:
+            - item_id
+            - category
+            - years_in_use
+            - maintenance_count
+            - condition_number
+            - last_reason
+    
+    Returns:
+        DataFrame with all features ready for model prediction
+    """
+    if not items:
+        return pd.DataFrame()
+    
+    # Create base DataFrame from items
+    df = pd.DataFrame(items)
+    
+    # Ensure required numeric columns exist and are properly typed
+    numeric_cols = ['years_in_use', 'maintenance_count', 'condition_number']
+    for col in numeric_cols:
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # Handle category one-hot encoding
+    # Get unique categories from data and create one-hot encoded columns
+    if 'category' in df.columns:
+        # Normalize category values (strip whitespace, handle case)
+        df['category'] = df['category'].astype(str).str.strip()
+        df['category'] = df['category'].fillna('Unknown')
+        # Create one-hot encoded columns: category_Desktop, category_ICT, etc.
+        category_dummies = pd.get_dummies(df['category'], prefix='category')
+        # Drop original category column
+        df = pd.concat([df.drop('category', axis=1), category_dummies], axis=1)
+    else:
+        df['category'] = 'Unknown'
+        category_dummies = pd.get_dummies(df['category'], prefix='category')
+        df = pd.concat([df.drop('category', axis=1), category_dummies], axis=1)
+    
+    # Handle last_reason one-hot encoding
+    # Normalize last_reason values
+    if 'last_reason' in df.columns:
+        df['last_reason'] = df['last_reason'].astype(str).str.strip().str.lower()
+        df['last_reason'] = df['last_reason'].fillna('other')
+        # Replace empty strings with 'other'
+        df['last_reason'] = df['last_reason'].replace('', 'other')
+        # Create one-hot encoded columns: last_reason_Wet, last_reason_Electrical, etc.
+        reason_dummies = pd.get_dummies(df['last_reason'], prefix='last_reason')
+        # Drop original last_reason column
+        df = pd.concat([df.drop('last_reason', axis=1), reason_dummies], axis=1)
+    else:
+        df['last_reason'] = 'other'
+        reason_dummies = pd.get_dummies(df['last_reason'], prefix='last_reason')
+        df = pd.concat([df.drop('last_reason', axis=1), reason_dummies], axis=1)
+    
+    # Remove item_id if present (not a feature)
+    if 'item_id' in df.columns:
+        item_ids = df['item_id'].copy()
+        df = df.drop('item_id', axis=1)
+    else:
+        item_ids = None
+    
+    return df, item_ids
+
+def align_features_with_model(df, model):
+    """
+    Ensure DataFrame has all features expected by the model.
+    Fill missing columns with 0 and reorder columns to match model.
+    
+    Args:
+        df: DataFrame with features
+        model: CatBoost model
+    
+    Returns:
+        DataFrame with all model features in correct order
+    """
+    if model is None:
+        return df
+    
+    try:
+        # Get feature names from model
+        model_features = model.feature_names_
+        if model_features is None:
+            # Try to get from model attributes
+            model_features = getattr(model, 'feature_names_', None)
+    except:
+        # If we can't get feature names, return df as-is
+        logger.warning("Could not retrieve feature names from model")
+        return df
+    
+    if model_features is None:
+        logger.warning("Model feature names not available, using DataFrame as-is")
+        return df
+    
+    # Create a new DataFrame with all model features
+    aligned_df = pd.DataFrame(index=df.index)
+    
+    # Add all model features, filling with 0 if missing
+    for feature in model_features:
+        if feature in df.columns:
+            aligned_df[feature] = df[feature]
+        else:
+            aligned_df[feature] = 0
+            logger.debug(f"Missing feature '{feature}' in input data, filled with 0")
+    
+    # Ensure columns are in the same order as model expects
+    aligned_df = aligned_df[model_features]
+    
+    return aligned_df
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -228,6 +410,64 @@ def predict_items_lifespan():
         items = data.get('items', [])
         logger.info(f"Received lifespan prediction request for {len(items)} items")
         
+        # Load model if not already loaded
+        model = load_lifespan_model()
+        
+        # Try to use CatBoost model if available
+        if model is not None:
+            try:
+                # Prepare features from items
+                df, item_ids = prepare_features_for_prediction(items)
+                
+                if df.empty:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No valid items to process'
+                    }), 400
+                
+                # Align features with model expectations
+                df_aligned = align_features_with_model(df, model)
+                
+                # Make predictions
+                remaining_years_predictions = model.predict(df_aligned)
+                
+                # Ensure predictions are in reasonable bounds (0.0 to 8 years)
+                # Allow values below 0.5 to show items ending soon (≤30 days = 0.082 years)
+                remaining_years_predictions = np.clip(remaining_years_predictions, 0.0, 8.0)
+                
+                # Build predictions response
+                predictions = []
+                for idx, item in enumerate(items):
+                    item_id = item.get('item_id')
+                    years_in_use = float(item.get('years_in_use', 0))
+                    remaining_years = float(remaining_years_predictions[idx])
+                    remaining_years = round(remaining_years, 1)
+                    lifespan_estimate = round(years_in_use + remaining_years, 1)
+                    
+                    predictions.append({
+                        'item_id': item_id,
+                        'remaining_years': remaining_years,
+                        'lifespan_estimate': lifespan_estimate,
+                        'years_in_use': round(years_in_use, 1),
+                        'method': 'catboost_model'
+                    })
+                
+                logger.info(f"✅ Successfully generated {len(predictions)} predictions using CatBoost model")
+                
+                return jsonify({
+                    'success': True,
+                    'predictions': predictions,
+                    'total_items': len(predictions),
+                    'method': 'catboost_model'
+                })
+                
+            except Exception as model_error:
+                logger.error(f"CatBoost model prediction failed: {str(model_error)}", exc_info=True)
+                logger.warning("Falling back to manual calculation method")
+                # Fall through to manual calculation fallback
+        
+        # Fallback: Manual calculation if model not available or prediction failed
+        logger.info("Using manual calculation method (model not available or failed)")
         predictions = []
         
         for item in items:
@@ -254,23 +494,16 @@ def predict_items_lifespan():
                 reason_multiplier = 1.0
                 if last_reason:
                     if 'wet' in last_reason or 'water' in last_reason:
-                        # Water damage is severe - reduce lifespan significantly
                         reason_multiplier = 1.5
                     elif 'electrical' in last_reason or 'short' in last_reason or 'circuit' in last_reason:
-                        # Electrical issues are critical
                         reason_multiplier = 1.4
                     elif 'overheat' in last_reason or 'over heat' in last_reason or 'thermal' in last_reason:
-                        # Overheating indicates serious problems
                         reason_multiplier = 1.3
                     elif 'wear' in last_reason or 'worn' in last_reason:
-                        # Wear is expected over time, moderate impact
                         reason_multiplier = 1.1
-                    # 'Other' or unknown reasons get no additional multiplier (1.0)
                 
-                # Apply the reason multiplier to the base penalty
                 penalty = base_penalty * reason_multiplier
                 
-                # Also add a small base penalty if maintenance_count is high
                 if maintenance_count >= 3:
                     penalty += 0.3
                 elif maintenance_count >= 4:
@@ -278,14 +511,9 @@ def predict_items_lifespan():
             
             # Calculate remaining lifespan with penalty
             remaining_years = base_lifespan - penalty
-            
-            # Clip between 0.5 and 8 years
-            remaining_years = np.clip(remaining_years, 0.5, 8.0)
-            
-            # Round to 1 decimal place
+            # Allow values below 0.5 to show items ending soon (≤30 days = 0.082 years)
+            remaining_years = np.clip(remaining_years, 0.0, 8.0)
             remaining_years = round(remaining_years, 1)
-            
-            # Total lifespan estimate (years_in_use + remaining_years)
             lifespan_estimate = round(years_in_use + remaining_years, 1)
             
             predictions.append({
@@ -293,11 +521,10 @@ def predict_items_lifespan():
                 'remaining_years': remaining_years,
                 'lifespan_estimate': lifespan_estimate,
                 'years_in_use': round(years_in_use, 1),
-                'penalty_applied': round(penalty, 1) if penalty > 0 else 0.0,
-                'last_reason': item.get('last_reason', '') if item.get('last_reason') else None
+                'method': 'manual_calculation_fallback'
             })
             
-            logger.info(f"Lifespan prediction for item {item_id}: {remaining_years} years remaining (penalty: {penalty:.1f}, reason: {item.get('last_reason', 'N/A')})")
+            logger.info(f"Lifespan prediction for item {item_id}: {remaining_years} years remaining (method: manual)")
         
         logger.info(f"Successfully generated lifespan predictions for {len(predictions)} items")
         
@@ -305,7 +532,7 @@ def predict_items_lifespan():
             'success': True,
             'predictions': predictions,
             'total_items': len(predictions),
-            'method': 'lifespan_calculation'
+            'method': 'manual_calculation_fallback'
         })
     
     except Exception as e:

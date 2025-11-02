@@ -60,39 +60,75 @@
 
   <!-- Ending Lifespan Modal -->
   <div v-if="showEndingLifespanModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" @click.self="showEndingLifespanModal = false">
-    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Items Ending Lifespan (≤ 30 days)</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Items Ending Lifespan Soon</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {{ endingSoonItems.length }} item{{ endingSoonItems.length !== 1 ? 's' : '' }} with ≤ 30 days remaining
+          </p>
+        </div>
         <button @click="showEndingLifespanModal = false" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
           <span class="material-icons-outlined">close</span>
         </button>
       </div>
-      <div class="max-h-96 overflow-y-auto">
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[500px]">
-            <thead>
-              <tr class="text-left border-b border-gray-200 dark:border-gray-700">
-                <th class="py-2 px-2 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Item</th>
-                <th class="py-2 px-2 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Remaining</th>
-                <th class="py-2 px-2 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">End Date</th>
-                <th class="py-2 px-2 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Recommendation</th>
+        <table class="w-full min-w-[800px]">
+          <thead class="bg-gray-100 dark:bg-gray-700">
+            <tr class="text-left border-b-2 border-gray-200 dark:border-gray-600">
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Item Name</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Category</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Remaining Days</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Remaining Years</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">End Date</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Acquired</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Status</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Recommendation</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="i in endingSoonItems" :key="i.name + i.lifespanEndDate" class="border-t border-gray-200 dark:border-gray-700">
-                <td class="py-2 px-2 text-xs sm:text-sm text-gray-900 dark:text-white">{{ i.name }}</td>
-                <td class="py-2 px-2 text-xs sm:text-sm text-gray-900 dark:text-white">{{ i.remainingLifespan }} days</td>
-                <td class="py-2 px-2 text-xs sm:text-sm text-gray-900 dark:text-white">{{ i.lifespanEndDate }}</td>
-                <td class="py-2 px-2"><span :class="i.recommendationClass" class="text-xs sm:text-sm">{{ i.recommendation }}</span></td>
+            <tr v-for="i in endingSoonItems" :key="i.name + i.lifespanEndDate" 
+                class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+              <td class="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{{ i.name }}</td>
+              <td class="py-3 px-4">
+                <span :class="i.categoryClass" class="px-2 py-1 rounded-full text-xs font-medium">
+                  {{ i.category }}
+                </span>
+              </td>
+              <td class="py-3 px-4">
+                <span class="font-semibold" :class="{
+                  'text-red-600 dark:text-red-400': i.remainingLifespan <= 15,
+                  'text-orange-600 dark:text-orange-400': i.remainingLifespan > 15 && i.remainingLifespan <= 30
+                }">
+                  {{ i.remainingLifespan }} days
+                </span>
+              </td>
+              <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">
+                {{ i.remainingYears != null ? i.remainingYears.toFixed(2) : 'N/A' }} years
+              </td>
+              <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{{ i.lifespanEndDate }}</td>
+              <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{{ i.acquisitionDate }}</td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-1 rounded text-xs font-medium" :class="{
+                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': i.remainingLifespan <= 15,
+                  'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300': i.remainingLifespan > 15 && i.remainingLifespan <= 30
+                }">
+                  {{ i.remainingLifespan <= 15 ? 'CRITICAL' : 'URGENT' }}
+                </span>
+              </td>
+              <td class="py-3 px-4">
+                <span :class="i.recommendationClass" class="text-sm font-medium">{{ i.recommendation }}</span>
+              </td>
               </tr>
             <tr v-if="endingSoonItems.length === 0">
-              <td colspan="4" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                No items predicted to end within 30 days.
+              <td colspan="8" class="py-8 text-center">
+                <span class="material-icons-outlined text-4xl text-gray-400 mb-2 block">check_circle</span>
+                <p class="text-sm text-gray-500 dark:text-gray-400">No items predicted to end within 30 days.</p>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">All items have sufficient remaining lifespan.</p>
               </td>
             </tr>
           </tbody>
         </table>
-        </div>
       </div>
     </div>
   </div>
@@ -125,6 +161,16 @@
             <div class="flex flex-col">
               <h3 class="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">{{ endingLifespanCount }} Items</h3>
               <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">All item types</p>
+              <div class="flex flex-col gap-1 mb-2">
+                <p class="text-xs text-gray-500 dark:text-gray-500 flex items-center gap-1">
+                  <span class="material-icons-outlined text-xs">update</span>
+                  {{ lifespanScheduleInfo }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-500 flex items-center gap-1">
+                  <span class="material-icons-outlined text-xs">schedule</span>
+                  Next: {{ nextLifespanCalculation }}
+                </p>
+              </div>
               <button @click="showEndingLifespanModal = true" class="px-4 py-1.5 bg-red-600 text-white rounded-lg text-sm w-fit hover:bg-red-700">View Details</button>
             </div>
           </div>
@@ -176,6 +222,16 @@
             <div class="flex flex-col">
               <h3 class="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mb-2">{{ averageLifespan }} days</h3>
               <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">All item types</p>
+              <div class="flex flex-col gap-1 mb-2">
+                <p class="text-xs text-gray-500 dark:text-gray-500 flex items-center gap-1">
+                  <span class="material-icons-outlined text-xs">update</span>
+                  {{ lifespanScheduleInfo }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-500 flex items-center gap-1">
+                  <span class="material-icons-outlined text-xs">schedule</span>
+                  Next: {{ nextLifespanCalculation }}
+                </p>
+              </div>
               <button @click="showLifespanModal = true" class="px-4 py-1.5 bg-yellow-600 text-white rounded-lg text-sm w-fit hover:bg-yellow-700">View Analysis</button>
             </div>
           </div>
@@ -183,9 +239,87 @@
       </div>
     </div>
 
+    <!-- All Items Ending Lifespan Soon - Dedicated Section -->
+    <div v-if="endingSoonItems.length > 0" class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg p-6 mb-8 border-l-4 border-red-500 dark:border-red-400 shadow-sm">
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+            <span class="material-icons-outlined text-red-600 dark:text-red-400 text-2xl">warning</span>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Items Ending Lifespan Soon</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400">{{ endingSoonItems.length }} item{{ endingSoonItems.length !== 1 ? 's' : '' }} with ≤ 30 days remaining</p>
+          </div>
+        </div>
+        <button @click="showEndingLifespanModal = true" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2">
+          <span class="material-icons-outlined text-sm">visibility</span>
+          View All
+        </button>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[800px]">
+          <thead class="bg-white/50 dark:bg-gray-800/50">
+            <tr class="text-left border-b-2 border-red-200 dark:border-red-800">
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Item Name</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Category</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Remaining Days</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Remaining Years</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">End Date</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Status</th>
+              <th class="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white">Recommendation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="i in endingSoonItems.slice(0, 10)" :key="i.name + i.lifespanEndDate" 
+                class="border-t border-red-100 dark:border-red-900/30 hover:bg-red-50/50 dark:hover:bg-red-900/10">
+              <td class="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{{ i.name }}</td>
+              <td class="py-3 px-4">
+                <span :class="i.categoryClass" class="px-2 py-1 rounded-full text-xs font-medium">
+                  {{ i.category }}
+                </span>
+              </td>
+              <td class="py-3 px-4">
+                <span class="font-semibold" :class="{
+                  'text-red-600 dark:text-red-400': i.remainingLifespan <= 15,
+                  'text-orange-600 dark:text-orange-400': i.remainingLifespan > 15 && i.remainingLifespan <= 30
+                }">
+                  {{ i.remainingLifespan }} days
+                </span>
+              </td>
+              <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">
+                {{ i.remainingYears != null ? i.remainingYears.toFixed(2) : 'N/A' }} years
+              </td>
+              <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{{ i.lifespanEndDate }}</td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-1 rounded text-xs font-medium" :class="{
+                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': i.remainingLifespan <= 15,
+                  'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300': i.remainingLifespan > 15 && i.remainingLifespan <= 30
+                }">
+                  {{ i.remainingLifespan <= 15 ? 'CRITICAL' : 'URGENT' }}
+                </span>
+              </td>
+              <td class="py-3 px-4">
+                <span :class="i.recommendationClass" class="text-sm font-medium">{{ i.recommendation }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div v-if="endingSoonItems.length > 10" class="mt-4 text-center">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Showing 10 of {{ endingSoonItems.length }} items. 
+          <button @click="showEndingLifespanModal = true" class="text-red-600 dark:text-red-400 hover:underline font-medium">
+            View all {{ endingSoonItems.length }} items
+          </button>
+        </p>
+      </div>
+    </div>
+
     <!-- Item Lifespan & Supply Alerts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
-      <!-- All Items Lifespan Alerts -->
+      <!-- All Items Lifespan Alerts (Summary) -->
       <div class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-l-4 border-red-500 dark:border-red-400 p-6 rounded-lg">
         <div class="flex justify-between items-start">
           <div>
@@ -195,14 +329,29 @@
               <span class="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-sm rounded-full font-medium">All Items</span>
             </div>
             <div class="space-y-2">
-              <div v-for="item in allItemsLifespan.filter(i => i.remainingLifespan <= 30).slice(0, 3)" :key="item.name" class="flex items-center gap-2">
+              <div v-if="endingSoonItems.length > 0">
+                <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                  <span class="font-semibold">{{ endingSoonItems.length }} item{{ endingSoonItems.length !== 1 ? 's' : '' }}</span> 
+                  ending lifespan within 30 days
+                </p>
+                <div v-for="item in endingSoonItems.slice(0, 3)" :key="item.name" class="flex items-center gap-2 mb-2">
                 <div :class="item.statusClass" class="w-3 h-3 rounded-full"></div>
                 <p :class="item.remainingLifespan <= 15 ? 'font-medium text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'">
-                  {{ item.name }} - Lifespan ending in {{ item.remainingLifespan }} days (Acquired: {{ item.acquisitionDate }})
+                    {{ item.name }} - {{ item.remainingLifespan }} days remaining
                 </p>
               </div>
-              <div v-if="allItemsLifespan.filter(i => i.remainingLifespan <= 30).length === 0" class="text-gray-500 dark:text-gray-400 text-sm">
-                No items ending lifespan soon
+                <button @click="showEndingLifespanModal = true" class="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline font-medium">
+                  View all {{ endingSoonItems.length }} items →
+                </button>
+              </div>
+              <div v-else-if="apiError && (!lifespanPredictions || lifespanPredictions.length === 0)" class="text-red-500 dark:text-red-400 text-sm">
+                Python API error: {{ apiError }}
+            </div>
+              <div v-else-if="!apiLoading && (!lifespanPredictions || lifespanPredictions.length === 0)" class="text-yellow-500 dark:text-yellow-400 text-sm">
+                Waiting for Python API predictions...
+              </div>
+              <div v-else class="text-gray-500 dark:text-gray-400 text-sm">
+                No items ending lifespan soon (all items have > 30 days remaining)
               </div>
             </div>
           </div>
@@ -309,7 +458,137 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700 mb-8">
       <div class="flex items-center gap-3 mb-6">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">All Items Lifespan Management</h2>
-        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm rounded-full font-medium">Date-Based Predictions</span>
+        <span class="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 text-sm rounded-full font-medium">CatBoost ML Predictions</span>
+        <span v-if="lifespanPredictions.length > 0" class="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-sm rounded-full font-medium">
+          {{ lifespanPredictions.length }} predictions loaded
+        </span>
+        <span v-if="lifespanPredictions.length > 0 && allItemsLifespan.length > 0" class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm rounded-full font-medium">
+          {{ allItemsLifespan.length }} displayed
+        </span>
+      </div>
+      
+      <!-- Predictions Summary Card -->
+      <div v-if="lifespanPredictions.length > 0" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ lifespanPredictions.length }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">Total Predictions</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ allItemsLifespan.length }}</div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">Items Displayed</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+              {{ lifespanPredictions.filter(p => p.remaining_years != null && p.remaining_years <= 0.082).length }}
+            </div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">Ending Soon (≤30 days)</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {{ Math.round(lifespanPredictions.reduce((sum, p) => sum + (p.remaining_years || 0), 0) / lifespanPredictions.length * 365) }}
+            </div>
+            <div class="text-sm text-gray-600 dark:text-gray-400">Avg. Remaining Days</div>
+          </div>
+        </div>
+        
+        <!-- View All Predictions Button -->
+        <div class="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+          <button 
+            @click="showAllPredictions = !showAllPredictions"
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+          >
+            <span class="material-icons-outlined text-sm">{{ showAllPredictions ? 'expand_less' : 'expand_more' }}</span>
+            {{ showAllPredictions ? 'Hide' : 'Show' }} All {{ lifespanPredictions.length }} Predictions
+          </button>
+        </div>
+      </div>
+      
+      <!-- All Predictions Detail View -->
+      <div v-if="showAllPredictions && lifespanPredictions.length > 0" class="mb-6 bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">All Predictions Details</h3>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700">
+              <tr class="border-b border-gray-200 dark:border-gray-600">
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Item ID</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Item Name</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Remaining Years</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Remaining Days</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Lifespan Estimate</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-900 dark:text-white">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(pred, index) in lifespanPredictions" :key="pred.item_id || index" 
+                  class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td class="px-3 py-2 text-gray-900 dark:text-white">{{ pred.item_id }}</td>
+                <td class="px-3 py-2 text-gray-900 dark:text-white">
+                  {{ items.find(i => i.id === pred.item_id)?.unit || 'Unknown' }}
+                </td>
+                <td class="px-3 py-2">
+                  <span class="font-medium" :class="{
+                    'text-red-600 dark:text-red-400': pred.remaining_years <= 0.082,
+                    'text-orange-600 dark:text-orange-400': pred.remaining_years > 0.082 && pred.remaining_years <= 0.164,
+                    'text-yellow-600 dark:text-yellow-400': pred.remaining_years > 0.164 && pred.remaining_years <= 0.5,
+                    'text-green-600 dark:text-green-400': pred.remaining_years > 0.5
+                  }">
+                    {{ pred.remaining_years != null ? pred.remaining_years.toFixed(2) : 'N/A' }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
+                  {{ pred.remaining_years != null ? Math.round(pred.remaining_years * 365) : 'N/A' }}
+                </td>
+                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
+                  {{ pred.lifespan_estimate != null ? pred.lifespan_estimate.toFixed(2) : 'N/A' }}
+                </td>
+                <td class="px-3 py-2">
+                  <span v-if="pred.remaining_years != null" class="px-2 py-1 rounded text-xs font-medium" :class="{
+                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': pred.remaining_years <= 0.082,
+                    'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300': pred.remaining_years > 0.082 && pred.remaining_years <= 0.164,
+                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': pred.remaining_years > 0.164 && pred.remaining_years <= 0.5,
+                    'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': pred.remaining_years > 0.5
+                  }">
+                    {{ pred.remaining_years <= 0.082 ? 'Urgent' : pred.remaining_years <= 0.164 ? 'Soon' : pred.remaining_years <= 0.5 ? 'Monitor' : 'Good' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Error message when Python API fails -->
+      <div v-if="apiError && (!lifespanPredictions || lifespanPredictions.length === 0)" 
+           class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-outlined text-red-500 dark:text-red-400">error</span>
+          <div>
+            <p class="text-sm font-medium text-red-800 dark:text-red-300">Python API Error</p>
+            <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ apiError }}</p>
+            <p class="text-xs text-red-600 dark:text-red-400 mt-1">Please ensure the Python API server is running at {{ PY_API_BASE }}</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Empty state when no predictions available -->
+      <div v-if="!apiLoading && !apiError && (!lifespanPredictions || lifespanPredictions.length === 0)" 
+           class="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-outlined text-yellow-500 dark:text-yellow-400">warning</span>
+          <div>
+            <p class="text-sm font-medium text-yellow-800 dark:text-yellow-300">No Predictions Available</p>
+            <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">Python API did not return any lifespan predictions. Waiting for API response...</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Loading state -->
+      <div v-if="apiLoading" class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+        <div class="flex items-center gap-2">
+          <span class="material-icons-outlined text-blue-500 dark:text-blue-400 animate-spin">sync</span>
+          <p class="text-sm text-blue-800 dark:text-blue-300">Loading predictions from Python API...</p>
+        </div>
       </div>
       
       <div class="overflow-x-auto -mx-6 px-6">
@@ -326,6 +605,12 @@
             </tr>
           </thead>
           <tbody>
+            <tr v-if="allItemsLifespan.length === 0 && !apiLoading" class="border-t border-gray-200 dark:border-gray-700">
+              <td colspan="7" class="py-8 text-center text-gray-500 dark:text-gray-400">
+                <span class="material-icons-outlined text-4xl mb-2 block">inventory_2</span>
+                <p class="text-sm">No items with Python API predictions available</p>
+              </td>
+            </tr>
             <tr v-for="item in allItemsLifespan" :key="item.name" class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
               <td class="py-3 sm:py-4 px-2 sm:px-4 text-xs sm:text-sm font-medium text-gray-900 dark:text-white">{{ item.name }}</td>
               <td class="py-3 sm:py-4 px-2 sm:px-4">
@@ -683,6 +968,8 @@ const showRestockModal = ref(false)
 const showExpiringModal = ref(false)
 const showAccuracyModal = ref(false)
 const showLifespanModal = ref(false)
+const showEndingLifespanModal = ref(false)
+const showAllPredictions = ref(false)
 const selectedRestockItem = ref(null)
 const selectedRestockItemName = ref('')
 const restockAmount = ref(0)
@@ -691,44 +978,39 @@ const restockAmount = ref(0)
 // NOTE: this is the ONLY declaration of allItemsLifespan
 const allItemsLifespan = computed(() => {
   if (!items.value || items.value.length === 0) return []
+  if (!lifespanPredictions.value || lifespanPredictions.value.length === 0) return []
+  
+  // ONLY use Python API predictions - filter out items without predictions
   return items.value
     .filter(item => !isConsumableCategory(item?.category))
     .map(item => {
+      // Find CatBoost prediction from Python API for this item
+      const catboostPred = lifespanPredictions.value.find(p => p.item_id === item.id)
+      
+      // If no prediction from Python API, exclude this item
+      if (!catboostPred || catboostPred.remaining_years == null || isNaN(catboostPred.remaining_years)) {
+        return null // Will be filtered out
+      }
+      
       const acquisitionDate = new Date(item.date_acquired)
       const today = new Date()
       const daysSinceAcquisition = Math.floor((today - acquisitionDate) / (1000 * 60 * 60 * 24))
       const yearsInUse = daysSinceAcquisition / 365.25
       
-      // Use remaining_years from database if available, otherwise calculate from acquisition date
-      let remainingYears = null
-      let expectedLifespan = null
-      let remainingLifespanDays = 0
+      // ONLY use CatBoost prediction from Python API (ml_api_server.py)
+      const remainingYears = parseFloat(catboostPred.remaining_years)
+      const remainingLifespanDays = Math.round(remainingYears * 365)
       
-      if (item.remaining_years != null && typeof item.remaining_years === 'number') {
-        // Use database value
-        remainingYears = item.remaining_years
-        remainingLifespanDays = Math.round(remainingYears * 365)
-        
-        // Calculate expected lifespan from remaining_years + years_in_use
-        if (item.lifespan_estimate != null) {
-          expectedLifespan = Math.round(item.lifespan_estimate * 365)
-        } else {
-          expectedLifespan = Math.round((remainingYears + yearsInUse) * 365)
-        }
+      // Calculate expected lifespan from CatBoost prediction
+      let expectedLifespan
+      if (catboostPred.lifespan_estimate != null && !isNaN(catboostPred.lifespan_estimate)) {
+        expectedLifespan = Math.round(catboostPred.lifespan_estimate * 365)
       } else {
-        // Fallback: calculate from acquisition date (legacy behavior)
-        expectedLifespan = (() => {
-          const pred = xgbLifespanForecast.value.find(p => (p.name || '').toLowerCase() === (item.unit || '').toLowerCase())
-          if (pred?.expected_lifespan_days != null) return parseInt(pred.expected_lifespan_days)
-          if ((item.category || '') === 'Desktop' || (item.category || '') === 'ICT') return 1095
-          return 1095
-        })()
-        remainingLifespanDays = Math.max(0, expectedLifespan - daysSinceAcquisition)
-        remainingYears = remainingLifespanDays / 365.25
+        expectedLifespan = Math.round((remainingYears + yearsInUse) * 365)
       }
       
       // Calculate lifespan end date
-      const lifespanEndDate = new Date(acquisitionDate.getTime() + ((remainingYears || (expectedLifespan / 365.25)) * 365.25 * 24 * 60 * 60 * 1000))
+      const lifespanEndDate = new Date(acquisitionDate.getTime() + (remainingYears * 365.25 * 24 * 60 * 60 * 1000))
       
       // Status classes and recommendations based on remaining years
       let statusClass = 'bg-green-500'
@@ -736,30 +1018,25 @@ const allItemsLifespan = computed(() => {
       let recommendation = 'Good condition'
       let recommendationClass = 'text-green-600'
       
-      if (remainingYears != null) {
-        if (remainingYears <= 0.082) { // <= 30 days
-          statusClass = 'bg-red-500'
-          lifespanClass = 'text-red-600'
-          recommendation = 'URGENT: Replace immediately'
-          recommendationClass = 'text-red-600'
-        } else if (remainingYears <= 0.164) { // <= 60 days (approximately 2 months)
-          statusClass = 'bg-orange-500'
-          lifespanClass = 'text-orange-600'
-          recommendation = 'Plan replacement soon'
-          recommendationClass = 'text-orange-600'
-        } else if (remainingYears <= 0.5) { // <= 6 months
-          statusClass = 'bg-yellow-500'
-          lifespanClass = 'text-yellow-600'
-          recommendation = 'Monitor closely'
-          recommendationClass = 'text-yellow-600'
-        }
+      if (remainingYears <= 0.082) { // <= 30 days
+        statusClass = 'bg-red-500'
+        lifespanClass = 'text-red-600'
+        recommendation = 'URGENT: Replace immediately'
+        recommendationClass = 'text-red-600'
+      } else if (remainingYears <= 0.164) { // <= 60 days (approximately 2 months)
+        statusClass = 'bg-orange-500'
+        lifespanClass = 'text-orange-600'
+        recommendation = 'Plan replacement soon'
+        recommendationClass = 'text-orange-600'
+      } else if (remainingYears <= 0.5) { // <= 6 months
+        statusClass = 'bg-yellow-500'
+        lifespanClass = 'text-yellow-600'
+        recommendation = 'Monitor closely'
+        recommendationClass = 'text-yellow-600'
       }
       
-      let confidence = (() => {
-        const pred = lifespanPredictions.value.find(p => p.item_id === item.id)
-        // Confidence based on having prediction data
-        return pred ? 92 : 85
-      })()
+      // CatBoost predictions from Python API have highest confidence
+      const confidence = 94
       
       return {
         name: item.unit || 'Unknown Item',
@@ -772,7 +1049,8 @@ const allItemsLifespan = computed(() => {
         daysSinceAcquisition,
         expectedLifespan,
         remainingLifespan: remainingLifespanDays,
-        remainingYears: remainingYears != null ? parseFloat(remainingYears.toFixed(1)) : null,
+        remainingYears: parseFloat(remainingYears.toFixed(1)),
+        predictionMethod: 'catboost_python_api', // Always Python API
         itemType: isConsumableCategory(item.category) ? 'Supply' : 'Non-Consumable',
         statusClass,
         lifespanEndDate: lifespanEndDate.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
@@ -787,6 +1065,7 @@ const allItemsLifespan = computed(() => {
         location: item.location?.location || 'Unknown'
       }
     })
+    .filter(item => item !== null) // Remove items without Python API predictions
 })
 
 // Computed data based on real inventory
@@ -806,6 +1085,49 @@ const endingSoonItems = computed(() => {
 })
 
 const endingLifespanCount = computed(() => endingSoonItems.value.length)
+
+// Calculate next lifespan calculation date (runs every 14 days: 1st and 15th of each month at 2:00 AM)
+const nextLifespanCalculation = computed(() => {
+  const now = new Date()
+  const currentDay = now.getDate()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+  
+  // Calculate next scheduled date (1st or 15th of current or next month)
+  let nextDate
+  if (currentDay < 1) {
+    // Before 1st, next is 1st of current month
+    nextDate = new Date(currentYear, currentMonth, 1, 2, 0, 0)
+  } else if (currentDay < 15) {
+    // Between 1st and 15th, next is 15th of current month
+    nextDate = new Date(currentYear, currentMonth, 15, 2, 0, 0)
+  } else {
+    // After 15th, next is 1st of next month
+    nextDate = new Date(currentYear, currentMonth + 1, 1, 2, 0, 0)
+  }
+  
+  // If next date is in the past (same day but past 2 AM), move to next scheduled date
+  if (nextDate < now) {
+    if (currentDay >= 15) {
+      nextDate = new Date(currentYear, currentMonth + 1, 1, 2, 0, 0)
+    } else {
+      nextDate = new Date(currentYear, currentMonth, 15, 2, 0, 0)
+    }
+  }
+  
+  return nextDate.toLocaleDateString('en-PH', { 
+    timeZone: 'Asia/Manila',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+})
+
+const lifespanScheduleInfo = computed(() => {
+  return `Updated every 14 days`
+})
 
 const consumableLowStock = computed(() => {
   return consumableSupplyItems.value.filter(item => {
@@ -1544,79 +1866,141 @@ const buildXgbLifespanPayload = () => {
 const fetchPredictions = async () => {
   apiLoading.value = true
   apiError.value = null
+  
   try {
-    // Linear Regression for supply low-stock forecast
-    // New lifespan prediction API call
-    // XGBoost (legacy - keeping for compatibility)
-    const [lrRes, lifespanRes, xgbRes] = await Promise.all([
-      axios.post(`${PY_API_BASE}/predict/consumables/linear`, buildConsumablePayload(), { timeout: 10000 }).catch(() => null),
-      axios.post(`${PY_API_BASE}/predict/items/lifespan`, buildLifespanPayload(), { timeout: 10000 }).catch(() => null),
-      axios.post(`${PY_API_BASE}/predict/equipment-lifespan/xgboost`, buildXgbLifespanPayload(), { timeout: 12000 }).catch(() => null)
-    ])
-
-    // Process Linear Regression results for supply
-    if (lrRes?.data?.forecast) {
-      lrConsumableForecast.value = lrRes.data.forecast
-    } else {
-      lrConsumableForecast.value = []
+    // PRIORITY: Only CatBoost lifespan prediction API call (Python API) - REQUIRED
+    const lifespanPayload = buildLifespanPayload()
+    
+    if (lifespanPayload.items.length === 0) {
+      console.warn('⚠️ No items to predict lifespan for')
+      lifespanPredictions.value = []
+      apiLoading.value = false
+      return
+    }
+    
+    // Make CatBoost API call with better error handling
+    let lifespanRes = null
+    try {
+      lifespanRes = await axios.post(
+        `${PY_API_BASE}/predict/items/lifespan`, 
+        lifespanPayload, 
+        { 
+          timeout: 15000,
+          validateStatus: (status) => status < 500 // Don't throw on 4xx, only on 5xx
+        }
+      )
+    } catch (err) {
+      // Network errors (connection refused, timeout, etc.)
+      if (err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || err.message?.includes('Network Error') || err.code === 'ERR_CONNECTION_REFUSED') {
+        // Suppress verbose console errors for network issues - user-friendly message shown in UI
+        lifespanRes = null
+      } else {
+        // Other errors might be worth logging
+        console.warn('CatBoost API call failed:', err.message)
+        lifespanRes = null
+      }
     }
 
-    // Process new lifespan predictions and update items in database
-    if (lifespanRes?.data?.success && lifespanRes.data.predictions) {
+    // Process CatBoost lifespan predictions - ONLY source of truth
+    if (lifespanRes?.data?.success && lifespanRes.data.predictions && Array.isArray(lifespanRes.data.predictions)) {
+      // Store CatBoost predictions immediately for use in UI
       lifespanPredictions.value = lifespanRes.data.predictions
+      apiError.value = null // Clear any previous errors
       
-      // Prepare predictions for batch update - need to map item_id to uuid
-      const predictionsToUpdate = lifespanRes.data.predictions.map(pred => {
-        const item = items.value.find(i => i.id === pred.item_id)
-        if (!item || !item.uuid) return null
-        return {
-          uuid: item.uuid,
-          remaining_years: pred.remaining_years,
-          lifespan_estimate: pred.lifespan_estimate
-        }
-      }).filter(p => p !== null)
+      // Log predictions summary for visibility
+      console.log(`✅ Received ${lifespanRes.data.predictions.length} predictions from Python API`)
+      console.log(`📊 Prediction method: ${lifespanRes.data.method || 'catboost_model'}`)
+      console.log(`📋 Sample predictions:`, lifespanRes.data.predictions.slice(0, 5))
       
-      // Batch update items with remaining_years via Laravel API
+      // Prepare predictions for batch update - map item_id to uuid
+      const predictionsToUpdate = lifespanRes.data.predictions
+        .map(pred => {
+          const item = items.value.find(i => i.id === pred.item_id)
+          if (!item || !item.uuid || pred.remaining_years == null || isNaN(pred.remaining_years)) {
+            return null
+          }
+          return {
+            uuid: item.uuid,
+            remaining_years: parseFloat(pred.remaining_years),
+            lifespan_estimate: pred.lifespan_estimate != null ? parseFloat(pred.lifespan_estimate) : null
+          }
+        })
+        .filter(p => p !== null)
+      
+      // Batch update items via Laravel API (non-blocking)
       if (predictionsToUpdate.length > 0) {
-        try {
-          console.log(`Updating ${predictionsToUpdate.length} items with lifespan predictions...`)
-          const updateResponse = await axiosClient.post('/v1/items/update-lifespan-predictions', {
-            predictions: predictionsToUpdate
-          })
-          
-          if (updateResponse.data && updateResponse.data.status === 'success') {
-            console.log(`✅ Successfully updated ${updateResponse.data.updated_count} items with remaining_years`)
+        // Route is in v1 group, so final URL should be: /api/v1/items/update-lifespan-predictions
+        // If baseURL is /api/v1, use: /items/update-lifespan-predictions
+        // If baseURL is /api, use: /v1/items/update-lifespan-predictions
+        const baseUrl = axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+        const updateUrl = baseUrl.includes('/v1') 
+          ? '/items/update-lifespan-predictions'
+          : '/v1/items/update-lifespan-predictions'
+        
+        console.log('🔧 Updating lifespan predictions - baseURL:', baseUrl, 'updateUrl:', updateUrl)
+        
+        console.log(`📤 Sending ${predictionsToUpdate.length} predictions to Laravel backend for database update`)
+        
+        axiosClient.post(updateUrl, {
+          predictions: predictionsToUpdate
+        }).then((updateResponse) => {
+          console.log('✅ Database update response:', updateResponse.data)
+          if (updateResponse.data) {
+            console.log(`📊 Update Summary:`)
+            console.log(`   - Total predictions sent: ${predictionsToUpdate.length}`)
+            console.log(`   - Successfully updated: ${updateResponse.data.updated_count || 0}`)
             if (updateResponse.data.errors && updateResponse.data.errors.length > 0) {
-              console.warn('⚠️ Some items failed to update:', updateResponse.data.errors)
+              console.warn(`   - Errors: ${updateResponse.data.errors.length}`)
+              console.warn(`   - First few errors:`, updateResponse.data.errors.slice(0, 3))
             }
           }
-          
-          // Refresh items to get updated remaining_years from database
-          await fetchitems()
-          console.log('✅ Items refreshed with updated remaining_years from database')
-        } catch (updateError) {
-          console.error('❌ Error updating items with lifespan predictions:', updateError)
-          console.error('Update error details:', updateError.response?.data || updateError.message)
-          // Don't fail the whole operation if batch update fails
-        }
-      } else {
-        console.warn('⚠️ No predictions to update (predictionsToUpdate is empty)')
+          fetchitems() // Refresh items in background
+        }).catch((updateError) => {
+          // Log error but don't fail - predictions are still available in UI
+          console.error('❌ Database update failed:', updateError.response?.data || updateError.message)
+          if (updateError.response?.data) {
+            console.error('   Error details:', updateError.response.data)
+          }
+        })
       }
     } else {
+      // API call failed or returned invalid data
       lifespanPredictions.value = []
+      apiError.value = 'Python API server is not available. Please ensure the server is running at ' + PY_API_BASE
     }
 
-    // Process XGBoost results (legacy)
+    // Optional: Try to fetch Linear Regression for supply (non-blocking, silent on failure)
+    axios.post(`${PY_API_BASE}/predict/consumables/linear`, buildConsumablePayload(), { timeout: 10000 })
+      .then(lrRes => {
+    if (lrRes?.data?.forecast) {
+      lrConsumableForecast.value = lrRes.data.forecast
+    }
+      })
+      .catch(() => {
+        // Silent fail - not critical for lifespan predictions
+        lrConsumableForecast.value = []
+      })
+
+    // Optional: Try to fetch XGBoost (legacy, non-blocking, silent on failure)
+    axios.post(`${PY_API_BASE}/predict/equipment-lifespan/xgboost`, buildXgbLifespanPayload(), { timeout: 12000 })
+      .then(xgbRes => {
     if (xgbRes?.data?.lifespan_predictions) {
       xgbLifespanForecast.value = xgbRes.data.lifespan_predictions
       if (typeof xgbRes.data.accuracy === 'number') {
         lifespanAccuracy.value = xgbRes.data.accuracy
       }
-    } else {
+        }
+      })
+      .catch(() => {
+        // Silent fail - not critical
       xgbLifespanForecast.value = []
-    }
+      })
+
   } catch (e) {
-    apiError.value = e?.message || 'Prediction API error'
+    // Unexpected errors
+    console.error('Unexpected error in fetchPredictions:', e)
+    apiError.value = 'An unexpected error occurred while fetching predictions'
+    lifespanPredictions.value = []
   } finally {
     apiLoading.value = false
   }

@@ -310,13 +310,29 @@ class ItemController extends Controller
                     }
                     
                     if (!empty($updateData)) {
-                        // Update the item
-                        $item->update($updateData);
+                        // Only update columns that exist in the database
+                        // Filter out any columns that don't exist in the fillable array or schema
+                        $fillableColumns = $item->getFillable();
+                        $updateData = array_intersect_key($updateData, array_flip($fillableColumns));
                         
-                        // Log the update for debugging
-                        \Log::info("Updated item {$uuid} ({$item->unit}) with remaining_years: {$updateData['remaining_years']}, lifespan_estimate: {$updateData['lifespan_estimate']}");
-                        
-                        $updated++;
+                        if (!empty($updateData)) {
+                            // Update the item
+                            $item->update($updateData);
+                            
+                            // Log the update for debugging
+                            $logData = [];
+                            if (isset($updateData['remaining_years'])) {
+                                $logData[] = "remaining_years: {$updateData['remaining_years']}";
+                            }
+                            if (isset($updateData['lifespan_estimate'])) {
+                                $logData[] = "lifespan_estimate: {$updateData['lifespan_estimate']}";
+                            }
+                            \Log::info("Updated item {$uuid} ({$item->unit}) with " . implode(', ', $logData));
+                            
+                            $updated++;
+                        } else {
+                            \Log::warning("No valid columns to update for item {$uuid}. Update data filtered out.");
+                        }
                     } else {
                         \Log::warning("No update data provided for item {$uuid}");
                     }

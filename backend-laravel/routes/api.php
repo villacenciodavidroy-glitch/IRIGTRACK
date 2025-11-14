@@ -90,9 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/items/export/serviceable-items', [ItemController::class, 'exportServiceableItems']);
     Route::get('/items/export/life-cycles-data', [ItemController::class, 'exportLifeCyclesData']);
     
-    // Transactions - admin only
-    Route::get('/transactions', [TransactionController::class, 'index'])->middleware('admin');
-    Route::get('/transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin');
+    // Transactions - admin or supply accounts
+    Route::get('/transactions', [TransactionController::class, 'index'])->middleware('admin_or_supply');
+    Route::get('/transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin_or_supply');
 });
 
 Route::group(['prefix'=>'v1', 'namespace' => 'App\Http\Controllers\Api\V1'], function() {
@@ -137,7 +137,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         
         // General resource routes last (excluding show since it's public for QR codes)
         Route::apiResource('items', ItemController::class)->except(['show']);
-        Route::post('items/update-lifespan-predictions', [ItemController::class, 'updateLifespanPredictions']);
+        // Update lifespan predictions - requires authentication (explicit middleware to prevent bypass)
+        Route::post('items/update-lifespan-predictions', [ItemController::class, 'updateLifespanPredictions'])->middleware('auth:sanctum');
 
         // Locations - admin for write operations
         Route::get('locations', [LocationController::class, 'index']);
@@ -193,9 +194,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::post('items/{itemId}/borrow-request/{requestId}/reject', [ItemController::class, 'rejectBorrowRequest'])->where(['itemId' => '[0-9a-fA-F\-]+', 'requestId' => '[0-9]+'])->middleware('admin');
         Route::get('admin/borrow-requests', [ItemController::class, 'getAllBorrowRequests'])->middleware('admin');
         
-        // TRANSACTIONS - admin only
-        Route::get('transactions', [TransactionController::class, 'index'])->middleware('admin');
-        Route::get('transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin');
+        // TRANSACTIONS - admin or supply accounts
+        Route::get('transactions', [TransactionController::class, 'index'])->middleware('admin_or_supply');
+        Route::get('transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin_or_supply');
     });
 
 });

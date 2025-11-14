@@ -99,7 +99,7 @@ class ItemController extends Controller
         
         $qrCodeService = new QrCodeService();
 
-        $itemService = new ItemService();@
+        $itemService = new ItemService();
         $newItem = Item::create($request->validated());
 
         $image = $request->file('image');
@@ -296,6 +296,9 @@ class ItemController extends Controller
                 // Quantity increased - this is a restock
                 $restockQty = $newQuantity - $oldQuantity;
                 $this->trackItemRestock($item, $oldQuantity, $newQuantity, $restockQty);
+                
+                // Log restock activity for supply category items
+                $this->logRestockActivity($request, $item, $restockQty);
             } elseif ($newQuantity < $oldQuantity) {
                 // Quantity decreased - this is usage
                 $usedQty = $oldQuantity - $newQuantity;
@@ -342,6 +345,28 @@ class ItemController extends Controller
      */
     public function updateLifespanPredictions(Request $request)
     {
+        // Require authentication - ensure user is logged in
+        // Check multiple ways to ensure authentication is enforced
+        $user = $request->user();
+        if (!$user) {
+            // Try alternative authentication check
+            $user = auth()->user();
+        }
+        
+        if (!$user) {
+            \Log::warning('Unauthenticated attempt to update lifespan predictions', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'url' => $request->fullUrl()
+            ]);
+            
+            return response()->json([
+                'message' => 'Authentication required. Please log in first.',
+                'status' => 'error',
+                'error' => 'Unauthenticated'
+            ], 401);
+        }
+        
         try {
             $predictions = $request->input('predictions', []);
             
@@ -1206,6 +1231,60 @@ class ItemController extends Controller
         } catch (\Exception $e) {
             \Log::error("Failed to track item restock: " . $e->getMessage());
             // Don't fail the request if tracking fails
+        }
+    }
+
+    /**
+     * Log restock activity for supply category items
+     * 
+     * @param Request $request
+     * @param Item $item
+     * @param int $restockQty
+     * @return void
+     */
+    private function logRestockActivity(Request $request, Item $item, int $restockQty): void
+    {
+        try {
+            // Check if item belongs to supply category
+            $item->load('category');
+            if (!$item->category) {
+                return; // No category, skip logging
+            }
+            
+            $categoryName = strtolower($item->category->category ?? '');
+            $isSupplyCategory = $categoryName === 'supply' || 
+                                strpos($categoryName, 'supply') !== false ||
+                                $categoryName === 'consumables' ||
+                                strpos($categoryName, 'consumable') !== false;
+            
+            if (!$isSupplyCategory) {
+                return; // Not a supply category, skip logging
+            }
+            
+            // Get the admin/user who is restocking
+            $user = $request->user();
+            if (!$user) {
+                \Log::warning('Restock activity: No authenticated user found for restock logging');
+                return;
+            }
+            
+            // Get admin name (prioritize fullname, then username, then email)
+            $adminName = $user->fullname ?? $user->username ?? $user->email ?? 'Unknown Admin';
+            
+            // Get item name
+            $itemName = $item->unit ?? $item->description ?? 'Unknown Item';
+            
+            // Create detailed description with admin name, quantity, and time
+            // Time will be automatically included in the activity log's created_at timestamp
+            $description = "Admin '{$adminName}' restocked {$restockQty} quantity of supply item '{$itemName}'";
+            
+            // Log the activity
+            $this->logActivity($request, 'Restocked Supply', $description);
+            
+            \Log::info("Restock activity logged: {$adminName} restocked {$restockQty} of {$itemName}");
+        } catch (\Exception $e) {
+            \Log::error("Failed to log restock activity: " . $e->getMessage());
+            // Don't fail the request if logging fails
         }
     }
 

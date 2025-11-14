@@ -24,7 +24,7 @@ class ItemUpdated implements ShouldBroadcast
         $this->item = $item;
         // Load relationships for the broadcast (use try-catch to handle missing relationships)
         try {
-            $this->item->load(['category', 'location', 'condition', 'conditionNumber', 'qrCode', 'user']);
+            $this->item->load(['category', 'location', 'condition', 'condition_number', 'qrCode', 'user']);
         } catch (\Exception $e) {
             \Log::warning("Failed to load some relationships for ItemUpdated broadcast: " . $e->getMessage());
             // Continue anyway, relationships might be optional

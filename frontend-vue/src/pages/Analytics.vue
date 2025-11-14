@@ -2664,6 +2664,13 @@ const fetchPredictions = async () => {
         .filter(p => p !== null)
       
       // Batch update items via Laravel API (non-blocking)
+      // IMPORTANT: Check authentication before making the request
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.warn('⚠️ Cannot update lifespan predictions: User not authenticated. Please log in first.')
+        return // Exit early if not authenticated
+      }
+      
       if (predictionsToUpdate.length > 0) {
         // Route is in v1 group, so final URL should be: /api/v1/items/update-lifespan-predictions
         // If baseURL is /api/v1, use: /items/update-lifespan-predictions
@@ -2692,7 +2699,18 @@ const fetchPredictions = async () => {
           }
           fetchitems() // Refresh items in background
         }).catch((updateError) => {
-          // Log error but don't fail - predictions are still available in UI
+          // Handle authentication errors - redirect to login
+          if (updateError.response?.status === 401) {
+            console.error('❌ Authentication required. Redirecting to login...')
+            localStorage.removeItem('token')
+            localStorage.removeItem('user')
+            localStorage.removeItem('userId')
+            // Redirect to login page
+            window.location.href = '/login'
+            return
+          }
+          
+          // Log other errors but don't fail - predictions are still available in UI
           console.error('❌ Database update failed:', updateError.response?.data || updateError.message)
           if (updateError.response?.data) {
             console.error('   Error details:', updateError.response.data)

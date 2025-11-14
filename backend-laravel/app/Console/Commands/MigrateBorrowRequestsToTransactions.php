@@ -97,6 +97,7 @@ class MigrateBorrowRequestsToTransactions extends Command
                 Transaction::create([
                     'approved_by' => $approverName, // Store approver's full name directly (not ID)
                     'borrower_name' => $borrowRequest->borrowed_by,
+                    'requested_by' => $borrowRequest->borrowed_by, // Person who requested the borrow
                     'location' => $borrowRequest->location,
                     'item_name' => $itemName,
                     'quantity' => $borrowRequest->quantity,

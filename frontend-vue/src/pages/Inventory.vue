@@ -754,7 +754,7 @@ const closeSuccessModal = () => {
             </button>
             <button @click="goToLocations" class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center">
               <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
-              <span>Locations</span>
+              <span>Unit/Sectors</span>
             </button>
             <button @click="goToAddItem" class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg">
               <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
@@ -813,7 +813,7 @@ const closeSuccessModal = () => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search by article, description, category, PAC, or location..."
+              placeholder="Search by article, description, category, PAC, or unit/sectors..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
             >
             <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -915,7 +915,7 @@ const closeSuccessModal = () => {
                   <span class="px-2 py-0.5 bg-blue-900 dark:bg-blue-900 text-sm font-semibold rounded-full" style="color: #FFFFFF;">{{ item.condition }}</span>
                   <span v-if="item.conditionStatus" 
                         :class="[
-                          'px-2 py-0.5 text-xs font-semibold rounded-full',
+                          'px-2 py-0.5 text-sm font-semibold rounded-full',
                           item.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
                           item.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
                           item.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
@@ -942,7 +942,7 @@ const closeSuccessModal = () => {
             <!-- Additional Info -->
             <div class="grid grid-cols-2 gap-2 mb-3 pt-3 border-t border-gray-200 dark:border-gray-700">
               <div class="text-sm">
-                <span class="font-semibold text-gray-600 dark:text-gray-400">Location:</span>
+                <span class="font-semibold text-gray-600 dark:text-gray-400">Unit/Sectors:</span>
                 <span class="text-gray-900 dark:text-white ml-1">{{ item.location || 'N/A' }}</span>
               </div>
               <div class="text-sm">
@@ -1020,7 +1020,7 @@ const closeSuccessModal = () => {
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT VALUE</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DATE ACQUIRED</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">P.O. NUMBER</th>
-              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">LOCATION</th>
+              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT/SECTORS</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CONDITION</th>
               <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">STATUS</th>
               <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ISSUED TO</th>
@@ -1101,7 +1101,7 @@ const closeSuccessModal = () => {
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <span v-if="item.conditionStatus" 
                       :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold',
                         item.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
                         item.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
                         item.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
@@ -1110,7 +1110,7 @@ const closeSuccessModal = () => {
                       ]">
                   {{ item.conditionStatus }}
                 </span>
-                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-400 text-white">
+                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-gray-400 text-white">
                   N/A
                 </span>
               </td>
@@ -1150,11 +1150,11 @@ const closeSuccessModal = () => {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-lg">info</span>
-              <span class="text-base font-semibold text-gray-900 dark:text-white">
-                Showing <span class="text-green-400 dark:text-green-400 font-bold">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
-                <span class="text-green-400 dark:text-green-400 font-bold">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
-                <span class="text-green-400 dark:text-green-400 font-bold">{{ totalFilteredItems }}</span> items
+              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
+              <span class="text-base font-semibold" style="color: #01200E;">
+                Showing <span class="font-bold" style="color: #01200E;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
+                <span class="font-bold" style="color: #01200E;">{{ totalFilteredItems }}</span> items
               </span>
             </div>
             <div class="flex items-center gap-2">
@@ -1254,7 +1254,7 @@ const closeSuccessModal = () => {
               <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QUANTITY</th>
               <th class="min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT VALUE</th>
               <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DATE ACQUIRED</th>
-              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">LOCATION</th>
+              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT/SECTORS</th>
               <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">STATUS</th>
               <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
             </tr>
@@ -1310,7 +1310,7 @@ const closeSuccessModal = () => {
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <span v-if="item.conditionStatus" 
                       :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold',
                         item.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
                         item.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
                         item.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
@@ -1319,7 +1319,7 @@ const closeSuccessModal = () => {
                       ]">
                   {{ item.conditionStatus }}
                 </span>
-                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-400 text-white">
+                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-gray-400 text-white">
                   N/A
                 </span>
               </td>
@@ -1542,7 +1542,7 @@ const closeSuccessModal = () => {
                   </div>
                   
                   <div class="space-y-1">
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Unit/Sectors</div>
                     <div class="text-sm font-semibold text-gray-900 flex items-center gap-1">
                       <span class="material-icons-outlined text-base text-green-600">location_on</span>
                       {{ selectedQrItem?.location || 'N/A' }}

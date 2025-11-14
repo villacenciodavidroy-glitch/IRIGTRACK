@@ -15,6 +15,8 @@ class BorrowRequest extends Model
         'quantity',
         'location',
         'borrowed_by',
+        'requested_by_user_id',
+        'send_to',
         'status',
         'approved_at',
         'approved_by',
@@ -35,12 +37,28 @@ class BorrowRequest extends Model
     }
 
     /**
+     * Get the user who requested this borrow request
+     */
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /**
      * Get the item for this borrow request
      */
     public function item()
     {
         // Try to find by UUID first, then by ID
         return Item::where('uuid', $this->item_id)->orWhere('id', $this->item_id)->first();
+    }
+
+    /**
+     * Get the location this request is sent to
+     */
+    public function sendToLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'send_to');
     }
 }
 

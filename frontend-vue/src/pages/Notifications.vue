@@ -85,14 +85,17 @@ const handleNotificationClick = async (notification) => {
 
 // Show success banner
 const showSuccessMessage = (message, type = 'success', details = null) => {
+  console.log('📢 Showing banner:', { message, type, details, showSuccessBanner: showSuccessBanner.value })
   successBannerMessage.value = message
   successBannerType.value = type
   successBannerDetails.value = details
   showSuccessBanner.value = true
+  console.log('📢 Banner state after setting:', { showSuccessBanner: showSuccessBanner.value, message: successBannerMessage.value })
   
   // Auto-hide after 5 seconds
   setTimeout(() => {
     showSuccessBanner.value = false
+    console.log('📢 Banner auto-hidden after 5 seconds')
   }, 5000)
 }
 
@@ -305,6 +308,23 @@ const handleReject = async (notification) => {
   }
 }
 
+// Wrapper functions for popup buttons to close popup after handling
+const handleApproveFromPopup = async (notification) => {
+  await handleApprove(notification)
+  // Close popup after a short delay to ensure banner is shown
+  setTimeout(() => {
+    showPopup.value = false
+  }, 100)
+}
+
+const handleRejectFromPopup = async (notification) => {
+  await handleReject(notification)
+  // Close popup after a short delay to ensure banner is shown
+  setTimeout(() => {
+    showPopup.value = false
+  }, 100)
+}
+
 // Methods
 
 const goToPage = (page) => {
@@ -397,7 +417,7 @@ const setupRealtimeWithPopup = () => {
           timestamp: data.notification.timestamp || data.notification.created_at,
           date: data.notification.date,
           time: data.notification.time,
-          action: data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert',
+          action: data.notification.title || (data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert'),
           isRead: data.notification.isRead ?? false,
           priority: data.notification.priority || 'high',
           item: data.notification.item,
@@ -830,7 +850,7 @@ onBeforeUnmount(() => {
                 <span class="material-icons-outlined text-green-600 dark:text-green-400 text-2xl">shopping_cart</span>
               </div>
               <div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">New Borrow Request</h3>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ popupNotification.title || 'New Borrow Request' }}</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">{{ formatRelativeTime(popupNotification.timestamp) }}</p>
               </div>
             </div>
@@ -861,7 +881,7 @@ onBeforeUnmount(() => {
           
           <div class="flex items-center gap-3">
             <button
-              @click="handleApprove(popupNotification); showPopup = false"
+              @click="handleApproveFromPopup(popupNotification)"
               :disabled="popupNotification.borrowRequest?.status !== 'pending'"
               class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
             >
@@ -869,7 +889,7 @@ onBeforeUnmount(() => {
               <span>{{ popupNotification.borrowRequest?.status === 'processing' ? 'Processing...' : 'Approve' }}</span>
             </button>
             <button
-              @click="handleReject(popupNotification); showPopup = false"
+              @click="handleRejectFromPopup(popupNotification)"
               :disabled="popupNotification.borrowRequest?.status !== 'pending'"
               class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
             >
@@ -883,7 +903,7 @@ onBeforeUnmount(() => {
       <!-- Professional Government-Style Success Banner -->
       <div
         v-if="showSuccessBanner"
-        class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-2xl w-[calc(100vw-2rem)]"
+        class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] max-w-2xl w-[calc(100vw-2rem)]"
       >
         <div
           class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 animate-slide-down"

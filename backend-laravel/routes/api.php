@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Transactions - admin only
     Route::get('/transactions', [TransactionController::class, 'index'])->middleware('admin');
+    Route::get('/transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin');
 });
 
 Route::group(['prefix'=>'v1', 'namespace' => 'App\Http\Controllers\Api\V1'], function() {
@@ -113,9 +114,12 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     // Note: If Bearer token is provided in Authorization header, user will be authenticated
     Route::post('items/{uuid}/borrow', [ItemController::class, 'borrowItem']);
 
-    // Borrow request routes (public - no auth required for creating requests)
-    Route::post('items/{id}/borrow-request', [ItemController::class, 'createBorrowRequest'])->where('id', '[0-9a-fA-F\-]+');
-    Route::get('items/{id}/borrow-requests', [ItemController::class, 'getBorrowRequests'])->where('id', '[0-9a-fA-F\-]+');
+    // Borrow request routes - require authentication to track who sent the request
+    // The mobile app MUST send the Bearer token in the Authorization header
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('items/{id}/borrow-request', [ItemController::class, 'createBorrowRequest'])->where('id', '[0-9a-fA-F\-]+');
+        Route::get('items/{id}/borrow-requests', [ItemController::class, 'getBorrowRequests'])->where('id', '[0-9a-fA-F\-]+');
+    });
 
     // Protected routes - require authentication
     Route::middleware('auth:sanctum')->group(function () {
@@ -137,6 +141,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
         // Locations - admin for write operations
         Route::get('locations', [LocationController::class, 'index']);
+        Route::get('locations/admins', [LocationController::class, 'getAdminLocations']);
         Route::post('locations', [LocationController::class, 'store'])->middleware('admin');
         Route::put('locations/{id}', [LocationController::class, 'update'])->middleware('admin');
         Route::delete('locations/{id}', [LocationController::class, 'destroy'])->middleware('admin');
@@ -190,6 +195,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         
         // TRANSACTIONS - admin only
         Route::get('transactions', [TransactionController::class, 'index'])->middleware('admin');
+        Route::get('transactions/export', [TransactionController::class, 'exportTransactions'])->middleware('admin');
     });
 
 });

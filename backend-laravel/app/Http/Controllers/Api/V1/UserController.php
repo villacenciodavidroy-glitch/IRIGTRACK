@@ -21,7 +21,8 @@ class UserController extends Controller
      */
     public function index()
     {
-        return new UserCollection(User::all());
+        $users = User::with('location')->get();
+        return new UserCollection($users);
     }
 
     /**

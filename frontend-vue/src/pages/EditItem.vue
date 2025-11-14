@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import useItems from '../composables/useItems'
 import useCategories from '../composables/useCategories'
@@ -594,6 +594,35 @@ const filteredConditionNumbers = computed(() => {
   });
 })
 
+// Watch for condition changes and auto-select "R" for "Non - Serviceable"
+watch(() => editForm.value.condition_id, (newConditionId) => {
+  if (newConditionId) {
+    // Find the selected condition
+    const selectedCondition = conditions.value.find(cond => 
+      cond.id == newConditionId
+    )
+    
+    // Check if the condition is "Non - Serviceable" (handle variations)
+    if (selectedCondition) {
+      const conditionName = (selectedCondition.condition || '').toLowerCase().trim()
+      const isNonServiceable = conditionName.includes('non') && conditionName.includes('serviceable')
+      
+      if (isNonServiceable) {
+        // Find the condition number "R"
+        const conditionNumberR = condition_numbers.value.find(cn => {
+          const cnValue = (cn.condition_number || '').trim().toUpperCase()
+          return cnValue === 'R'
+        })
+        
+        if (conditionNumberR) {
+          editForm.value.condition_number_id = conditionNumberR.id
+          console.log('Auto-selected condition number "R" for Non-Serviceable condition')
+        }
+      }
+    }
+  }
+})
+
 // Check if there's a valid image to show close button for
 const hasValidImage = computed(() => {
   // Show close button if there's a newly uploaded file
@@ -995,16 +1024,16 @@ const removeImage = () => {
                 <span class="material-icons-outlined text-white text-xl">location_on</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Assignment & Location</h2>
-                <p class="text-xs text-green-100">Item location and personnel assignment</p>
+                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sectors</h2>
+                <p class="text-xs text-green-100">Item unit/sectors and personnel assignment</p>
               </div>
             </div>
           </div>
           <div class="p-6 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <!-- Location -->
+              <!-- Unit/Sectors -->
               <div class="form-group">
-                <label class="form-label">Location <span class="text-red-500">*</span></label>
+                <label class="form-label">Unit/Sectors <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">location_on</span>
@@ -1015,7 +1044,7 @@ const removeImage = () => {
                     required
                     class="form-select-enhanced !pl-12"
                   >
-                    <option :value="null">Select location</option>
+                    <option :value="null">Select Unit/Sector</option>
                     <option v-for="location in locations" :key="location.id" :value="Number(location.id || location.location_id)">
                       {{ location.location }}
                     </option>
@@ -1023,7 +1052,7 @@ const removeImage = () => {
                 </div>
                 <p v-if="locations.length === 0" class="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded border border-amber-200 dark:border-amber-700">
                   <span class="material-icons-outlined text-sm align-middle mr-1">info</span>
-                  Loading locations...
+                  Loading units/sectors...
                 </p>
               </div>
               
@@ -1050,7 +1079,7 @@ const removeImage = () => {
                 </div>
                 <p v-if="locationsWithPersonnel.length === 0" class="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border-l-4 border-amber-400 dark:border-amber-600 flex items-start gap-2">
                   <span class="material-icons-outlined text-sm text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5">info</span>
-                  <span>No personnel assigned to any location. Please assign personnel in Location Management first.</span>
+                  <span>No personnel assigned to any unit/sector. Please assign personnel in Unit/Sectors Management first.</span>
                 </p>
               </div>
             </div>

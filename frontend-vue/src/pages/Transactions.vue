@@ -4,10 +4,17 @@ import axiosClient from '../axios'
 import { useDebouncedRef } from '../composables/useDebounce'
 
 const transactions = ref([])
+const allTransactions = ref([]) // Store all transactions for filter options
 const transactionsPerPage = ref(10)
 const searchQuery = ref('')
 const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
-// Remove status filter for transactions table
+const statusFilter = ref('')
+const roleFilter = ref('')
+const locationFilter = ref('')
+const requestedByFilter = ref('')
+const approvedByFilter = ref('')
+const borrowerNameFilter = ref('')
+const itemNameFilter = ref('')
 const currentPage = ref(1)
 const totalTransactions = ref(0)
 const totalPages = ref(1)
@@ -129,37 +136,15 @@ onMounted(() => {
   const handleNewTransaction = (data) => {
     console.log('📝 Processing new transaction:', data)
     
+    // Note: Transactions are only created when borrow requests are approved/rejected
+    // This handler is for BorrowRequestCreated events, but transactions don't exist yet
+    // So we just refresh the list when approval/rejection events are received instead
+    // This function is kept for compatibility but transactions should come from fetchTransactions()
+    
     if (data && data.borrowRequest) {
-      // If we're on the first page and not searching/filtering, prepend the new transaction
-      if (currentPage.value === 1 && !debouncedSearchQuery.value && !statusFilter.value) {
-        const newTransaction = {
-          id: data.borrowRequest.id,
-          item_name: data.item?.description || data.item?.unit || 'N/A',
-          item_pac: data.item?.pac || 'N/A',
-          item_quantity: data.item?.quantity || 0,
-          quantity: data.borrowRequest.quantity,
-          location: data.borrowRequest.location,
-          borrowed_by: data.borrowRequest.borrowed_by,
-          status: data.borrowRequest.status,
-          created_at: data.borrowRequest.created_at || new Date().toISOString(),
-          approved_at: data.borrowRequest.approved_at,
-          approved_by: data.borrowRequest.approved_by,
-          approver: data.approver || null
-        }
-        
-        transactions.value.unshift(newTransaction)
-        
-        // Update total count
-        totalTransactions.value++
-        
-        // If we exceed transactions per page, remove the last one
-        if (transactions.value.length > transactionsPerPage.value) {
-          transactions.value.pop()
-        }
-      } else {
-        // Otherwise, just refresh the current page
-        fetchTransactions()
-      }
+      // Transactions are created on approval/rejection, so just refresh the list
+      // The BorrowRequestApproved and BorrowRequestRejected events will trigger fetchTransactions()
+      console.log('📝 Borrow request created - transactions will be available after approval/rejection')
     }
   }
 
@@ -196,6 +181,9 @@ const fetchTransactions = async () => {
     const response = await axiosClient.get(requestUrl)
     
     if (response.data.success && response.data.data) {
+      // Store all transactions for filter options
+      allTransactions.value = response.data.data
+      
       let filteredTransactions = response.data.data
       
       // Apply search filter
@@ -205,7 +193,57 @@ const fetchTransactions = async () => {
           t.item_name?.toLowerCase().includes(query) ||
           t.borrower_name?.toLowerCase().includes(query) ||
           t.location?.toLowerCase().includes(query) ||
-          t.approver_name?.toLowerCase().includes(query)
+          t.approver_name?.toLowerCase().includes(query) ||
+          t.requested_by?.toLowerCase().includes(query)
+        )
+      }
+      
+      // Apply status filter
+      if (statusFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.status?.toLowerCase() === statusFilter.value.toLowerCase()
+        )
+      }
+      
+      // Apply role filter
+      if (roleFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.role?.toUpperCase() === roleFilter.value.toUpperCase()
+        )
+      }
+      
+      // Apply location filter
+      if (locationFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.location === locationFilter.value
+        )
+      }
+      
+      // Apply requested by filter
+      if (requestedByFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.requested_by === requestedByFilter.value
+        )
+      }
+      
+      // Apply approved by filter
+      if (approvedByFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.approver_name === approvedByFilter.value
+        )
+      }
+      
+      // Apply borrower name filter
+      if (borrowerNameFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.borrower_name === borrowerNameFilter.value
+        )
+      }
+      
+      // Apply item name filter
+      if (itemNameFilter.value) {
+        filteredTransactions = filteredTransactions.filter(t => 
+          t.item_name === itemNameFilter.value
         )
       }
       
@@ -236,7 +274,11 @@ watch(debouncedSearchQuery, () => {
   fetchTransactions()
 })
 
-// Status filter removed for transactions table
+// Watch for changes in filters and reset to page 1
+watch([statusFilter, roleFilter, locationFilter, requestedByFilter, approvedByFilter, borrowerNameFilter, itemNameFilter], () => {
+  currentPage.value = 1
+  fetchTransactions()
+})
 
 // Watch for changes in transactions per page
 watch(transactionsPerPage, () => {
@@ -376,6 +418,428 @@ const getRoleIcon = (role) => {
       return 'help'
   }
 }
+
+// Computed properties for unique filter values
+const uniqueLocations = computed(() => {
+  const locations = [...new Set(allTransactions.value.map(t => t.location).filter(Boolean))]
+  return locations.sort()
+})
+
+const uniqueRequestedBy = computed(() => {
+  const requestedBy = [...new Set(allTransactions.value.map(t => t.requested_by).filter(Boolean))]
+  return requestedBy.sort()
+})
+
+const uniqueApprovedBy = computed(() => {
+  const approvedBy = [...new Set(allTransactions.value.map(t => t.approver_name).filter(Boolean))]
+  return approvedBy.sort()
+})
+
+const uniqueBorrowerNames = computed(() => {
+  const borrowerNames = [...new Set(allTransactions.value.map(t => t.borrower_name).filter(Boolean))]
+  return borrowerNames.sort()
+})
+
+const uniqueItemNames = computed(() => {
+  const itemNames = [...new Set(allTransactions.value.map(t => t.item_name).filter(Boolean))]
+  return itemNames.sort()
+})
+
+const uniqueStatuses = computed(() => {
+  const statuses = [...new Set(allTransactions.value.map(t => t.status).filter(Boolean))]
+  return statuses.sort()
+})
+
+const uniqueRoles = computed(() => {
+  const roles = [...new Set(allTransactions.value.map(t => t.role).filter(Boolean))]
+  return roles.sort()
+})
+
+// Get filtered transactions (all, not just current page)
+const getFilteredTransactions = () => {
+  let filteredTransactions = allTransactions.value
+  
+  // Apply search filter
+  if (debouncedSearchQuery.value) {
+    const query = debouncedSearchQuery.value.toLowerCase()
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.item_name?.toLowerCase().includes(query) ||
+      t.borrower_name?.toLowerCase().includes(query) ||
+      t.location?.toLowerCase().includes(query) ||
+      t.approver_name?.toLowerCase().includes(query) ||
+      t.requested_by?.toLowerCase().includes(query)
+    )
+  }
+  
+  // Apply status filter
+  if (statusFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.status?.toLowerCase() === statusFilter.value.toLowerCase()
+    )
+  }
+  
+  // Apply role filter
+  if (roleFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.role?.toUpperCase() === roleFilter.value.toUpperCase()
+    )
+  }
+  
+  // Apply location filter
+  if (locationFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.location === locationFilter.value
+    )
+  }
+  
+  // Apply requested by filter
+  if (requestedByFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.requested_by === requestedByFilter.value
+    )
+  }
+  
+  // Apply approved by filter
+  if (approvedByFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.approver_name === approvedByFilter.value
+    )
+  }
+  
+  // Apply borrower name filter
+  if (borrowerNameFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.borrower_name === borrowerNameFilter.value
+    )
+  }
+  
+  // Apply item name filter
+  if (itemNameFilter.value) {
+    filteredTransactions = filteredTransactions.filter(t => 
+      t.item_name === itemNameFilter.value
+    )
+  }
+  
+  return filteredTransactions
+}
+
+// Export to Excel function
+const exportToExcel = async () => {
+  try {
+    const filteredTransactions = getFilteredTransactions()
+    
+    if (filteredTransactions.length === 0) {
+      alert('No transactions to export')
+      return
+    }
+    
+    console.log('Starting Excel export...', { 
+      transactionCount: filteredTransactions.length,
+      baseURL: axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    })
+    
+    // Prepare export parameters
+    const params = new URLSearchParams()
+    
+    // Convert filtered transactions to format expected by backend
+    const exportData = filteredTransactions.map(transaction => ({
+      requested_by: transaction.requested_by || 'N/A',
+      approver_name: transaction.approver_name || transaction.approved_by || 'N/A',
+      approved_by: transaction.approver_name || transaction.approved_by || 'N/A',
+      borrower_name: transaction.borrower_name || 'N/A',
+      location: transaction.location || 'N/A',
+      item_name: transaction.item_name || 'N/A',
+      quantity: transaction.quantity || 0,
+      transaction_time: transaction.transaction_time || 'N/A',
+      role: transaction.role || 'USER',
+      status: transaction.status || 'Pending'
+    }))
+    
+    params.append('transactions', JSON.stringify(exportData))
+    
+    // Build the export URL
+    const baseUrl = axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    const exportUrl = baseUrl.includes('/v1') 
+      ? '/transactions/export'
+      : '/v1/transactions/export'
+    
+    const fullUrl = `${exportUrl}?${params.toString()}`
+    const urlLength = fullUrl.length
+    
+    console.log('Export details:', {
+      urlLength,
+      baseURL: baseUrl,
+      exportUrl,
+      transactionCount: filteredTransactions.length
+    })
+    
+    let response
+    
+    // If URL is too long, don't send transactions - let backend fetch all
+    if (urlLength > 1800) {
+      console.warn('URL too long, exporting all transactions instead of filtered transactions')
+      response = await axiosClient.get(exportUrl, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        },
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      })
+    } else {
+      response = await axiosClient.get(fullUrl, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        },
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      })
+    }
+    
+    console.log('Response received:', {
+      status: response.status,
+      contentType: response.headers['content-type'],
+      size: response.data?.size || 'unknown'
+    })
+    
+    // Check HTTP status code
+    if (response.status !== 200) {
+      const text = await response.data.text()
+      try {
+        const errorData = JSON.parse(text)
+        throw new Error(errorData.message || `Export failed with status ${response.status}`)
+      } catch (parseError) {
+        throw new Error(`Server error (${response.status}): ${text}`)
+      }
+    }
+    
+    // Check content type
+    const contentType = response.headers['content-type'] || ''
+    
+    // Check for JSON error response
+    if (contentType.includes('application/json')) {
+      const text = await response.data.text()
+      try {
+        const errorData = JSON.parse(text)
+        throw new Error(errorData.message || 'Export failed')
+      } catch (parseError) {
+        throw new Error('Server returned an error: ' + text)
+      }
+    }
+    
+    // Verify it's actually an Excel file
+    const blobSize = response.data.size || 0
+    if (blobSize < 1000 && contentType !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      const text = await response.data.text()
+      throw new Error('Server error: ' + text)
+    }
+    
+    // Create blob URL and trigger download
+    const blob = response.data instanceof Blob 
+      ? response.data 
+      : new Blob([response.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        })
+    const url = window.URL.createObjectURL(blob)
+    const downloadLink = document.createElement('a')
+    downloadLink.href = url
+    const now = new Date()
+    const dateStr = now.toISOString().split('T')[0]
+    downloadLink.download = `Transactions_${dateStr}.xlsx`
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+    document.body.removeChild(downloadLink)
+    window.URL.revokeObjectURL(url)
+    
+    console.log('✅ Excel file exported successfully')
+  } catch (error) {
+    console.error('❌ Error exporting to Excel:', error)
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    })
+    
+    let errorMessage = 'Failed to export to Excel. Please try again.'
+    
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
+      errorMessage = 'Network Error: Cannot connect to the server. Please check if the backend server is running.'
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Export endpoint not found (404). Please check if the server is running and routes are registered.'
+    } else if (error.response?.status === 500) {
+      errorMessage = 'Server error during export (500). Please check the server logs.'
+    } else if (error.message) {
+      errorMessage = error.message
+    } else if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        try {
+          const errorData = JSON.parse(error.response.data)
+          errorMessage = errorData.message || errorMessage
+        } catch (e) {
+          errorMessage = error.response.data
+        }
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message
+      }
+    }
+    
+    alert(errorMessage)
+  }
+}
+
+// Print function
+const printTransactions = () => {
+  try {
+    const filteredTransactions = getFilteredTransactions()
+    
+    if (filteredTransactions.length === 0) {
+      alert('No transactions to print')
+      return
+    }
+    
+    // Create print window content
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Transactions Report</title>
+          <style>
+            @media print {
+              @page {
+                margin: 1cm;
+                size: A4 landscape;
+              }
+              body {
+                margin: 0;
+                padding: 20px;
+                font-family: Arial, sans-serif;
+                font-size: 10px;
+              }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              font-size: 10px;
+              margin: 0;
+              padding: 20px;
+            }
+            h1 {
+              text-align: center;
+              color: #059669;
+              margin-bottom: 20px;
+              font-size: 24px;
+            }
+            .print-info {
+              text-align: center;
+              margin-bottom: 20px;
+              color: #666;
+              font-size: 12px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th {
+              background-color: #059669;
+              color: white;
+              padding: 10px 8px;
+              text-align: left;
+              border: 1px solid #ddd;
+              font-weight: bold;
+              font-size: 10px;
+            }
+            td {
+              padding: 8px;
+              border: 1px solid #ddd;
+              font-size: 9px;
+            }
+            tr:nth-child(even) {
+              background-color: #f9fafb;
+            }
+            tr:hover {
+              background-color: #f3f4f6;
+            }
+            .footer {
+              margin-top: 30px;
+              text-align: center;
+              color: #666;
+              font-size: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Transactions Report</h1>
+          <div class="print-info">
+            <p>Generated on: ${new Date().toLocaleString('en-PH', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}</p>
+            <p>Total Transactions: ${filteredTransactions.length}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Requested By</th>
+                <th>Approved By</th>
+                <th>Name of Receiver</th>
+                <th>Unit/Sectors</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Transaction Time</th>
+                <th>Role</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredTransactions.map(transaction => `
+                <tr>
+                  <td>${transaction.requested_by || 'N/A'}</td>
+                  <td>${transaction.approver_name || 'N/A'}</td>
+                  <td>${transaction.borrower_name || 'N/A'}</td>
+                  <td>${transaction.location || 'N/A'}</td>
+                  <td>${transaction.item_name || 'N/A'}</td>
+                  <td>${transaction.quantity || 0}</td>
+                  <td>${formatDateTime(transaction.transaction_time)}</td>
+                  <td>${transaction.role || 'USER'}</td>
+                  <td>${transaction.status || 'Pending'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            <p>End of Report</p>
+          </div>
+        </body>
+      </html>
+    `
+    
+    // Open print window
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(printContent)
+    printWindow.document.close()
+    
+    // Wait for content to load, then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+      }, 250)
+    }
+    
+    console.log('✅ Print dialog opened')
+  } catch (error) {
+    console.error('❌ Error printing transactions:', error)
+    alert('Failed to print. Please try again.')
+  }
+}
 </script>
 
 <template>
@@ -396,6 +860,24 @@ const getRoleIcon = (role) => {
               </p>
               <p v-else class="text-green-100 text-sm sm:text-base">Loading transactions...</p>
             </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <button
+              @click="exportToExcel"
+              :disabled="loading || totalTransactions === 0"
+              class="flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span class="material-icons-outlined text-lg">download</span>
+              <span class="hidden sm:inline">Export Excel</span>
+            </button>
+            <button
+              @click="printTransactions"
+              :disabled="loading || totalTransactions === 0"
+              class="flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg transition-all font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span class="material-icons-outlined text-lg">print</span>
+              <span class="hidden sm:inline">Print</span>
+            </button>
           </div>
         </div>
       </div>
@@ -421,38 +903,173 @@ const getRoleIcon = (role) => {
 
     <!-- Enhanced Search and Filter Section -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-6">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div class="flex items-center gap-3">
-          <span class="text-gray-900 dark:text-white font-semibold">Show</span>
-          <select 
-            v-model="transactionsPerPage"
-            class="px-4 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md"
-          >
-            <option value="10" class="bg-gray-700 text-white">10</option>
-            <option value="25" class="bg-gray-700 text-white">25</option>
-            <option value="50" class="bg-gray-700 text-white">50</option>
-            <option value="100" class="bg-gray-700 text-white">100</option>
-          </select>
-          <span class="text-gray-900 dark:text-white font-semibold">entries</span>
-        </div>
+      <div class="flex flex-col gap-4">
+        <!-- First Row: Show entries and Search -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div class="flex items-center gap-3">
+            <span class="text-gray-900 dark:text-white font-semibold">Show</span>
+            <select 
+              v-model="transactionsPerPage"
+              class="px-4 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md"
+            >
+              <option value="10" class="bg-gray-700 text-white">10</option>
+              <option value="25" class="bg-gray-700 text-white">25</option>
+              <option value="50" class="bg-gray-700 text-white">50</option>
+              <option value="100" class="bg-gray-700 text-white">100</option>
+            </select>
+            <span class="text-gray-900 dark:text-white font-semibold">entries</span>
+          </div>
 
-        <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div class="relative w-full sm:w-auto">
-            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">search</span>
-            </div>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search by item, borrower, location, or approver..."
-              class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
-            />
-            <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
-              <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons-outlined text-lg">close</span>
-              </button>
+          <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div class="relative w-full sm:w-auto">
+              <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">search</span>
+              </div>
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search by item, borrower, unit/sectors, or approver..."
+                class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
+              />
+              <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+                <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <span class="material-icons-outlined text-lg">close</span>
+                </button>
+              </div>
             </div>
           </div>
+        </div>
+
+        <!-- Second Row: Column Filters -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <!-- Status Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">flag</span>
+            </div>
+            <select 
+              v-model="statusFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Status</option>
+              <option v-for="status in uniqueStatuses" :key="status" :value="status" class="bg-gray-700 text-white">{{ status }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Role Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">badge</span>
+            </div>
+            <select 
+              v-model="roleFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Roles</option>
+              <option v-for="role in uniqueRoles" :key="role" :value="role" class="bg-gray-700 text-white">{{ role }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Unit/Sectors Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">location_on</span>
+            </div>
+            <select 
+              v-model="locationFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Unit/Sectors</option>
+              <option v-for="location in uniqueLocations" :key="location" :value="location" class="bg-gray-700 text-white">{{ location }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Requested By Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">person_add</span>
+            </div>
+            <select 
+              v-model="requestedByFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Requesters</option>
+              <option v-for="requester in uniqueRequestedBy" :key="requester" :value="requester" class="bg-gray-700 text-white">{{ requester }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Approved By Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">admin_panel_settings</span>
+            </div>
+            <select 
+              v-model="approvedByFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Approvers</option>
+              <option v-for="approver in uniqueApprovedBy" :key="approver" :value="approver" class="bg-gray-700 text-white">{{ approver }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Name of Receiver Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">person</span>
+            </div>
+            <select 
+              v-model="borrowerNameFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Receivers</option>
+              <option v-for="borrower in uniqueBorrowerNames" :key="borrower" :value="borrower" class="bg-gray-700 text-white">{{ borrower }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Item Name Filter -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">inventory_2</span>
+            </div>
+            <select 
+              v-model="itemNameFilter"
+              class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
+            >
+              <option value="">All Items</option>
+              <option v-for="item in uniqueItemNames" :key="item" :value="item" class="bg-gray-700 text-white">{{ item }}</option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">arrow_drop_down</span>
+            </div>
+          </div>
+
+          <!-- Clear Filters Button -->
+          <button
+            v-if="statusFilter || roleFilter || locationFilter || requestedByFilter || approvedByFilter || borrowerNameFilter || itemNameFilter"
+            @click="statusFilter = ''; roleFilter = ''; locationFilter = ''; requestedByFilter = ''; approvedByFilter = ''; borrowerNameFilter = ''; itemNameFilter = ''"
+            class="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all font-medium shadow-sm hover:shadow-md"
+          >
+            <span class="material-icons-outlined text-sm">clear</span>
+            <span>Clear</span>
+          </button>
         </div>
       </div>
     </div>
@@ -482,27 +1099,30 @@ const getRoleIcon = (role) => {
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead>
             <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Requested By</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Approved By</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Borrower Name</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Location</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Name of Receiver</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sectors</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Item Name</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Quantity</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Transaction Time</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Role</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Created At</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Updated At</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Status</th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="transactions.length === 0">
-              <td colspan="10" class="px-6 py-12 text-center">
+              <td colspan="9" class="px-6 py-12 text-center">
                 <div class="flex flex-col items-center">
                   <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
                     <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">swap_horiz</span>
                   </div>
                   <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No transactions found</h3>
-                  <p class="text-gray-600 dark:text-gray-400">{{ searchQuery ? 'Try adjusting your search query' : 'Transactions will appear here' }}</p>
+                  <p class="text-gray-600 dark:text-gray-400">
+                    {{ searchQuery || statusFilter || roleFilter || locationFilter || requestedByFilter || approvedByFilter || borrowerNameFilter || itemNameFilter
+                      ? 'Try adjusting your search query or filters' 
+                      : 'Transactions will appear here' }}
+                  </p>
                 </div>
               </td>
             </tr>
@@ -511,6 +1131,12 @@ const getRoleIcon = (role) => {
               :key="transaction.id"
               class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-green-500"
             >
+              <td class="px-6 py-4 whitespace-nowrap border-r border-gray-300 dark:border-gray-600">
+                <div class="flex items-center gap-2">
+                  <span class="material-icons-outlined text-orange-400 text-sm">person_add</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">{{ transaction.requested_by || 'N/A' }}</span>
+                </div>
+              </td>
               <td class="px-6 py-4 whitespace-nowrap border-r border-gray-300 dark:border-gray-600">
                 <div class="flex items-center gap-2">
                   <span class="material-icons-outlined text-indigo-400 text-sm">admin_panel_settings</span>
@@ -549,17 +1175,11 @@ const getRoleIcon = (role) => {
                   {{ transaction.role || 'USER' }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap border-r border-gray-300 dark:border-gray-600">
+              <td class="px-6 py-4 whitespace-nowrap">
                 <span :class="['inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', getStatusClass(transaction.status)]">
                   <span class="material-icons-outlined text-sm">{{ getStatusIcon(transaction.status) }}</span>
                   {{ transaction.status || 'Pending' }}
                 </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap border-r border-gray-300 dark:border-gray-600">
-                <span class="text-gray-700 dark:text-gray-300 font-medium">{{ formatDateTime(transaction.created_at) }}</span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-gray-700 dark:text-gray-300 font-medium">{{ formatDateTime(transaction.updated_at) }}</span>
               </td>
             </tr>
           </tbody>
@@ -570,11 +1190,11 @@ const getRoleIcon = (role) => {
       <div v-if="!loading && transactions.length > 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 p-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex items-center gap-2">
-            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-lg">info</span>
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">
-              Showing <span class="text-green-400 dark:text-green-400 font-bold">{{ totalTransactions > 0 ? ((currentPage - 1) * transactionsPerPage + 1) : 0 }}</span> to 
-              <span class="text-green-400 dark:text-green-400 font-bold">{{ Math.min(currentPage * transactionsPerPage, totalTransactions) }}</span> of 
-              <span class="text-green-400 dark:text-green-400 font-bold">{{ totalTransactions }}</span> entries
+            <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
+            <span class="text-sm font-semibold" style="color: #01200E;">
+              Showing <span class="font-bold" style="color: #01200E;">{{ totalTransactions > 0 ? ((currentPage - 1) * transactionsPerPage + 1) : 0 }}</span> to 
+              <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * transactionsPerPage, totalTransactions) }}</span> of 
+              <span class="font-bold" style="color: #01200E;">{{ totalTransactions }}</span> entries
             </span>
           </div>
           <div v-if="totalPages > 1" class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\LocationCollection;
 use App\Http\Resources\V1\LocationResource;
 use App\Models\Location;
+use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 
 class LocationController extends Controller
@@ -138,6 +139,40 @@ class LocationController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get locations associated with admin users.
+     */
+    public function getAdminLocations(Request $request)
+    {
+        $perPage = $request->get('per_page', 10);
+        $page = $request->get('page', 1);
+        
+        // Get location IDs that have at least one admin user
+        $adminLocationIds = User::where('role', 'admin')
+            ->whereNotNull('location_id')
+            ->distinct()
+            ->pluck('location_id')
+            ->toArray();
+        
+        // Get locations that have admin users
+        $locations = Location::whereIn('id', $adminLocationIds)
+            ->orderBy('id', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+        
+        return response()->json([
+            'success' => true,
+            'data' => new LocationCollection($locations->items()),
+            'pagination' => [
+                'current_page' => $locations->currentPage(),
+                'last_page' => $locations->lastPage(),
+                'per_page' => $locations->perPage(),
+                'total' => $locations->total(),
+                'from' => $locations->firstItem(),
+                'to' => $locations->lastItem(),
+            ]
+        ]);
     }
 
     /**

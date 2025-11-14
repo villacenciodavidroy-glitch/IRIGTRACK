@@ -496,7 +496,7 @@ const printInventory = () => {
             <th>Property Account Code</th>
             <th>Unit Value</th>
             <th>Date Acquired</th>
-            <th>Location</th>
+            <th>Unit/Sectors</th>
             <th>Condition</th>
             <th>Issued To</th>
             <th>Quantity</th>
@@ -711,7 +711,7 @@ const navigateBack = () => {
                 class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
               >
                 <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
-                <span>Locations</span>
+                <span>Unit/Sectors</span>
               </button>
               <button 
                 @click="goToAddItem"
@@ -777,7 +777,7 @@ const navigateBack = () => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search by article, description, category, PAC, or location..."
+              placeholder="Search by article, description, category, PAC, or unit/sectors..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
             >
             <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -873,7 +873,7 @@ const navigateBack = () => {
               <!-- Action buttons -->
               <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                 <div class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-medium">Location:</span> {{ item.location || 'N/A' }}
+                  <span class="font-medium">Unit/Sectors:</span> {{ item.location || 'N/A' }}
                 </div>
                 <div class="flex justify-end gap-2">
                   <button 
@@ -915,105 +915,110 @@ const navigateBack = () => {
           </div>
           
           <!-- Table with data -->
-          <table v-else class="min-w-full divide-y divide-gray-200 whitespace-nowrap">
+          <table v-else class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap bg-white dark:bg-gray-800">
             <thead>
-              <tr class="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50">
-                <th class="sticky left-0 z-10 bg-gray-100 w-12 px-4 py-4 border-r border-gray-200">
-                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer">
+              <tr class="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700">
+                <th class="sticky left-0 z-10 bg-gray-100 dark:bg-gray-700 w-12 px-4 py-4 border-r border-gray-200 dark:border-gray-600">
+                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-white dark:bg-gray-600">
                 </th>
-                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">QR CODE</th>
-                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">IMAGE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">ARTICLE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">CATEGORY</th>
-                <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">DESCRIPTION</th>
-                <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">QUANTITY</th>
-                <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">PROPERTY ACCOUNT CODE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">UNIT VALUE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">DATE ACQUIRED</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">P.O. NUMBER</th>
-                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">LOCATION</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">CONDITION</th>
-                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">ISSUED TO</th>
-                <th class="sticky right-0 z-10 bg-gray-100 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">ACTIONS</th>
+                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QR CODE</th>
+                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">IMAGE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ARTICLE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CATEGORY</th>
+                <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DESCRIPTION</th>
+                <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QUANTITY</th>
+                <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">PROPERTY ACCOUNT CODE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.O. NUMBER</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTORS</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
+                <th class="sticky right-0 z-10 bg-gray-100 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="(item, index) in paginatedItems" :key="item.id || item.propertyAccountCode" 
-                  class="group hover:bg-gradient-to-r hover:from-green-50 hover:to-transparent transition-all duration-200 border-l-4 border-transparent hover:border-green-500">
-                <td class="sticky left-0 z-10 bg-white group-hover:bg-green-50 px-4 py-3 border-r border-gray-200">
-                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer">
+                  :class="[
+                    'group transition-all duration-200 border-l-4 border-transparent hover:border-green-500',
+                    index % 2 === 0 
+                      ? 'bg-white dark:bg-gray-800 hover:bg-gradient-to-r hover:from-green-50 hover:to-transparent dark:hover:from-gray-700 dark:hover:to-transparent' 
+                      : 'bg-gray-50 dark:bg-gray-700 hover:bg-gradient-to-r hover:from-green-50 hover:to-transparent dark:hover:from-gray-600 dark:hover:to-transparent'
+                  ]">
+                <td class="sticky left-0 z-10 px-4 py-3 border-r border-gray-200 dark:border-gray-600 group-hover:bg-green-50 dark:group-hover:bg-gray-700" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'">
+                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer">
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <div 
-                    class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-green-50 to-green-100"
+                    class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-green-50 to-green-100 dark:from-gray-600 dark:to-gray-700"
                     @click="openQrPreviewModal(item)"
                     title="View QR Code"
                   >
                     <img :src="item.qrCode" alt="QR Code" class="h-10 w-10 object-contain">
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-blue-50 to-blue-100">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-600 dark:to-gray-700">
                     <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded">
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base font-semibold text-gray-900 truncate max-w-[130px]" :title="item.article">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[130px]" :title="item.article">
                     {{ item.article }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">
                     {{ item.category }}
                   </span>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base text-gray-700 truncate max-w-[220px]" :title="item.description">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[220px]" :title="item.description">
                     {{ item.description }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
                     {{ item.quantity || '0' }}
                   </span>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base font-mono text-gray-700 truncate max-w-[180px]" :title="item.propertyAccountCode">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base font-mono text-gray-700 dark:text-gray-300 truncate max-w-[180px]" :title="item.propertyAccountCode">
                     {{ item.propertyAccountCode }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base font-medium text-gray-700 truncate max-w-[130px]" :title="item.unitValue">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.unitValue">
                     {{ item.unitValue }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base text-gray-600 truncate max-w-[130px]" :title="item.dateAcquired">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base text-gray-600 dark:text-gray-400 truncate max-w-[130px]" :title="item.dateAcquired">
                     {{ item.dateAcquired }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base text-gray-600 truncate max-w-[130px]" :title="item.poNumber">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base text-gray-600 dark:text-gray-400 truncate max-w-[130px]" :title="item.poNumber">
                     {{ item.poNumber }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base text-gray-700 truncate max-w-[160px]" :title="item.location">
-                    <span class="material-icons-outlined text-base align-middle mr-1 text-gray-400">location_on</span>
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]" :title="item.location">
+                    <span class="material-icons-outlined text-base align-middle mr-1 text-gray-400 dark:text-gray-500">location_on</span>
                     {{ item.location }}
                   </div>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
                     {{ item.condition }}
                   </span>
                 </td>
-                <td class="px-4 py-3 border-r border-gray-200">
-                  <div class="text-base text-gray-700 truncate max-w-[160px]" :title="item.issuedTo">
+                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
+                  <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]" :title="item.issuedTo">
                     {{ item.issuedTo }}
                   </div>
                 </td>
-                <td class="sticky right-0 z-10 bg-white group-hover:bg-green-50 px-4 py-3">
+                <td class="sticky right-0 z-10 px-4 py-3 group-hover:bg-green-50 dark:group-hover:bg-gray-700" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'">
                   <div class="flex justify-center gap-2">
                     <button 
                       @click="openValidation(item)"
@@ -1030,23 +1035,23 @@ const navigateBack = () => {
         </div>
 
         <!-- Enhanced Pagination -->
-        <div v-if="!loading && totalFilteredItems > 0" class="bg-gradient-to-r from-gray-50 to-gray-100 border-t-2 border-gray-200">
+        <div v-if="!loading && totalFilteredItems > 0" class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 border-t-2 border-gray-200 dark:border-gray-600">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
               <div class="flex items-center gap-2">
-                <span class="material-icons-outlined text-green-600 text-lg">info</span>
-                <span class="text-base font-semibold text-gray-700">
-                  Showing <span class="text-green-600 font-bold">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
-                  <span class="text-green-600 font-bold">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
-                  <span class="text-green-600 font-bold">{{ totalFilteredItems }}</span> items
+                <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
+                <span class="text-base font-semibold" style="color: #01200E;">
+                  Showing <span class="font-bold" style="color: #01200E;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                  <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
+                  <span class="font-bold" style="color: #01200E;">{{ totalFilteredItems }}</span> items
                 </span>
               </div>
               <div class="flex items-center gap-2">
-                <label class="text-base font-medium text-gray-700">Items per page:</label>
+                <label class="text-base font-medium text-gray-700 dark:text-gray-300">Items per page:</label>
                 <select 
                   v-model="itemsPerPage" 
                   @change="changeItemsPerPage($event.target.value)"
-                  class="bg-white border-2 border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 text-base font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
+                  class="bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-base font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
                 >
                   <option value="8">8</option>
                   <option value="16">16</option>
@@ -1059,14 +1064,14 @@ const navigateBack = () => {
               <button 
                 @click="goToPage(1)"
                 :disabled="currentPage === 1"
-                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
               >
                 <span class="material-icons-outlined text-base align-middle">first_page</span>
               </button>
               <button 
                 @click="goToPage(currentPage - 1)"
                 :disabled="currentPage === 1"
-                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
               >
                 <span class="material-icons-outlined text-base align-middle">chevron_left</span>
               </button>
@@ -1079,28 +1084,28 @@ const navigateBack = () => {
                       'px-3 py-2 text-base font-semibold border-2 rounded-lg transition-all shadow-sm hover:shadow-md',
                       currentPage === page 
                         ? 'bg-gradient-to-r from-green-600 to-green-700 text-white border-green-600 shadow-lg' 
-                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-green-400'
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400'
                     ]"
                   >
                     {{ page }}
                   </button>
                   <span 
                     v-else-if="page === currentPage - 2 || page === currentPage + 2"
-                    class="px-2 text-gray-500"
+                    class="px-2 text-gray-500 dark:text-gray-400"
                   >...</span>
                 </template>
               </div>
               <button 
                 @click="goToPage(currentPage + 1)"
                 :disabled="currentPage === totalPages"
-                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
               >
                 <span class="material-icons-outlined text-base align-middle">chevron_right</span>
               </button>
               <button 
                 @click="goToPage(totalPages)"
                 :disabled="currentPage === totalPages"
-                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
               >
                 <span class="material-icons-outlined text-base align-middle">last_page</span>
               </button>
@@ -1224,7 +1229,7 @@ const navigateBack = () => {
                         <div class="text-sm font-medium text-gray-900">{{ selectedQrItem?.description || 'N/A' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">LOCATION</div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">UNIT/SECTORS</div>
                         <div class="text-sm font-medium text-gray-900 flex items-center gap-1">
                           <span class="material-icons-outlined text-green-600 text-base">location_on</span>
                           {{ selectedQrItem?.location || 'N/A' }}
@@ -1299,74 +1304,74 @@ const navigateBack = () => {
           <div class="p-6 space-y-6">
             <!-- QR Code Display -->
             <div class="flex flex-col items-center">
-              <div class="bg-white border-2 border-green-500 rounded-lg p-4 shadow-md mb-4">
+              <div class="bg-white dark:bg-gray-700 border-2 border-green-500 rounded-lg p-4 shadow-md mb-4">
                 <img :src="selectedItem?.qrCode" alt="QR Code 2024" class="w-56 h-56 object-contain">
               </div>
-              <p class="text-center text-gray-700 font-semibold text-sm mb-2">Property Account Code</p>
-              <p class="text-center text-gray-900 font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
+              <p class="text-center text-gray-700 dark:text-gray-300 font-semibold text-sm mb-2">Property Account Code</p>
+              <p class="text-center text-gray-900 dark:text-white font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
             </div>
             
             <!-- Item Details Section -->
-            <div class="border-t border-gray-200 pt-6">
-              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <span class="material-icons-outlined text-green-600 text-xl">inventory_2</span>
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">inventory_2</span>
                 Item Details
               </h3>
-              <div class="bg-gradient-to-br from-gray-50 to-green-50/30 rounded-lg p-5 space-y-3 border border-gray-200">
+              <div class="bg-gradient-to-br from-gray-50 to-green-50/30 dark:from-gray-700 dark:to-gray-800 rounded-lg p-5 space-y-3 border border-gray-200 dark:border-gray-600">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Article</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.article || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Article</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.article || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Category</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.category || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Category</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.category || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Quantity</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.quantity || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.quantity || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Property Account Code</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.propertyAccountCode || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Property Account Code</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.propertyAccountCode || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Unit Value</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.unitValue || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Unit Value</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.unitValue || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date Acquired</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.dateAcquired || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Date Acquired</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.dateAcquired || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">P.O. Number</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.poNumber || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">P.O. Number</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.poNumber || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location</div>
-                    <div class="text-sm font-bold text-gray-900 flex items-center gap-1">
-                      <span class="material-icons-outlined text-green-600 text-sm">location_on</span>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Unit/Sectors</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                      <span class="material-icons-outlined text-green-600 dark:text-green-400 text-sm">location_on</span>
                       {{ specs.location || 'N/A' }}
                     </div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Condition</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Condition</div>
                     <div class="text-sm">
-                      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-white">
                         {{ specs.condition || 'N/A' }}
                       </span>
                     </div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Issued To</div>
-                    <div class="text-sm font-bold text-gray-900">{{ specs.issuedTo || 'N/A' }}</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Issued To</div>
+                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.issuedTo || 'N/A' }}</div>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex flex-col gap-3 pt-4 border-t border-gray-200">
+            <div class="flex flex-col gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button 
                 @click="generateNewQrCode"
                 class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold validate-button disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1395,27 +1400,27 @@ const navigateBack = () => {
           <div class="p-6 space-y-6">
             <!-- QR Code Display -->
             <div class="flex flex-col items-center">
-              <div class="bg-white border-2 border-green-500 rounded-lg p-4 shadow-md mb-4" :class="{ 'qr-pulse-border': qrCodeUpdated }">
+              <div class="bg-white dark:bg-gray-700 border-2 border-green-500 rounded-lg p-4 shadow-md mb-4" :class="{ 'qr-pulse-border': qrCodeUpdated }">
                 <img 
                   :src="qrCodeUpdated ? newQrCode : selectedItem?.qrCode" 
                   alt="QR Code 2025" 
                   class="w-56 h-56 object-contain"
                 >
               </div>
-              <p class="text-center text-gray-700 font-semibold text-sm mb-2">Property Account Code</p>
-              <p class="text-center text-gray-900 font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
+              <p class="text-center text-gray-700 dark:text-gray-300 font-semibold text-sm mb-2">Property Account Code</p>
+              <p class="text-center text-gray-900 dark:text-white font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
             </div>
 
             <!-- Status Messages -->
             <div v-if="qrCodeUpdated" class="space-y-4">
-              <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg p-5">
+              <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border-2 border-green-400 dark:border-green-600 rounded-lg p-5">
                 <div class="flex items-start gap-3">
                   <div class="p-2 bg-green-500 rounded-full flex-shrink-0">
                     <span class="material-icons-outlined text-white text-xl">check_circle</span>
                   </div>
                   <div>
-                    <p class="text-green-800 font-bold text-base mb-1">QR Code Updated Successfully!</p>
-                    <p class="text-green-700 text-sm">The QR code has been validated and updated from Calendar Year 2024 to 2025.</p>
+                    <p class="text-green-800 dark:text-green-300 font-bold text-base mb-1">QR Code Updated Successfully!</p>
+                    <p class="text-green-700 dark:text-green-400 text-sm">The QR code has been validated and updated from Calendar Year 2024 to 2025.</p>
                   </div>
                 </div>
               </div>
@@ -1430,15 +1435,15 @@ const navigateBack = () => {
             </div>
             
             <div v-else class="space-y-4">
-              <div class="bg-gradient-to-br from-gray-50 to-blue-50/30 border-2 border-gray-300 rounded-lg p-5">
+              <div class="bg-gradient-to-br from-gray-50 to-blue-50/30 dark:from-gray-700 dark:to-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-5">
                 <div class="flex items-start gap-3">
-                  <div class="p-2 bg-blue-100 rounded-full flex-shrink-0">
-                    <span class="material-icons-outlined text-blue-600 text-xl">info</span>
+                  <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
+                    <span class="material-icons-outlined text-blue-600 dark:text-blue-300 text-xl">info</span>
                   </div>
                   <div>
-                    <p class="text-gray-800 font-bold text-base mb-1">Validation Required</p>
-                    <p class="text-gray-700 text-sm">Click the <span class="font-semibold text-green-600">"Validate & Generate 2025 QR Code"</span> button to generate the new QR code for Calendar Year 2025.</p>
-                    <p class="text-gray-600 text-xs mt-2 italic">This will update the QR code from 2024 to 2025.</p>
+                    <p class="text-gray-800 dark:text-white font-bold text-base mb-1">Validation Required</p>
+                    <p class="text-gray-700 dark:text-gray-300 text-sm">Click the <span class="font-semibold text-green-600 dark:text-green-400">"Validate & Generate 2025 QR Code"</span> button to generate the new QR code for Calendar Year 2025.</p>
+                    <p class="text-gray-600 dark:text-gray-400 text-xs mt-2 italic">This will update the QR code from 2024 to 2025.</p>
                   </div>
                 </div>
               </div>

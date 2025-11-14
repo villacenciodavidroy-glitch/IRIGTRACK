@@ -18,8 +18,23 @@ class NotificationResource extends JsonResource
         $borrowRequest = $this->borrowRequest;
         $type = $this->type ?? 'low_stock';
         
+        // Get the user who requested this borrow request (if applicable)
+        $requestedByName = 'N/A';
+        if ($type === 'borrow_request' && $borrowRequest) {
+            if ($borrowRequest->requested_by_user_id) {
+                $requestedByUser = \App\Models\User::find($borrowRequest->requested_by_user_id);
+                if ($requestedByUser) {
+                    $requestedByName = $requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'N/A';
+                }
+            }
+            // Fallback to borrowed_by if no user found
+            if ($requestedByName === 'N/A' && $borrowRequest->borrowed_by) {
+                $requestedByName = $borrowRequest->borrowed_by;
+            }
+        }
+        
         // Determine title and priority based on type
-        $title = $type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert';
+        $title = $type === 'borrow_request' ? $requestedByName : 'Low Stock Alert';
         $priority = $type === 'borrow_request' ? 'high' : 'high';
         
         $data = [
@@ -45,11 +60,14 @@ class NotificationResource extends JsonResource
         
         // Add borrow request data if this is a borrow request notification
         if ($type === 'borrow_request' && $borrowRequest) {
+            
             $data['borrowRequest'] = [
                 'id' => $borrowRequest->id,
                 'quantity' => $borrowRequest->quantity,
                 'location' => $borrowRequest->location,
                 'borrowed_by' => $borrowRequest->borrowed_by,
+                'requested_by' => $requestedByName,
+                'requested_by_user_id' => $borrowRequest->requested_by_user_id,
                 'status' => $borrowRequest->status,
                 'created_at' => $borrowRequest->created_at->toISOString(),
             ];

@@ -22,22 +22,6 @@
               <span class="material-icons-outlined text-lg">inventory_2</span>
               <span>Restock</span>
             </button>
-            <div class="hidden sm:block w-px h-6 bg-white/30 mx-2"></div>
-            <select v-model="timeRange" class="px-4 py-2.5 bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-xl focus:ring-2 focus:ring-white/50 focus:border-white/50 transition-all font-medium text-base min-w-[140px]">
-              <option value="3" class="text-gray-900">Last 3 months</option>
-              <option value="6" class="text-gray-900">Last 6 months</option>
-              <option value="12" class="text-gray-900">Last 12 months</option>
-            </select>
-            <select v-model="selectedCategory" class="px-4 py-2.5 bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-xl focus:ring-2 focus:ring-white/50 focus:border-white/50 transition-all font-medium text-base min-w-[140px]">
-              <option value="all" class="text-gray-900">All Categories</option>
-              <option value="supply" class="text-gray-900">Supply</option>
-              <option value="ict" class="text-gray-900">ICT</option>
-            </select>
-            <select v-model="selectedStatus" class="px-4 py-2.5 bg-white/20 backdrop-blur-sm text-white border border-white/30 rounded-xl focus:ring-2 focus:ring-white/50 focus:border-white/50 transition-all font-medium text-base min-w-[120px]">
-              <option value="all" class="text-gray-900">All Status</option>
-              <option value="active" class="text-gray-900">Active</option>
-              <option value="low" class="text-gray-900">Low Stock</option>
-            </select>
           </div>
         </div>
       </div>
@@ -181,8 +165,7 @@
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Remaining Years</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">End Date</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Acquired</th>
-                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
-                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Recommendation</th>
+                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -210,20 +193,18 @@
                 </td>
                 <td class="px-6 py-4 text-base text-gray-900 dark:text-white font-medium border-r border-gray-300 dark:border-gray-600">{{ i.lifespanEndDate }}</td>
                 <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300 border-r border-gray-300 dark:border-gray-600">{{ i.acquisitionDate }}</td>
-                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
-                  <span class="px-3 py-1.5 rounded-full text-sm font-bold" :class="{
-                    'bg-red-100 text-red-900': i.remainingLifespan <= 15,
-                    'bg-orange-100 text-orange-900': i.remainingLifespan > 15 && i.remainingLifespan <= 30
-                  }">
-                    Dispose
-                  </span>
-                </td>
                 <td class="px-6 py-4">
-                  <span :class="i.recommendationClass" class="text-base font-semibold">{{ i.recommendation }}</span>
+                  <span class="px-4 py-2 rounded-full text-sm sm:text-base font-bold whitespace-nowrap inline-block min-w-[100px] text-center" :class="{
+                    'bg-red-600 text-white dark:bg-red-700 dark:text-white shadow-md': i.conditionStatus === 'Disposal',
+                    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': i.remainingLifespan <= 15 && i.conditionStatus !== 'Disposal',
+                    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200': i.remainingLifespan > 15 && i.remainingLifespan <= 30 && i.conditionStatus !== 'Disposal'
+                  }">
+                    {{ i.conditionStatus === 'Disposal' ? 'DISPOSE' : 'For Checking' }}
+                  </span>
                 </td>
               </tr>
               <tr v-if="endingSoonItems.length === 0">
-                <td colspan="8" class="px-6 py-12 text-center">
+                <td colspan="7" class="px-6 py-12 text-center">
                   <div class="flex flex-col items-center">
                     <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
                       <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">check_circle</span>
@@ -708,13 +689,47 @@
                     {{ pred.lifespan_estimate != null ? pred.lifespan_estimate.toFixed(2) : 'N/A' }}
                   </td>
                   <td class="px-6 py-4">
-                    <span v-if="pred.remaining_years != null" class="px-3 py-1.5 rounded-full text-sm font-bold" :class="{
-                      'bg-red-100 text-red-900': pred.remaining_years <= 0.082,
-                      'bg-orange-100 text-orange-900': pred.remaining_years > 0.082 && pred.remaining_years <= 0.164,
-                      'bg-yellow-100 text-yellow-900': pred.remaining_years > 0.164 && pred.remaining_years <= 0.5,
-                      'bg-green-100 text-green-900': pred.remaining_years > 0.5
-                    }">
-                      {{ pred.remaining_years <= 0.082 ? 'Dispose' : pred.remaining_years <= 0.164 ? 'Soon' : pred.remaining_years <= 0.5 ? 'Monitor' : 'Good' }}
+                    <span 
+                      v-if="pred.remaining_years != null || (() => { const item = items.find(i => i.id === pred.item_id); return item?.condition_status === 'Disposal'; })()" 
+                      class="px-4 py-2 rounded-full text-sm sm:text-base font-bold whitespace-nowrap inline-block min-w-[100px] text-center" 
+                      :class="{
+                        'bg-red-600 text-white dark:bg-red-700 dark:text-white shadow-md': (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          return item?.condition_status === 'Disposal';
+                        })(),
+                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': pred.remaining_years != null && pred.remaining_years <= 0.082 && (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          return item?.condition_status !== 'Disposal';
+                        })(),
+                        'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200': pred.remaining_years != null && pred.remaining_years > 0.082 && pred.remaining_years <= 0.164 && (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          return item?.condition_status !== 'Disposal';
+                        })(),
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': pred.remaining_years != null && pred.remaining_years > 0.164 && pred.remaining_years <= 0.5 && (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          return item?.condition_status !== 'Disposal';
+                        })(),
+                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': pred.remaining_years != null && pred.remaining_years > 0.5 && (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          return item?.condition_status !== 'Disposal';
+                        })()
+                      }"
+                    >
+                      {{
+                        (() => {
+                          const item = items.find(i => i.id === pred.item_id);
+                          // Priority 1: Check condition_status first - if Disposal, always show DISPOSE
+                          if (item?.condition_status === 'Disposal') {
+                            return 'DISPOSE';
+                          }
+                          // Priority 2: Check remaining_years only if condition_status is not Disposal
+                          if (pred.remaining_years == null) return 'N/A';
+                          if (pred.remaining_years <= 0.082) return 'For Checking';
+                          if (pred.remaining_years <= 0.164) return 'Soon';
+                          if (pred.remaining_years <= 0.5) return 'Monitor';
+                          return 'Good';
+                        })()
+                      }}
                     </span>
                   </td>
                 </tr>
@@ -1102,27 +1117,37 @@ const allItemsLifespan = computed(() => {
       // So end date = today + remainingYears
       const lifespanEndDate = new Date(today.getTime() + (remainingYears * 365.25 * 24 * 60 * 60 * 1000))
       
-      // Status classes and recommendations based on remaining years
-      let statusClass = 'bg-green-500'
-      let lifespanClass = 'text-green-600'
-      let recommendation = 'Good condition'
-      let recommendationClass = 'text-green-600'
+      // Get condition_status from item (comes from condition_number->condition_status)
+      const conditionStatus = item.condition_status || null
       
-      if (remainingYears <= 0.082) { // <= 30 days
-        statusClass = 'bg-red-500'
-        lifespanClass = 'text-red-600'
-        recommendation = 'URGENT: Dispose immediately'
-        recommendationClass = 'text-red-600'
+      // Status classes and recommendations based on remaining years
+      // If condition_status is "Disposal", override with disposal status
+      let statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+      let lifespanClass = 'text-green-600 dark:text-green-400'
+      let recommendation = 'Good condition'
+      let recommendationClass = 'text-green-600 dark:text-green-400'
+      
+      // Check if item is marked for disposal first
+      if (conditionStatus === 'Disposal') {
+        statusClass = 'bg-red-600 text-white dark:bg-red-700 dark:text-white'
+        lifespanClass = 'text-red-600 dark:text-red-400'
+        recommendation = 'URGENT: Item marked for disposal - Dispose immediately'
+        recommendationClass = 'text-red-600 dark:text-red-400'
+      } else if (remainingYears <= 0.082) { // <= 30 days
+        statusClass = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+        lifespanClass = 'text-red-600 dark:text-red-400'
+        recommendation = 'URGENT: End of life reached - Replacement required'
+        recommendationClass = 'text-red-600 dark:text-red-400'
       } else if (remainingYears <= 0.164) { // <= 60 days (approximately 2 months)
-        statusClass = 'bg-orange-500'
-        lifespanClass = 'text-orange-600'
+        statusClass = 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+        lifespanClass = 'text-orange-600 dark:text-orange-400'
         recommendation = 'Plan replacement soon'
-        recommendationClass = 'text-orange-600'
+        recommendationClass = 'text-orange-600 dark:text-orange-400'
       } else if (remainingYears <= 0.5) { // <= 6 months
-        statusClass = 'bg-yellow-500'
-        lifespanClass = 'text-yellow-600'
+        statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+        lifespanClass = 'text-yellow-600 dark:text-yellow-400'
         recommendation = 'Monitor closely'
-        recommendationClass = 'text-yellow-600'
+        recommendationClass = 'text-yellow-600 dark:text-yellow-400'
       }
       
       // CatBoost predictions from Python API have highest confidence
@@ -1152,7 +1177,8 @@ const allItemsLifespan = computed(() => {
         confidenceClass: statusClass,
         unitValue: item.unit_value,
         pac: item.pac,
-        location: item.location?.location || 'Unknown'
+        location: item.location?.location || 'Unknown',
+        conditionStatus: conditionStatus // Include condition_status for status display
       }
     })
     .filter(item => item !== null) // Remove items without Python API predictions
@@ -1826,11 +1852,6 @@ ChartJS.register(
   Legend
 )
 
-// Filter states
-const timeRange = ref('3')
-const selectedCategory = ref('all')
-const selectedStatus = ref('all')
-
 // Chart Data for Predictive Analytics
 const mlUsagePredictionData = ref({
   labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
@@ -2337,7 +2358,7 @@ const consumableSupplyItems = computed(() => {
     let nextThreeMonths = 'N/A'
     if (usageForecast) {
       // Use forecast.predicted_usage from backend (EXACT same field that Usage Overview uses)
-      // Reuse the forecast variable already defined above in this block
+      const forecast = usageForecast.forecast || {}
       let predictedUsage = forecast.predicted_usage
       
       // Also check direct forecasted_usage (if already processed by Python ML API like Usage Overview)
@@ -2842,5 +2863,54 @@ table {
     min-height: 44px;
     min-width: 44px;
   }
+}
+
+/* DISPOSE badge - Enhanced visibility and cross-browser compatibility */
+/* Target spans with red-600 background (DISPOSE status) */
+span.bg-red-600 {
+  background-color: #dc2626 !important; /* red-600 */
+  color: #ffffff !important; /* white */
+  font-weight: 700 !important;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode DISPOSE badge */
+.dark span.bg-red-700 {
+  background-color: #b91c1c !important; /* red-700 */
+  color: #ffffff !important; /* white */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Ensure DISPOSE text is visible on all screen sizes */
+@media (max-width: 640px) {
+  span.bg-red-600,
+  span.bg-red-700 {
+    font-size: 0.875rem !important; /* text-sm */
+    padding: 0.5rem 0.75rem !important;
+    min-width: 90px !important;
+  }
+}
+
+@media (min-width: 641px) {
+  span.bg-red-600,
+  span.bg-red-700 {
+    font-size: 1rem !important; /* text-base */
+    padding: 0.5rem 1rem !important;
+  }
+}
+
+/* Additional fallback for maximum compatibility */
+[class*="bg-red-600"] {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.dark [class*="bg-red-700"] {
+  background-color: #b91c1c !important;
+  color: #ffffff !important;
 }
 </style>

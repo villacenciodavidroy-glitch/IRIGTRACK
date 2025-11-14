@@ -15,14 +15,20 @@ class NotificationResource extends JsonResource
     public function toArray(Request $request): array
     {
         $item = $this->item;
+        $borrowRequest = $this->borrowRequest;
+        $type = $this->type ?? 'low_stock';
         
-        return [
+        // Determine title and priority based on type
+        $title = $type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert';
+        $priority = $type === 'borrow_request' ? 'high' : 'high';
+        
+        $data = [
             'id' => $this->notification_id,
             'item_id' => $this->item_id,
             'message' => $this->message,
-            'type' => 'low_stock', // All notifications are low stock alerts
-            'title' => 'Low Stock Alert',
-            'priority' => 'high', // Low stock is high priority
+            'type' => $type,
+            'title' => $title,
+            'priority' => $priority,
             'timestamp' => $this->created_at->toISOString(),
             'date' => $this->created_at->format('d-m-Y'),
             'time' => $this->created_at->format('h:i A'),
@@ -30,10 +36,25 @@ class NotificationResource extends JsonResource
             'isRead' => $this->is_read ?? false,
             'item' => $item ? [
                 'id' => $item->id,
+                'uuid' => $item->uuid ?? null,
                 'unit' => $item->unit,
                 'description' => $item->description,
                 'quantity' => $item->quantity,
             ] : null,
         ];
+        
+        // Add borrow request data if this is a borrow request notification
+        if ($type === 'borrow_request' && $borrowRequest) {
+            $data['borrowRequest'] = [
+                'id' => $borrowRequest->id,
+                'quantity' => $borrowRequest->quantity,
+                'location' => $borrowRequest->location,
+                'borrowed_by' => $borrowRequest->borrowed_by,
+                'status' => $borrowRequest->status,
+                'created_at' => $borrowRequest->created_at->toISOString(),
+            ];
+        }
+        
+        return $data;
     }
 }

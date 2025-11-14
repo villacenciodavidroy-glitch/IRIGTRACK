@@ -9,12 +9,71 @@ const router = useRouter()
 const route = useRoute()
 
 // Use the auth composable to get user data
-const { user, loading: userLoading, error: userError, fetchCurrentUser, getUserDisplayName, logout } = useAuth()
+const { user, loading: userLoading, error: userError, fetchCurrentUser, getUserDisplayName, logout, isAdmin } = useAuth()
 
 // Use the notifications composable
-const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, refreshNotifications, refreshUnreadCount } = useNotifications()
+const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, refreshNotifications, refreshUnreadCount, setupRealtimeListener, approveBorrowRequest, rejectBorrowRequest } = useNotifications()
 
-// Handle notification click in dropdown - mark as read and navigate to Analytics
+// Global popup notification state
+const showGlobalPopup = ref(false)
+const globalPopupNotification = ref(null)
+
+// Format relative time helper
+const formatRelativeTime = (timestamp) => {
+  const now = new Date()
+  const time = new Date(timestamp)
+  const diffInSeconds = Math.floor((now - time) / 1000)
+
+  if (diffInSeconds < 60) return 'Just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
+  return time.toLocaleDateString()
+}
+
+// Handle approve from global popup
+const handleGlobalApprove = async (notification) => {
+  if (!notification.borrowRequest || !notification.item) {
+    return
+  }
+  
+  // Navigate to notifications page to handle approval
+  router.push({ 
+    name: 'Notifications',
+    query: { highlight: notification.id, action: 'approve' }
+  })
+  showGlobalPopup.value = false
+}
+
+// Handle reject from global popup
+const handleGlobalReject = async (notification) => {
+  if (!notification.borrowRequest || !notification.item) {
+    return
+  }
+  
+  if (!confirm('Are you sure you want to reject this borrow request?')) {
+    return
+  }
+  
+  const itemId = notification.item.uuid || notification.item.id || notification.item_id
+  const requestId = notification.borrowRequest.id
+  
+  const result = await rejectBorrowRequest(itemId, requestId)
+  
+  if (result.success) {
+    // Update status
+    if (notification.borrowRequest) {
+      notification.borrowRequest.status = 'rejected'
+    }
+    showGlobalPopup.value = false
+    // Refresh notifications
+    await fetchNotifications(5)
+  } else {
+    alert(`Error: ${result.message || 'Failed to reject borrow request'}`)
+  }
+}
+
+// Handle notification click in dropdown - mark as read and navigate
 const handleNotificationClick = async (notification) => {
   // Mark as read if not already read
   if (!notification.isRead) {
@@ -22,8 +81,17 @@ const handleNotificationClick = async (notification) => {
   }
   // Close the dropdown
   isNotificationsOpen.value = false
-  // Navigate to Analytics page
-  router.push({ name: 'Analytics' })
+  
+  // For borrow request notifications, navigate to Notifications page with ID
+  if (notification.type === 'borrow_request') {
+    router.push({ 
+      name: 'Notifications',
+      query: { highlight: notification.id }
+    })
+  } else {
+    // For other notifications, navigate to Analytics page
+    router.push({ name: 'Analytics' })
+  }
 }
 
 // Fallback user data for when API is loading
@@ -44,14 +112,20 @@ const avatarError = ref(false)
 const currentTime = ref(new Date())
 const currentDate = ref(new Date())
 
-const navigation = [
+// Base navigation items (available to all authenticated users)
+const baseNavigation = [
   { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
   { name: 'Inventory', path: '/inventory', icon: 'inventory' },
+  { name: 'Analytics', path: '/analytics', icon: 'analytics' },
+  { name: 'Profile', path: '/profile', icon: 'person' }
+]
+
+// Admin-only navigation items
+const adminNavigation = [
   { name: 'Categories', path: '/categories', icon: 'category' },
   { name: 'Locations', path: '/locations', icon: 'location_on' },
   { name: 'Admins', path: '/admin', icon: 'people' },
-  { name: 'Analytics', path: '/analytics', icon: 'analytics' },
-  { name: 'Profile', path: '/profile', icon: 'person' },
+  { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' },
   { name: 'Activity Log', path: '/activity-log', icon: 'history' },
   {
     name: 'History',
@@ -59,11 +133,19 @@ const navigation = [
     hasSubmenu: true,
     id: 'history',
     submenu: [
-      { name: 'Deleted Items', path: '/history/deleted-items', icon: 'delete' },
-      { name: 'Deleted Accounts', path: '/history/deleted-accounts', icon: 'person_off' }
+      { name: 'Deleted Items', path: '/history/deleted-items', icon: 'delete' }
     ]
   }
 ]
+
+// Computed navigation that filters based on user role
+const navigation = computed(() => {
+  const nav = [...baseNavigation]
+  if (isAdmin()) {
+    nav.push(...adminNavigation)
+  }
+  return nav
+})
 
 // Computed property for user display name
 const userDisplayName = computed(() => {
@@ -90,7 +172,7 @@ const userAvatar = computed(() => {
 // Computed property for sidebar classes
 const sidebarClasses = computed(() => {
   return {
-    'fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-800 shadow-lg z-20 flex flex-col transform transition-transform duration-300 ease-in-out': true,
+    'fixed inset-y-0 left-0 w-64 xs:w-72 sm:w-80 lg:w-64 bg-white dark:bg-white shadow-lg z-20 flex flex-col transform transition-transform duration-300 ease-in-out': true,
     '-translate-x-full': !isSidebarOpen.value && isMobile.value,
     'translate-x-0': isSidebarOpen.value || !isMobile.value
   }
@@ -128,6 +210,21 @@ const handleImageError = () => {
 
 const isSubmenuOpen = (itemId) => {
   return !!submenuStates.value[itemId]
+}
+
+// Helper function to check if a route is active (exact match, normalized)
+const isActiveRoute = (path) => {
+  if (!path) return false
+  // Normalize paths by removing trailing slashes and ensuring exact match
+  const currentPath = route.path.replace(/\/$/, '') || '/'
+  const itemPath = path.replace(/\/$/, '') || '/'
+  return currentPath === itemPath
+}
+
+// Helper function to check if any submenu item is active
+const isSubmenuActive = (submenu) => {
+  if (!submenu || !Array.isArray(submenu)) return false
+  return submenu.some(subItem => isActiveRoute(subItem.path))
 }
 
 const closeProfileDropdown = (e) => {
@@ -222,6 +319,96 @@ const cancelLogout = () => {
   isLogoutModalOpen.value = false
 }
 
+// Auto-open submenus when their items are active
+watch(() => route.path, (newPath) => {
+  // Check if any submenu item is active and auto-open the parent
+  const adminNav = adminNavigation.find(item => item.hasSubmenu)
+  if (adminNav && adminNav.submenu) {
+    const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
+    if (isActive && !isSubmenuOpen(adminNav.id)) {
+      submenuStates.value[adminNav.id] = true
+    }
+  }
+}, { immediate: true })
+
+// Setup global real-time notification listener
+const setupGlobalNotificationListener = () => {
+  if (!window.Echo) {
+    console.warn('⚠️ Laravel Echo not available. Will retry...')
+    setTimeout(setupGlobalNotificationListener, 2000)
+    return
+  }
+
+  try {
+    const channel = window.Echo.channel('notifications')
+    
+    channel.listen('.NotificationCreated', (data) => {
+      console.log('📬 Global: New notification received:', data)
+      
+      if (data.notification) {
+        const newNotification = {
+          id: data.notification.id,
+          type: data.notification.type || 'low_stock',
+          title: data.notification.title || 'Low Stock Alert',
+          message: data.notification.message,
+          user: data.notification.item?.unit || 'System',
+          role: 'System',
+          timestamp: data.notification.timestamp || data.notification.created_at,
+          date: data.notification.date,
+          time: data.notification.time,
+          action: data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert',
+          isRead: data.notification.isRead ?? false,
+          priority: data.notification.priority || 'high',
+          item: data.notification.item,
+          borrowRequest: data.notification.borrowRequest || null,
+          selected: false
+        }
+        
+        // Check if notification already exists (prevent duplicates)
+        const exists = notifications.value.some(n => n.id === newNotification.id)
+        if (!exists) {
+          // Add to beginning of notifications array (for dropdown)
+          notifications.value.unshift(newNotification)
+          
+          // Keep only latest 10 in dropdown
+          if (notifications.value.length > 10) {
+            notifications.value = notifications.value.slice(0, 10)
+          }
+          
+          // Update unread count
+          if (data.unread_count !== undefined) {
+            unreadCount.value = data.unread_count
+          } else if (!newNotification.isRead) {
+            unreadCount.value++
+          }
+          
+          // Show popup for NEW borrow requests (even on other pages)
+          if (newNotification.type === 'borrow_request' && newNotification.borrowRequest?.status === 'pending') {
+            globalPopupNotification.value = newNotification
+            showGlobalPopup.value = true
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+              showGlobalPopup.value = false
+            }, 10000)
+          }
+        } else {
+          // Notification already exists, just update unread count
+          if (data.unread_count !== undefined) {
+            unreadCount.value = data.unread_count
+          }
+        }
+      }
+    })
+    
+    console.log('✅ Global real-time notifications listener active')
+  } catch (error) {
+    console.error('❌ Error setting up global notifications listener:', error)
+    // Retry after delay
+    setTimeout(setupGlobalNotificationListener, 3000)
+  }
+}
+
 onMounted(async () => {
   if (isDarkMode.value) {
     document.documentElement.classList.add('dark')
@@ -239,13 +426,30 @@ onMounted(async () => {
   // Fetch notifications when component mounts
   await fetchNotifications(5) // Fetch only 5 for the dropdown
   
+  // Setup global real-time listener for notifications (works on all pages)
+  setTimeout(() => {
+    setupGlobalNotificationListener()
+    // Also use the composable's listener as backup
+    setupRealtimeListener()
+  }, 500) // Wait a bit for Echo to initialize
+  
   // Refresh unread count periodically (every 30 seconds) to keep badge updated
+  // Note: Real-time updates will handle most cases, but this is a backup
   const unreadCountInterval = setInterval(async () => {
     await refreshUnreadCount()
   }, 30000) // 30 seconds
   
   // Store interval ID for cleanup
   window.unreadCountInterval = unreadCountInterval
+  
+  // Auto-open submenus on mount if their items are active
+  const adminNav = adminNavigation.find(item => item.hasSubmenu)
+  if (adminNav && adminNav.submenu) {
+    const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
+    if (isActive) {
+      submenuStates.value[adminNav.id] = true
+    }
+  }
 })
 
 onBeforeUnmount(() => {
@@ -267,48 +471,65 @@ onBeforeUnmount(() => {
     <!-- Sidebar -->
     <aside :class="sidebarClasses" class="sidebar transition-transform duration-300 ease-in-out">
       <!-- Logo -->
-      <div class="flex items-center px-6 py-4 h-16">
-        <img src="../assets/logo.png" alt="IrrigTrack" class="h-8 w-8" />
-        <span class="ml-2 text-xl font-semibold text-gray-800 dark:text-green-400">IrrigTrack</span>
+      <div class="flex items-center px-4 xs:px-5 py-4 xs:py-5 h-16 xs:h-20 border-b border-gray-100">
+        <div class="h-8 w-8 xs:h-10 xs:w-10 rounded-full border-2 border-green-600 flex items-center justify-center flex-shrink-0">
+          <img src="../assets/logo.png" alt="IrrigTrack" class="h-5 w-5 xs:h-7 xs:w-7 object-contain" />
+        </div>
+        <span class="ml-2 xs:ml-3 text-base xs:text-lg font-semibold text-gray-800 dark:text-gray-900" style="font-weight: 600;">IrrigTrack</span>
       </div>
 
       <!-- Navigation -->
-      <nav class="flex-1 px-4 py-2 overflow-y-auto">
+      <nav class="flex-1 px-3 xs:px-4 py-4 overflow-y-auto">
         <template v-for="item in navigation" :key="item.name">
           <!-- Regular nav items -->
           <router-link
             v-if="!item.hasSubmenu"
             :to="item.path"
             :class="[
-              'flex items-center px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-700 dark:text-gray-300 rounded-lg mb-1',
-              $route.path === item.path
-                ? 'bg-green-50 text-green-600 dark:bg-green-900/50 dark:text-green-400'
-                : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              'flex items-center px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md mb-3 xs:mb-4 transition-colors',
+              isActiveRoute(item.path)
+                ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
+                : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
             ]"
+            style="font-weight: 500;"
             @click="isMobile ? isSidebarOpen = false : null"
           >
-            <span class="material-icons-outlined mr-2 sm:mr-3 text-current text-xl sm:text-2xl">{{ item.icon }}</span>
-            {{ item.name }}
+            <span 
+              class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
+              :class="isActiveRoute(item.path) ? 'text-green-600' : 'text-gray-600'"
+            >
+              {{ item.icon }}
+            </span>
+            <span class="truncate">{{ item.name }}</span>
           </router-link>
 
           <!-- Submenu items -->
-          <div v-else class="mb-1">
+          <div v-else class="mb-3 xs:mb-4">
             <button
               @click="toggleSubmenu(item.id)"
               :class="[
-                'w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-700 dark:text-gray-300 rounded-lg',
-                item.submenu.some(subItem => $route.path === subItem.path) || isSubmenuOpen(item.id)
-                  ? 'bg-green-50 text-green-600 dark:bg-green-900/50 dark:text-green-400'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                'w-full flex items-center justify-between px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md transition-colors',
+                isSubmenuActive(item.submenu) || isSubmenuOpen(item.id)
+                  ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
+                  : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
               ]"
+              style="font-weight: 500;"
             >
-              <div class="flex items-center">
-                <span class="material-icons-outlined mr-2 sm:mr-3 text-current text-xl sm:text-2xl">{{ item.icon }}</span>
-                {{ item.name }}
+              <div class="flex items-center min-w-0 flex-1">
+                <span 
+                  class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
+                  :class="isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600' : 'text-gray-600'"
+                >
+                  {{ item.icon }}
+                </span>
+                <span class="truncate">{{ item.name }}</span>
               </div>
               <span 
-                class="material-icons-outlined text-current text-xl transition-transform duration-200"
-                :class="{ 'transform rotate-180': isSubmenuOpen(item.id) }"
+                class="material-icons-outlined text-base xs:text-lg transition-transform duration-200 flex-shrink-0"
+                :class="[
+                  isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600' : 'text-gray-600',
+                  { 'transform rotate-180': isSubmenuOpen(item.id) }
+                ]"
               >
                 expand_more
               </span>
@@ -322,21 +543,27 @@ onBeforeUnmount(() => {
               leave-from-class="transform scale-100 opacity-100"
               leave-to-class="transform scale-95 opacity-0"
             >
-              <div v-show="isSubmenuOpen(item.id)" class="ml-8 space-y-1 mt-1">
+              <div v-show="isSubmenuOpen(item.id)" class="ml-8 xs:ml-10 sm:ml-12 space-y-2 mt-2">
                 <router-link
                   v-for="subItem in item.submenu"
                   :key="subItem.name"
                   :to="subItem.path"
                   :class="[
-                    'flex items-center px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-gray-700 dark:text-gray-300 rounded-lg',
-                    $route.path === subItem.path
-                      ? 'bg-green-50 text-green-600 dark:bg-green-900/50 dark:text-green-400'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    'flex items-center px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md transition-colors',
+                    isActiveRoute(subItem.path)
+                      ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
+                      : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
                   ]"
+                  style="font-weight: 500;"
                   @click="isMobile ? isSidebarOpen = false : null"
                 >
-                  <span class="material-icons-outlined mr-2 sm:mr-3 text-current text-xl sm:text-2xl">{{ subItem.icon }}</span>
-                  {{ subItem.name }}
+                  <span 
+                    class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
+                    :class="isActiveRoute(subItem.path) ? 'text-green-600' : 'text-gray-600'"
+                  >
+                    {{ subItem.icon }}
+                  </span>
+                  <span class="truncate">{{ subItem.name }}</span>
                 </router-link>
               </div>
             </transition>
@@ -345,10 +572,11 @@ onBeforeUnmount(() => {
       </nav>
 
       <!-- User Info at Bottom -->
-      <div class="mt-auto border-t border-gray-200 dark:border-gray-700 p-4">
-        <div class="text-green-600 dark:text-green-400 font-medium">{{ userDisplayName }}</div>
-        <div class="text-gray-600 dark:text-gray-400 text-sm mt-1">
-          {{ formatPhDate(currentDate) }} at {{ formatTime(currentTime) }}
+      <div class="mt-auto border-t border-gray-200 dark:border-gray-200 p-3 xs:p-4 sm:p-5 bg-gray-50 dark:bg-gray-50">
+        <div class="text-gray-800 dark:text-gray-800 font-semibold mb-1 text-sm xs:text-base truncate">{{ userDisplayName }}</div>
+        <div class="text-gray-600 dark:text-gray-600 text-xs xs:text-sm">
+          <div class="truncate">{{ formatPhDate(currentDate) }}</div>
+          <div class="truncate">at {{ formatTime(currentTime) }}</div>
         </div>
       </div>
     </aside>
@@ -372,11 +600,11 @@ onBeforeUnmount(() => {
     <!-- Main Content -->
     <div class="lg:ml-64 min-h-screen flex flex-col transition-all duration-300">
       <!-- Top Bar -->
-      <header class="h-14 sm:h-16 bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between px-3 sm:px-4 lg:px-6 sticky top-0 z-30">
-        <div class="flex items-center gap-2 sm:gap-4">
+      <header class="h-14 sm:h-16 bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between px-2 xs:px-3 sm:px-4 lg:px-6 sticky top-0 z-30">
+        <div class="flex items-center gap-1.5 xs:gap-2 sm:gap-4 min-w-0 flex-1">
           <!-- Mobile Menu Button -->
           <button 
-            class="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 menu-button focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
+            class="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 menu-button focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 flex-shrink-0"
             @click="toggleSidebar"
             aria-label="Toggle menu"
           >
@@ -384,90 +612,113 @@ onBeforeUnmount(() => {
               {{ isSidebarOpen ? 'close' : 'menu' }}
             </span>
           </button>
-          <h1 class="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 dark:text-green-400">{{ route.name }}</h1>
+          <h1 class="text-base xs:text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 dark:text-green-400 truncate">{{ route.name }}</h1>
         </div>
 
         <!-- Right Side Icons -->
-        <div class="flex items-center space-x-2 sm:space-x-4">
+        <div class="flex items-center space-x-1.5 xs:space-x-2 sm:space-x-3 md:space-x-4 flex-shrink-0">
           <!-- Dark Mode Toggle -->
           <button 
-            class="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/50"
+            class="p-1.5 xs:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-100 transition-colors"
             @click="toggleDarkMode"
             aria-label="Toggle dark mode"
           >
-            <span class="material-icons-outlined text-xl sm:text-2xl dark:text-gray-300" v-if="!isDarkMode">dark_mode</span>
-            <span class="material-icons-outlined text-xl sm:text-2xl text-yellow-500" v-else>light_mode</span>
+            <span class="material-icons-outlined text-lg xs:text-xl sm:text-2xl text-gray-800 dark:text-white" v-if="!isDarkMode">dark_mode</span>
+            <span class="material-icons-outlined text-lg xs:text-xl sm:text-2xl text-gray-800 dark:text-white" v-else>light_mode</span>
           </button>
 
           <!-- Notifications -->
           <div class="relative">
             <button 
-              class="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700/50 notifications-button relative"
+              class="p-1.5 xs:p-2 rounded-full hover:bg-gray-100 border-2 border-green-200 notifications-button relative transition-all"
               @click="toggleNotifications"
               aria-label="Notifications"
             >
-              <span class="material-icons-outlined text-xl sm:text-2xl dark:text-gray-300">notifications</span>
+              <span class="material-icons-outlined text-lg xs:text-xl sm:text-2xl text-gray-800 dark:text-white">notifications</span>
               <!-- Dynamic notification badge from database -->
               <span 
                 v-if="unreadCount > 0" 
-                class="absolute top-0 right-0 h-4 w-4 sm:h-5 sm:w-5 bg-red-500 rounded-full text-[10px] sm:text-xs text-white flex items-center justify-center font-semibold shadow-lg"
+                class="absolute -top-1 -right-1 h-4 w-4 xs:h-5 xs:w-5 sm:h-6 sm:w-6 bg-red-500 rounded-full text-[9px] xs:text-[10px] sm:text-xs text-white flex items-center justify-center font-bold shadow-lg ring-2 ring-white"
               >
                 {{ unreadCount > 99 ? '99+' : unreadCount }}
               </span>
             </button>
 
-            <!-- Notifications Dropdown -->
+            <!-- Enhanced Notifications Dropdown -->
             <div 
               v-if="isNotificationsOpen"
-              class="absolute right-0 mt-2 w-64 sm:w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-2 z-50 notifications-dropdown max-h-[80vh] overflow-y-auto"
+              class="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-[90vw] xs:w-72 sm:w-96 bg-white dark:bg-[#2D3748] rounded-xl shadow-2xl border border-gray-200 dark:border-[#4A5568] z-50 notifications-dropdown overflow-hidden"
             >
-              <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Recent Notifications</h3>
+              <!-- Header -->
+              <div class="bg-gradient-to-r from-green-600 to-green-700 dark:bg-[#2D6A4F] px-5 py-3 border-b border-green-800 dark:border-[#388E3C] flex justify-between items-center">
+                <h3 class="text-base font-bold text-white">Recent Notifications</h3>
                 <button 
                   @click="refreshNotifications"
-                  class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  class="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
                   title="Refresh notifications"
                 >
-                  <span class="material-icons-outlined text-sm text-gray-500 dark:text-gray-400">refresh</span>
+                  <span class="material-icons-outlined text-sm text-white">refresh</span>
                 </button>
               </div>
               
               <!-- Notification Items -->
-              <div class="max-h-[400px] overflow-y-auto">
-                <div v-if="notifications.length === 0" class="px-4 py-3 text-center">
-                  <p class="text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+              <div class="max-h-[500px] overflow-y-auto bg-gray-50 dark:bg-[#2D3748]">
+                <div v-if="notifications.length === 0" class="px-5 py-8 text-center">
+                  <span class="material-icons-outlined text-4xl text-gray-300 dark:text-gray-500 mb-3 block">notifications_off</span>
+                  <p class="text-sm text-gray-500 dark:text-[#A0AEC0] font-medium">No notifications</p>
                 </div>
                 
                 <div
                   v-for="notification in notifications.slice(0, 5)"
                   :key="notification.id"
                   @click="handleNotificationClick(notification)"
-                  class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer flex items-start gap-3"
-                  :class="{ 'bg-blue-50 dark:bg-blue-900/20': !notification.isRead }"
+                  class="px-5 py-3.5 hover:bg-white dark:hover:bg-[#4A5568] cursor-pointer transition-colors border-b border-gray-100 dark:border-[#4A5568] last:border-b-0 bg-white dark:bg-[#2D3748]"
+                  :class="{ 'bg-blue-50/30 dark:bg-blue-900/20': !notification.isRead }"
                 >
-                  <div class="flex-shrink-0 w-2 h-2 mt-2 rounded-full"
-                       :class="notification.priority === 'high' ? 'bg-red-500' : 
-                               notification.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'">
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm text-gray-800 dark:text-gray-300 font-medium">{{ notification.title }}</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{{ notification.message }}</p>
-                    <div class="flex items-center justify-between mt-1">
-                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ notification.user }}</p>
-                      <p class="text-xs text-gray-400 dark:text-gray-500">{{ notification.time }}</p>
+                  <div class="flex items-start gap-3">
+                    <!-- Unread Indicator (Red Dot) -->
+                    <div v-if="!notification.isRead" class="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-red-500"></div>
+                    <div v-else class="flex-shrink-0 w-2 h-2 mt-2"></div>
+                    
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0">
+                      <!-- Title and Time -->
+                      <div class="flex items-start justify-between gap-2 mb-1.5">
+                        <h4 class="text-sm font-bold text-gray-900 dark:text-[#E2E8F0] leading-tight">{{ notification.title }}</h4>
+                        <span class="text-xs font-medium text-gray-500 dark:text-[#A0AEC0] flex-shrink-0 whitespace-nowrap">{{ notification.time }}</span>
+                      </div>
+                      
+                      <!-- Message -->
+                      <p class="text-xs text-gray-600 dark:text-[#E2E8F0] leading-relaxed mb-2">
+                        {{ notification.message }}
+                      </p>
+                      
+                      <!-- Source/Item Info -->
+                      <p class="text-xs text-gray-500 dark:text-[#A0AEC0]">
+                        <span v-if="notification.item && notification.item.unit">
+                          {{ notification.item.unit }}
+                        </span>
+                        <span v-else-if="notification.user">
+                          {{ notification.user }}
+                        </span>
+                        <span v-else>
+                          System
+                        </span>
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
 
               <!-- View All Link -->
-              <div class="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
+              <div class="bg-white dark:bg-[#2D3748] px-5 py-3 border-t border-gray-200 dark:border-[#4A5568]">
                 <router-link 
                   to="/notifications"
-                  class="text-sm text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-medium"
+                  class="text-sm text-green-600 dark:text-[#48BB78] hover:text-green-700 dark:hover:text-[#4CAF50] font-semibold flex items-center justify-center gap-2 transition-colors"
                   @click="isNotificationsOpen = false"
                 >
-                  View all notifications
+                  <span>View all notifications</span>
+                  <span class="material-icons-outlined text-base">arrow_forward</span>
                 </router-link>
               </div>
             </div>
@@ -476,57 +727,50 @@ onBeforeUnmount(() => {
           <!-- Profile -->
           <div class="relative">
             <button 
-              class="flex items-center space-x-2 profile-button"
+              class="flex items-center justify-center profile-button border-2 border-green-200 rounded-full p-0.5 hover:bg-gray-100 transition-all"
               @click="toggleProfileDropdown"
               aria-label="Profile menu"
             >
-              <div v-if="avatarError" class="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">
+              <div class="h-7 w-7 xs:h-8 xs:w-8 sm:h-9 sm:w-9 rounded-full bg-green-600 flex items-center justify-center text-white text-xs xs:text-sm sm:text-base font-semibold">
                 {{ userDisplayName.charAt(0).toUpperCase() }}
               </div>
-              <img
-                v-else
-                :src="userAvatar"
-                alt="Profile"
-                class="h-7 w-7 sm:h-8 sm:w-8 rounded-full object-cover"
-                @error="handleImageError"
-              />
             </button>
 
             <!-- Profile Dropdown -->
             <div 
               v-if="isProfileDropdownOpen"
-              class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 z-50 profile-dropdown"
+              class="absolute right-0 mt-2 w-48 xs:w-56 bg-white dark:bg-[#2D3748] rounded-lg shadow-lg py-2 z-50 profile-dropdown border border-gray-100 dark:border-[#4A5568]"
             >
               <router-link 
                 to="/profile"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
+                class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="isProfileDropdownOpen = false"
               >
-                <span class="material-icons-outlined mr-2 text-sm">person</span>
-                Profile
+                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">person</span>
+                <span class="font-medium">Profile</span>
               </router-link>
               <router-link
                 to="/activity-log"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
+                class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="isProfileDropdownOpen = false"
               >
-                <span class="material-icons-outlined mr-2 text-sm">history</span>
-                Activity Log
+                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">history</span>
+                <span class="font-medium">Activity Log</span>
               </router-link>
               <router-link
                 to="/history/deleted-items"
-                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
+                class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="isProfileDropdownOpen = false"
               >
-                <span class="material-icons-outlined mr-2 text-sm">folder</span>
-                History
+                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">folder</span>
+                <span class="font-medium">History</span>
               </router-link>
               <button
-                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center"
+                class="w-full text-left flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="handleLogout"
               >
-                <span class="material-icons-outlined mr-2 text-sm">logout</span>
-                Log out
+                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">logout</span>
+                <span class="font-medium">Log out</span>
               </button>
             </div>
           </div>
@@ -534,20 +778,20 @@ onBeforeUnmount(() => {
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 p-3 sm:p-4 lg:p-6 dark:bg-gray-900">
+      <main class="flex-1 p-2 xs:p-3 sm:p-4 lg:p-6 dark:bg-gray-900">
         <RouterView />
       </main>
 
       <!-- Footer -->
-      <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-2 px-4">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 dark:text-gray-400 gap-2">
-          <div class="flex items-center space-x-2">
-            <span class="material-icons-outlined text-green-600 dark:text-green-400">person</span>
-            <span class="font-medium text-green-600 dark:text-green-400">{{ userDisplayName }}</span>
+      <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-2 px-2 xs:px-3 sm:px-4">
+        <div class="flex flex-col xs:flex-row xs:items-center xs:justify-between text-xs xs:text-sm text-gray-600 dark:text-gray-400 gap-1.5 xs:gap-2">
+          <div class="flex items-center space-x-1.5 xs:space-x-2 truncate min-w-0">
+            <span class="material-icons-outlined text-green-600 dark:text-green-400 text-sm xs:text-base flex-shrink-0">person</span>
+            <span class="font-medium text-green-600 dark:text-green-400 truncate">{{ userDisplayName }}</span>
           </div>
-          <div class="flex items-center space-x-4">
-            <div>{{ formatPhDate(currentDate) }}</div>
-            <div>{{ formatTime(currentTime) }}</div>
+          <div class="flex items-center space-x-2 xs:space-x-3 sm:space-x-4 flex-wrap">
+            <div class="whitespace-nowrap">{{ formatPhDate(currentDate) }}</div>
+            <div class="whitespace-nowrap">{{ formatTime(currentTime) }}</div>
           </div>
         </div>
       </footer>
@@ -561,11 +805,90 @@ onBeforeUnmount(() => {
       @confirm="confirmLogout"
       @cancel="cancelLogout"
     />
+
+    <!-- Global Popup Notification for Borrow Requests (shows on all pages) -->
+    <div
+      v-if="showGlobalPopup && globalPopupNotification"
+      class="fixed top-4 right-4 z-50 max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-2 border-green-500 animate-slide-in"
+      @click.stop
+    >
+      <div class="p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <span class="material-icons-outlined text-green-600 dark:text-green-400 text-2xl">shopping_cart</span>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white">New Borrow Request</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">{{ formatRelativeTime(globalPopupNotification.timestamp) }}</p>
+            </div>
+          </div>
+          <button
+            @click="showGlobalPopup = false"
+            class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <span class="material-icons-outlined">close</span>
+          </button>
+        </div>
+        
+        <p class="text-gray-700 dark:text-gray-300 mb-4">{{ globalPopupNotification.message }}</p>
+        
+        <div v-if="globalPopupNotification.borrowRequest" class="mb-4 space-y-2 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="material-icons-outlined text-base text-blue-400">person</span>
+            <span class="text-gray-700 dark:text-gray-300"><strong>Requested by:</strong> {{ globalPopupNotification.borrowRequest.borrowed_by }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="material-icons-outlined text-base text-purple-400">location_on</span>
+            <span class="text-gray-700 dark:text-gray-300"><strong>Location:</strong> {{ globalPopupNotification.borrowRequest.location }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="material-icons-outlined text-base text-green-400">inventory_2</span>
+            <span class="text-gray-700 dark:text-gray-300"><strong>Quantity:</strong> {{ globalPopupNotification.borrowRequest.quantity }} unit(s)</span>
+          </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+          <button
+            @click="handleGlobalApprove(globalPopupNotification)"
+            :disabled="globalPopupNotification.borrowRequest?.status !== 'pending'"
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <span class="material-icons-outlined text-lg">check_circle</span>
+            <span>Approve</span>
+          </button>
+          <button
+            @click="handleGlobalReject(globalPopupNotification)"
+            :disabled="globalPopupNotification.borrowRequest?.status !== 'pending'"
+            class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+          >
+            <span class="material-icons-outlined text-lg">cancel</span>
+            <span>Decline</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style>
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons+Outlined');
+
+/* Popup animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
 
 :root {
   color-scheme: light dark;
@@ -609,6 +932,27 @@ button, a, .router-link-active {
   
   .menu-button:active {
     transform: scale(0.9);
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 374px) {
+  .sidebar {
+    width: calc(100vw - 1rem);
+    max-width: 280px;
+  }
+}
+
+/* Touch-friendly targets */
+@media (max-width: 640px) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .menu-button {
+    min-width: 40px;
+    min-height: 40px;
   }
 }
 

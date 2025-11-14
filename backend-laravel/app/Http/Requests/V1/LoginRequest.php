@@ -24,7 +24,7 @@ class LoginRequest extends FormRequest
         return [
             'email'    => 'required|email|exists:users',
             'password' => 'required|string',
-            'role'     => 'in:admin,user' // Optional, only needed if role-specific
+            'role'     => 'in:admin,user,supply' // Optional, only needed if role-specific
         ];
     }
 }

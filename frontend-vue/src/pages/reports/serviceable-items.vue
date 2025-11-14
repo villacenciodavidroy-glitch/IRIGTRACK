@@ -2,7 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../../composables/useItems'
+import useAuth from '../../composables/useAuth'
 import axiosClient from '../../axios'
+import logoImage from '../../assets/logo.png'
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -12,6 +14,26 @@ const selectedStatus = ref('all') // all, serviceable, non-serviceable, maintena
 
 // Get items from the API using the composable
 const { items, fetchitems, loading, error } = useItems()
+
+// Get user data from auth composable
+const { getUserDisplayName } = useAuth()
+
+// Signature editing state
+const showSignatureModal = ref(false)
+const signatureData = ref({
+  preparedBy: {
+    name: '',
+    title: 'Property Officer B'
+  },
+  reviewedBy: {
+    name: 'ANA LIZA C. DINOPOL',
+    title: 'Administrative Services Officer A'
+  },
+  notedBy: {
+    name: 'LARRY C. FRANADA',
+    title: 'Division Manager A'
+  }
+})
 
 // Fetch items when component mounts
 onMounted(async () => {
@@ -126,14 +148,23 @@ const statusCounts = computed(() => {
 // Export to Excel
 const exportToExcel = async () => {
   try {
-    // Prepare export parameters
-    const params = new URLSearchParams()
-    
-    // Always send filtered items (from search/status filters) if available
-    // Otherwise send all items from inventoryItems
+    // Check if there are items to export
     const itemsToExport = filteredItems.value.length > 0 
       ? filteredItems.value 
       : inventoryItems.value
+    
+    if (!itemsToExport || itemsToExport.length === 0) {
+      alert('No items to export. Please ensure there are items available.')
+      return
+    }
+    
+    console.log('Starting Excel export...', { 
+      itemCount: itemsToExport.length,
+      baseURL: axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    })
+    
+    // Prepare export parameters
+    const params = new URLSearchParams()
     
     // Convert to format expected by backend
     const exportData = itemsToExport.map(item => ({
@@ -154,18 +185,77 @@ const exportToExcel = async () => {
     params.append('items', JSON.stringify(exportData))
     
     // Build the export URL
-    const exportUrl = `/items/export/serviceable-items?${params.toString()}`
+    // Check if URL would be too long (browsers typically limit to ~2000 chars)
+    const itemsParam = params.get('items')
+    const itemsLength = itemsParam ? itemsParam.length : 0
+    const baseUrl = `/items/export/serviceable-items`
+    const fullUrl = `${baseUrl}?${params.toString()}`
+    const urlLength = fullUrl.length
     
-    // Use axios with blob response type for Excel downloads
-    const response = await axiosClient.get(exportUrl, {
-      responseType: 'blob',
-      headers: {
-        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      }
+    const baseURL = axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    const fullRequestUrl = baseURL + (baseURL.endsWith('/') ? '' : '/') + baseUrl.replace(/^\//, '')
+    
+    console.log('Export details:', {
+      urlLength,
+      itemsParamLength: itemsLength,
+      baseURL,
+      fullRequestUrl: fullRequestUrl + (urlLength <= 1800 ? `?${params.toString()}` : ''),
+      itemCount: itemsToExport.length
     })
     
-    // Check if response is actually an error (blob might contain error JSON)
+    let response
+    
+    // If URL is too long, don't send items - let backend fetch all
+    // This is a fallback to avoid network errors from URL length limits
+    if (urlLength > 1800) {
+      console.warn('URL too long, exporting all items instead of filtered items')
+      const exportUrl = baseUrl // No query params
+      
+      response = await axiosClient.get(exportUrl, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        },
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      })
+    } else {
+      const exportUrl = fullUrl
+      console.log('Export URL:', exportUrl.substring(0, 200) + (exportUrl.length > 200 ? '...' : ''))
+      
+      response = await axiosClient.get(exportUrl, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        },
+        timeout: 60000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      })
+    }
+    
+    console.log('Response received:', {
+      status: response.status,
+      contentType: response.headers['content-type'],
+      size: response.data?.size || 'unknown'
+    })
+    
+    // Check HTTP status code first
+    if (response.status !== 200) {
+      const text = await response.data.text()
+      try {
+        const errorData = JSON.parse(text)
+        throw new Error(errorData.message || `Export failed with status ${response.status}`)
+      } catch (parseError) {
+        throw new Error(`Server error (${response.status}): ${text}`)
+      }
+    }
+    
+    // Check content type
     const contentType = response.headers['content-type'] || ''
+    
+    // Check for JSON error response (even with 200 status, might be error)
     if (contentType.includes('application/json')) {
       const text = await response.data.text()
       try {
@@ -176,16 +266,19 @@ const exportToExcel = async () => {
       }
     }
     
-    // Verify it's actually an Excel file
-    if (!contentType.includes('spreadsheet') && !contentType.includes('excel')) {
+    // Verify it's actually an Excel file by checking blob size
+    const blobSize = response.data.size || 0
+    if (blobSize < 1000 && contentType !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
       const text = await response.data.text()
-      throw new Error('Unexpected response type. Server may have returned an error.')
+      throw new Error('Server error: ' + text)
     }
     
     // Create blob URL and trigger download
-    const blob = new Blob([response.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
+    const blob = response.data instanceof Blob 
+      ? response.data 
+      : new Blob([response.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        })
     const url = window.URL.createObjectURL(blob)
     const downloadLink = document.createElement('a')
     downloadLink.href = url
@@ -200,47 +293,94 @@ const exportToExcel = async () => {
     console.error('Error exporting to Excel:', error)
     console.error('Error details:', {
       message: error.message,
+      code: error.code,
       response: error.response,
       status: error.response?.status,
       statusText: error.response?.statusText,
-      url: error.config?.url
+      data: error.response?.data,
+      request: error.request
     })
-    const errorMessage = error.response?.status === 404 
-      ? 'Export endpoint not found. Please check if the server is running and routes are registered.'
-      : error.response?.data?.message || error.message || 'Failed to export to Excel. Please try again.'
+    
+    let errorMessage = 'Failed to export to Excel. Please try again.'
+    
+    // Handle network errors specifically
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
+      errorMessage = 'Network Error: Cannot connect to the server. Please check:\n' +
+                     '1. The backend server is running\n' +
+                     '2. The server URL is correct\n' +
+                     '3. There are no firewall issues\n\n' +
+                     'Error: ' + (error.message || 'Unknown network error')
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Export endpoint not found (404). Please check if the server is running and routes are registered.\n' +
+                     'Expected route: /api/items/export/serviceable-items'
+    } else if (error.response?.status === 500) {
+      errorMessage = 'Server error during export (500). Please check the server logs.'
+    } else if (error.response?.status === 413) {
+      errorMessage = 'Request too large. The export data is too big. Please try filtering the data first.'
+    } else if (error.message) {
+      errorMessage = error.message
+    } else if (error.response?.data) {
+      // Try to extract error message from response
+      if (typeof error.response.data === 'string') {
+        try {
+          const errorData = JSON.parse(error.response.data)
+          errorMessage = errorData.message || errorMessage
+        } catch (e) {
+          errorMessage = error.response.data
+        }
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message
+      }
+    }
+    
     alert(errorMessage)
   }
 }
 
+// Open signature edit modal before printing
+const openPrintDialog = () => {
+  // Initialize signature data with current user
+  const userName = getUserDisplayName() || 'Admin User'
+  signatureData.value.preparedBy.name = userName
+  signatureData.value.preparedBy.title = 'Property Officer B'
+  signatureData.value.reviewedBy.name = 'ANA LIZA C. DINOPOL'
+  signatureData.value.reviewedBy.title = 'Administrative Services Officer A'
+  signatureData.value.notedBy.name = 'LARRY C. FRANADA'
+  signatureData.value.notedBy.title = 'Division Manager A'
+  
+  showSignatureModal.value = true
+}
+
+// Print report with edited signature data
 const printReport = () => {
+  showSignatureModal.value = false
+  
   const printWindow = window.open('', '_blank')
   
   const now = new Date()
-  const dateFormatted = now.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'Asia/Manila'
-  })
-  const timeFormatted = now.toLocaleTimeString('en-PH', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Manila'
-  })
+  const currentYear = now.getFullYear()
+  
+  // Use edited signature data
+  const preparedByName = signatureData.value.preparedBy.name || getUserDisplayName() || 'Admin User'
+  const preparedByTitle = signatureData.value.preparedBy.title || 'Property Officer B'
+  const reviewedByName = signatureData.value.reviewedBy.name || 'ANA LIZA C. DINOPOL'
+  const reviewedByTitle = signatureData.value.reviewedBy.title || 'Administrative Services Officer A'
+  const notedByName = signatureData.value.notedBy.name || 'LARRY C. FRANADA'
+  const notedByTitle = signatureData.value.notedBy.title || 'Division Manager A'
   
   const tableRows = filteredItems.value.map(item => `
     <tr>
-      <td>${item.article || 'N/A'}</td>
-      <td>${item.category || 'N/A'}</td>
-      <td>${item.description || 'N/A'}</td>
-      <td>${item.propertyAccountCode || 'N/A'}</td>
-      <td>${item.unitValue || 'N/A'}</td>
-      <td>${item.dateAcquired || 'N/A'}</td>
-      <td>${item.location || 'N/A'}</td>
-      <td>${item.condition || 'N/A'}</td>
-      <td>${item.issuedTo || 'Not Assigned'}</td>
-      <td>${item.quantity || 'N/A'}</td>
-      <td>${item.serviceableStatus.replace('-', ' ')}</td>
+      <td style="text-align: left; padding: 4px;">${item.article || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.category || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.description || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.propertyAccountCode || 'N/A'}</td>
+      <td style="text-align: right; padding: 4px;">${item.unitValue ? parseFloat(item.unitValue).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : 'N/A'}</td>
+      <td style="text-align: center; padding: 4px;">${item.dateAcquired ? new Date(item.dateAcquired).toLocaleDateString('en-PH', { month: '2-digit', day: '2-digit', year: '2-digit' }) : 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.location || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.condition || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.issuedTo || 'Not Assigned'}</td>
+      <td style="text-align: center; padding: 4px;">${item.quantity || 'N/A'}</td>
+      <td style="text-align: left; padding: 4px;">${item.serviceableStatus.replace('-', ' ')}</td>
     </tr>
   `).join('')
   
@@ -248,87 +388,78 @@ const printReport = () => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Serviceable Items Report - ${dateFormatted}</title>
+      <title>SERVICEABLE ITEMS REPORT - ${currentYear}</title>
       <style>
         body {
-          font-family: Arial, sans-serif;
+          font-family: 'Times New Roman', serif;
           margin: 0;
           padding: 20px;
-          color: #333;
+          color: #000;
+          font-size: 12px;
+          line-height: 1.3;
         }
-        .report-header {
+        .header {
           text-align: center;
-          margin-bottom: 20px;
-          padding-bottom: 15px;
-          border-bottom: 2px solid #10B981;
+          margin-bottom: 25px;
+        }
+        .org-info {
+          margin-bottom: 15px;
+        }
+        .org-info div {
+          margin-bottom: 2px;
+          font-weight: bold;
+          font-size: 14px;
+        }
+        .org-info .republic {
+          font-size: 15px;
+          font-weight: bold;
+        }
+        .org-info .nia {
+          font-size: 15px;
+          font-weight: bold;
+        }
+        .org-info .region {
+          font-size: 13px;
+          font-weight: normal;
+        }
+        .logo {
+          width: 50px;
+          height: 50px;
+          margin: 8px auto;
+          display: block;
         }
         .report-title {
-          font-size: 24px;
+          font-size: 16px;
           font-weight: bold;
-          color: #10B981;
-          margin: 0 0 5px 0;
+          margin: 12px 0 3px 0;
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
-        .report-subtitle {
-          font-size: 14px;
-          color: #666;
-          margin: 0;
+        .report-year {
+          font-size: 13px;
+          font-weight: bold;
+          margin-bottom: 15px;
         }
-        .report-meta {
-          margin-top: 15px;
-          font-size: 12px;
-          color: #666;
-        }
-        .summary-cards {
-          display: flex;
-          justify-content: space-around;
-          margin: 20px 0;
-          flex-wrap: wrap;
-        }
-        .summary-card {
-          background: #f0fdf4;
-          border: 1px solid #10B981;
-          border-radius: 8px;
-          padding: 15px;
-          margin: 5px;
-          text-align: center;
-          min-width: 120px;
-        }
-        .summary-card h3 {
-          margin: 0 0 5px 0;
-          font-size: 18px;
-          color: #10B981;
-        }
-        .summary-card p {
-          margin: 0;
-          font-size: 14px;
-          color: #666;
-        }
-        .inventory-table {
+        .serviceable-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 20px;
-          font-size: 12px;
+          margin-top: 15px;
+          font-size: 10px;
         }
-        .inventory-table th {
-          background-color: #f0fdf4;
-          color: #065f46;
+        .serviceable-table th {
           font-weight: bold;
           text-align: left;
-          padding: 10px;
-          border: 1px solid #d1d5db;
+          padding: 6px 3px;
+          border: 1px solid #000;
+          font-size: 9px;
+          background-color: #f8f8f8;
         }
-        .inventory-table td {
-          padding: 8px 10px;
-          border: 1px solid #d1d5db;
+        .serviceable-table td {
+          padding: 4px 3px;
+          border: 1px solid #000;
           vertical-align: top;
+          font-size: 9px;
         }
-        .inventory-table tr:nth-child(even) {
-          background-color: #f9fafb;
-        }
-        .status-serviceable { color: #10B981; font-weight: bold; }
-        .status-non-serviceable { color: #EF4444; font-weight: bold; }
-        .status-maintenance { color: #F59E0B; font-weight: bold; }
-        .status-unknown { color: #6B7280; font-weight: bold; }
         .print-button {
           background-color: #10B981;
           color: white;
@@ -342,6 +473,34 @@ const printReport = () => {
         .print-button:hover {
           background-color: #059669;
         }
+        .signature-section {
+          margin-top: 40px;
+          display: flex;
+          justify-content: space-between;
+          padding: 20px 0;
+        }
+        .signature-item {
+          text-align: left;
+          width: 30%;
+        }
+        .signature-label {
+          font-size: 10px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          color: #000;
+        }
+        .signature-name {
+          font-size: 10px;
+          font-weight: bold;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+          color: #000;
+        }
+        .signature-title {
+          font-size: 9px;
+          font-weight: normal;
+          color: #000;
+        }
         @media print {
           .print-button { display: none; }
           body { padding: 0; margin: 0; }
@@ -350,51 +509,57 @@ const printReport = () => {
       </style>
     </head>
     <body>
-      <div class="report-header">
-        <h1 class="report-title">Serviceable Items Report</h1>
-        <p class="report-subtitle">IrrigTrack System</p>
-        <div class="report-meta">
-          <div>Generated on: ${dateFormatted} at ${timeFormatted}</div>
-          <div>Total Items: ${filteredItems.value.length}</div>
-          ${selectedStatus.value !== 'all' ? `<div>Filter: ${selectedStatus.value}</div>` : ''}
+      <div class="header">
+        <div class="org-info">
+          <div class="republic">Republic of the Philippines</div>
+          <div class="nia">National Irrigation Administration</div>
+          <div class="region">Region XI</div>
         </div>
+        
+        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        
+        <div class="report-title">SERVICEABLE ITEMS REPORT</div>
+        <div class="report-year">For the Year ${currentYear}</div>
       </div>
       
-      <div class="summary-cards">
-        <div class="summary-card">
-          <h3>${statusCounts.value.serviceable}</h3>
-          <p>Serviceable</p>
-        </div>
-        <div class="summary-card">
-          <h3>${statusCounts.value['non-serviceable']}</h3>
-          <p>Non-Serviceable</p>
-        </div>
-        <div class="summary-card">
-          <h3>${statusCounts.value.maintenance}</h3>
-          <p>On Maintenance</p>
-        </div>
-      </div>
-      
-      <table class="inventory-table">
+      <table class="serviceable-table">
         <thead>
           <tr>
-            <th>Article</th>
-            <th>Category</th>
-            <th>Description</th>
-            <th>Property Account Code</th>
-            <th>Unit Value</th>
-            <th>Date Acquired</th>
-            <th>Location</th>
-            <th>Condition</th>
-            <th>Issued To</th>
-            <th>Quantity</th>
-            <th>Status</th>
+            <th>ARTICLE</th>
+            <th>CATEGORY</th>
+            <th>DESCRIPTION</th>
+            <th>PROPERTY ACCOUNT CODE</th>
+            <th>UNIT VALUE</th>
+            <th>DATE ACQUIRED</th>
+            <th>LOCATION</th>
+            <th>CONDITION</th>
+            <th>ISSUED TO</th>
+            <th>QUANTITY</th>
+            <th>STATUS</th>
           </tr>
         </thead>
         <tbody>
           ${tableRows}
         </tbody>
       </table>
+      
+      <div class="signature-section">
+        <div class="signature-item">
+          <div class="signature-label">Prepared by:</div>
+          <div class="signature-name">${preparedByName}</div>
+          <div class="signature-title">${preparedByTitle}</div>
+        </div>
+        <div class="signature-item">
+          <div class="signature-label">Reviewed by:</div>
+          <div class="signature-name">${reviewedByName}</div>
+          <div class="signature-title">${reviewedByTitle}</div>
+        </div>
+        <div class="signature-item">
+          <div class="signature-label">Noted by:</div>
+          <div class="signature-name">${notedByName}</div>
+          <div class="signature-title">${notedByTitle}</div>
+        </div>
+      </div>
       
       <div style="text-align: center; margin-top: 30px;">
         <button onclick="window.print(); return false;" class="print-button">Print Report</button>
@@ -414,244 +579,391 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-white dark:bg-gray-900">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
-      <div class="flex items-center gap-3">
-        <button 
-          @click="goBack"
-          class="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center hover:bg-green-700 transition-colors"
-        >
-          <span class="material-icons-outlined mr-2">arrow_back</span>
-          Back
-        </button>
-        <h1 class="text-xl sm:text-2xl font-semibold text-green-700 dark:text-green-400">Serviceable Items Report</h1>
-      </div>
-      <div class="flex items-center gap-2">
-        <button @click="exportToExcel" class="btn-primary flex items-center">
-          <span class="material-icons-outlined text-lg mr-1">file_download</span>
-          <span>Export Excel</span>
-        </button>
-        <button @click="printReport" class="btn-primary flex items-center">
-          <span class="material-icons-outlined text-lg mr-1">print</span>
-          <span>Print Report</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg p-4 text-center">
-        <h3 class="text-2xl font-bold text-green-600 dark:text-green-400">{{ statusCounts.serviceable }}</h3>
-        <p class="text-sm text-green-700 dark:text-green-300">Serviceable</p>
-      </div>
-      <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4 text-center">
-        <h3 class="text-2xl font-bold text-red-600 dark:text-red-400">{{ statusCounts['non-serviceable'] }}</h3>
-        <p class="text-sm text-red-700 dark:text-red-300">Non-Serviceable</p>
-      </div>
-      <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 text-center">
-        <h3 class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ statusCounts.maintenance }}</h3>
-        <p class="text-sm text-yellow-700 dark:text-yellow-300">On Maintenance</p>
-      </div>
-    </div>
-
-    <!-- Search and Filter Bar -->
-    <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0">
-      <div class="relative w-full sm:w-96">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
-            <span class="material-icons-outlined text-lg">search</span>
-          </span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search items..."
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6">
+    <div class="max-w-full mx-auto space-y-5">
+      <!-- Enhanced Header Section -->
+      <div class="bg-green-600 rounded-lg shadow-lg overflow-hidden">
+        <div class="px-6 py-5 md:px-8 md:py-6 flex flex-wrap items-center gap-4">
+          <button 
+            @click="goBack" 
+            class="p-2.5 bg-white rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+            title="Go back"
           >
+            <span class="material-icons-outlined text-green-600 text-xl md:text-2xl">arrow_back</span>
+          </button>
+          <div class="p-3 bg-white rounded-lg flex-shrink-0 shadow-md">
+            <span class="material-icons-outlined text-green-600 text-2xl md:text-3xl">build</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1">Serviceable Items Report</h1>
+            <p class="text-green-100 text-base md:text-lg">Report on serviceable and non-serviceable equipment status</p>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button @click="exportToExcel" class="btn-secondary-enhanced flex items-center gap-2">
+              <span class="material-icons-outlined text-lg">file_download</span>
+              <span>Export Excel</span>
+            </button>
+            <button @click="openPrintDialog" class="btn-primary-enhanced flex items-center gap-2">
+              <span class="material-icons-outlined text-lg">print</span>
+              <span>Print Report</span>
+            </button>
+          </div>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <select 
-          v-model="selectedStatus"
-          class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-        >
-          <option value="all">All Status</option>
-          <option value="serviceable">Serviceable</option>
-          <option value="non-serviceable">Non-Serviceable</option>
-          <option value="maintenance">On Maintenance</option>
-        </select>
-      </div>
-    </div>
 
-    <!-- Table Container -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-      <!-- Loading indicator -->
-      <div v-if="loading" class="flex justify-center items-center py-10">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
-      </div>
-      
-      <!-- Error state -->
-      <div v-else-if="error" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-red-400 dark:text-red-500">error_outline</span>
-        <p class="mt-2 text-red-500 dark:text-red-400">{{ error }}</p>
-        <button 
-          @click="fetchitems" 
-          class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-        >
-          Try Again
-        </button>
-      </div>
-      
-      <!-- Empty state -->
-      <div v-else-if="paginatedItems.length === 0" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">inventory_2</span>
-        <p class="mt-2 text-gray-500 dark:text-gray-400">No items found</p>
-        <p v-if="searchQuery || selectedStatus !== 'all'" class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search or filter</p>
-      </div>
-      
-      <!-- Table with data -->
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QR Code</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Image</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Article</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Category</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Description</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Property Account Code</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Unit Value</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Date Acquired</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Location</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Condition</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Issued To</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Quantity</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Serviceable Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="item in paginatedItems" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-              <td class="px-4 py-2">
-                <img :src="item.qrCode" alt="QR Code" class="h-8 w-8 object-contain">
-              </td>
-              <td class="px-4 py-2">
-                <img :src="item.image" alt="Item" class="h-8 w-8 object-contain">
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ item.article }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.category }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white max-w-xs truncate" :title="item.description">
-                  {{ item.description }}
-                </div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.propertyAccountCode }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.unitValue }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.dateAcquired }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.location }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.condition }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.issuedTo }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.quantity }}</div>
-              </td>
-              <td class="px-4 py-2">
-                <span 
-                  :class="{
-                    'status-serviceable': item.serviceableStatus === 'serviceable',
-                    'status-non-serviceable': item.serviceableStatus === 'non-serviceable',
-                    'status-maintenance': item.serviceableStatus === 'maintenance'
-                  }"
-                  class="text-sm font-medium capitalize"
-                >
-                  {{ item.serviceableStatus.replace('-', ' ') }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination -->
-      <div v-if="!loading && filteredItems.length > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 gap-3 sm:gap-0">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <div class="text-sm text-gray-600">
-            Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }} of {{ filteredItems.length }}
+      <!-- Summary Statistics -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Serviceable</div>
+            <div class="p-3 bg-green-500 rounded-lg">
+              <span class="material-icons-outlined text-white text-xl">check_circle</span>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <label class="text-sm text-gray-600">Items per page:</label>
-            <select 
-              v-model="itemsPerPage" 
-              @change="changeItemsPerPage($event.target.value)"
-              class="border rounded px-2 py-1 text-sm"
+          <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ statusCounts.serviceable }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Non-Serviceable</div>
+            <div class="p-3 bg-red-500 rounded-lg">
+              <span class="material-icons-outlined text-white text-xl">cancel</span>
+            </div>
+          </div>
+          <div class="text-3xl font-bold text-red-600 dark:text-red-400">{{ statusCounts['non-serviceable'] }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-medium text-gray-600 dark:text-gray-400">On Maintenance</div>
+            <div class="p-3 bg-yellow-500 rounded-lg">
+              <span class="material-icons-outlined text-white text-xl">build_circle</span>
+            </div>
+          </div>
+          <div class="text-3xl font-bold text-yellow-600 dark:text-yellow-400">{{ statusCounts.maintenance }}</div>
+        </div>
+      </div>
+
+      <!-- Enhanced Search and Filter Bar -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="flex-1 relative">
+            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-green-600 dark:text-green-400">
+              <span class="material-icons-outlined">search</span>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search items..."
+              class="w-full pl-12 pr-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
             >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+            <button
+              v-if="searchQuery"
+              @click="searchQuery = ''"
+              class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <span class="material-icons-outlined text-lg">close</span>
+            </button>
+          </div>
+          <select 
+            v-model="selectedStatus"
+            class="px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+          >
+            <option value="all">All Status</option>
+            <option value="serviceable">Serviceable</option>
+            <option value="non-serviceable">Non-Serviceable</option>
+            <option value="maintenance">On Maintenance</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <!-- Table Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+              <span class="material-icons-outlined text-white text-xl">table_chart</span>
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-white">Serviceable Items</h2>
+              <p class="text-xs text-green-100">{{ filteredItems.length }} item{{ filteredItems.length !== 1 ? 's' : '' }} found</p>
+            </div>
           </div>
         </div>
-        <div class="flex items-center justify-center sm:justify-end gap-1 flex-wrap">
+
+        <!-- Loading State -->
+        <div v-if="loading" class="flex justify-center items-center py-20">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        </div>
+
+        <!-- Error State -->
+        <div v-else-if="error" class="flex flex-col justify-center items-center py-20">
+          <span class="material-icons-outlined text-5xl text-red-400 dark:text-red-400 mb-4">error_outline</span>
+          <p class="mt-2 text-red-500 dark:text-red-400 text-lg font-semibold mb-4">{{ error }}</p>
           <button 
-            @click="goToPage(1)"
-            :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+            @click="fetchitems" 
+            class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md hover:shadow-lg transition-all"
           >
-            First
+            Try Again
           </button>
-          <button 
-            @click="goToPage(currentPage - 1)"
-            :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
-          >
-            &lt; Previous
-          </button>
-          <div class="flex items-center gap-1">
-            <template v-for="page in totalPages" :key="page">
+        </div>
+
+        <!-- Empty State -->
+        <div v-else-if="paginatedItems.length === 0" class="flex flex-col justify-center items-center py-20">
+          <span class="material-icons-outlined text-5xl text-gray-400 dark:text-gray-500 mb-4">inbox</span>
+          <p class="mt-2 text-gray-500 dark:text-gray-400 text-lg font-semibold mb-2">No items found</p>
+          <p v-if="searchQuery || selectedStatus !== 'all'" class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search or filter</p>
+        </div>
+
+        <!-- Table with data -->
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-700">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">QR Code</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Image</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Article</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Category</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Description</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Property Account Code</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Unit Value</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Date Acquired</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Location</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Condition</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Issued To</th>
+                <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Quantity</th>
+                <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+              <tr v-for="item in paginatedItems" :key="item.id" class="hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors border-l-4 border-transparent hover:border-green-500 dark:hover:border-green-500">
+                <td class="px-4 py-3">
+                  <img :src="item.qrCode" alt="QR Code" class="h-12 w-12 object-contain rounded border border-gray-200 dark:border-gray-600">
+                </td>
+                <td class="px-4 py-3">
+                  <img :src="item.image" alt="Item" class="h-12 w-12 object-contain rounded border border-gray-200 dark:border-gray-600">
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">{{ item.article }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                    {{ item.category }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white max-w-xs truncate" :title="item.description">
+                    {{ item.description }}
+                  </div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">{{ item.propertyAccountCode }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ item.unitValue }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ item.dateAcquired }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white flex items-center gap-1">
+                    <span class="material-icons-outlined text-green-600 dark:text-green-400 text-base">location_on</span>
+                    {{ item.location }}
+                  </div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ item.condition }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ item.issuedTo }}</div>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
+                    {{ item.quantity }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span 
+                    :class="{
+                      'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300': item.serviceableStatus === 'serviceable',
+                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300': item.serviceableStatus === 'non-serviceable',
+                      'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300': item.serviceableStatus === 'maintenance'
+                    }"
+                    class="px-3 py-1 rounded-full text-xs font-semibold capitalize"
+                  >
+                    {{ item.serviceableStatus.replace('-', ' ') }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Enhanced Pagination -->
+        <div v-if="!loading && filteredItems.length > 0" class="bg-gradient-to-r from-green-50 to-green-100 dark:from-gray-700 dark:to-gray-700 px-6 py-4 border-t border-green-200 dark:border-gray-700">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div class="text-sm font-medium text-gray-700 dark:text-white">
+                Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }} of {{ filteredItems.length }}
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-white">Items per page:</label>
+                <select 
+                  v-model="itemsPerPage" 
+                  @change="changeItemsPerPage($event.target.value)"
+                  class="border-2 border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20"
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center justify-center sm:justify-end gap-2 flex-wrap">
               <button 
-                v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
-                @click="goToPage(page)"
-                :class="[
-                  'px-2 py-1 text-sm border rounded hover:bg-gray-50',
-                  currentPage === page ? 'bg-green-50 text-green-600 border-green-500' : ''
-                ]"
+                @click="goToPage(1)"
+                :disabled="currentPage === 1"
+                class="px-3 py-1.5 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-600 hover:border-green-500 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-700 dark:text-white font-medium transition-all"
               >
-                {{ page }}
+                <span class="material-icons-outlined text-base align-middle">first_page</span>
               </button>
-              <span 
-                v-else-if="page === currentPage - 2 || page === currentPage + 2"
-                class="px-2"
-              >...</span>
-            </template>
+              <button 
+                @click="goToPage(currentPage - 1)"
+                :disabled="currentPage === 1"
+                class="px-3 py-1.5 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-600 hover:border-green-500 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-700 dark:text-white font-medium transition-all"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_left</span>
+              </button>
+              <div class="flex items-center gap-1">
+                <template v-for="page in totalPages" :key="page">
+                  <button 
+                    v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                    @click="goToPage(page)"
+                    :class="[
+                      'px-3 py-1.5 text-sm border-2 rounded-lg font-medium transition-all',
+                      currentPage === page 
+                        ? 'bg-green-600 text-white border-green-600 shadow-md' 
+                        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-500 dark:hover:border-green-500'
+                    ]"
+                  >
+                    {{ page }}
+                  </button>
+                  <span 
+                    v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                    class="px-2 text-gray-500 dark:text-gray-400"
+                  >...</span>
+                </template>
+              </div>
+              <button 
+                @click="goToPage(currentPage + 1)"
+                :disabled="currentPage === totalPages"
+                class="px-3 py-1.5 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-600 hover:border-green-500 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-700 dark:text-white font-medium transition-all"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_right</span>
+              </button>
+              <button 
+                @click="goToPage(totalPages)"
+                :disabled="currentPage === totalPages"
+                class="px-3 py-1.5 text-sm border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-600 hover:border-green-500 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white dark:bg-gray-700 text-gray-700 dark:text-white font-medium transition-all"
+              >
+                <span class="material-icons-outlined text-base align-middle">last_page</span>
+              </button>
+            </div>
           </div>
-          <button 
-            @click="goToPage(currentPage + 1)"
-            :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+        </div>
+      </div>
+    </div>
+
+    <!-- Signature Edit Modal -->
+    <div 
+      v-if="showSignatureModal" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="showSignatureModal = false"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 rounded-t-xl">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-white">Edit Signature Information</h3>
+            <button 
+              @click="showSignatureModal = false"
+              class="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+            >
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="p-6 space-y-6">
+          <!-- Prepared By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Prepared by:
+            </label>
+            <input
+              v-model="signatureData.preparedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.preparedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+
+          <!-- Reviewed By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Reviewed by:
+            </label>
+            <input
+              v-model="signatureData.reviewedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.reviewedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+
+          <!-- Noted By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Noted by:
+            </label>
+            <input
+              v-model="signatureData.notedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.notedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+        </div>
+
+        <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 rounded-b-xl flex justify-end gap-3">
+          <button
+            @click="showSignatureModal = false"
+            class="px-5 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
           >
-            Next &gt;
+            Cancel
           </button>
-          <button 
-            @click="goToPage(totalPages)"
-            :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+          <button
+            @click="printReport"
+            class="px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg"
           >
-            Last
+            Print Report
           </button>
         </div>
       </div>
@@ -660,8 +972,18 @@ const goBack = () => {
 </template>
 
 <style scoped>
-.btn-primary {
-  @apply bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow;
+/* Enhanced Button Styles */
+.btn-primary-enhanced {
+  @apply bg-gradient-to-r from-green-600 to-green-700 text-white px-5 py-2.5 rounded-lg hover:from-green-700 hover:to-green-800 flex items-center text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg;
+}
+
+.btn-secondary-enhanced {
+  @apply bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white px-5 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-green-500 flex items-center text-sm font-semibold transition-all duration-300 shadow-sm hover:shadow-md;
+}
+
+/* Dark mode support for select options */
+select option {
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
 }
 
 .status-serviceable {
@@ -682,5 +1004,8 @@ const goBack = () => {
 
 .material-icons-outlined {
   font-size: 24px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
 }
 </style>

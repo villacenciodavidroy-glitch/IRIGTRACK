@@ -9,7 +9,6 @@ import Inventory from "./pages/Inventory.vue"
 import Admin from "./pages/Admin.vue"
 import Analytics from "./pages/Analytics.vue"
 import AddItem from "./pages/AddItem.vue"
-import Maintenance from "./pages/Maintenance.vue"
 import AddAccount from './pages/AddAccount.vue'
 import EditAccount from './pages/EditAccount.vue'
 import Reporting from './pages/reports/index.vue'
@@ -21,8 +20,8 @@ import QRGeneration from './pages/QRGeneration.vue'
 import ActivityLog from './pages/ActivityLog.vue'
 import Profile from './pages/ProfileView.vue'
 import DeletedItems from './pages/DeletedItems.vue'
-import DeletedAccounts from './pages/DeletedAccounts.vue'
 import Notifications from './pages/Notifications.vue'
+import axiosClient from './axios'
 
 const routes = [
     {
@@ -56,11 +55,6 @@ const routes = [
                         path: 'deleted-items',
                         name: 'DeletedItems',
                         component: DeletedItems
-                    },
-                    {
-                        path: 'deleted-accounts',
-                        name: 'DeletedAccounts',
-                        component: DeletedAccounts
                     }
                 ]
             },
@@ -83,11 +77,6 @@ const routes = [
                 path: '/add-item',
                 name: 'AddItem',
                 component: AddItem
-            },
-            {
-                path: '/maintenance',
-                name: 'Maintenance',
-                component: Maintenance
             },
             {
                 path: '/admin',
@@ -139,6 +128,11 @@ const routes = [
                 component: () => import('./pages/reports/monitoring-assets.vue')
             },
             {
+                path: '/reports/life-cycles-data',
+                name: 'LifeCyclesData',
+                component: () => import('./pages/reports/life-cycles-data.vue')
+            },
+            {
                 path: '/QRGeneration',
                 name: 'QRGeneration',
                 component: QRGeneration
@@ -152,6 +146,11 @@ const routes = [
                 path: '/notifications',
                 name: 'Notifications',
                 component: Notifications
+            },
+            {
+                path: '/transactions',
+                name: 'Transactions',
+                component: () => import('./pages/Transactions.vue')
             }
         ]
     },
@@ -183,8 +182,17 @@ const router = createRouter({
     routes
 })
 
-// Navigation guard to prevent back navigation from login page
-router.beforeEach((to, from, next) => {
+// Define public routes that don't require authentication
+const publicRoutes = ['Login', 'Signup', 'NotFound']
+
+// Define admin-only routes
+const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Transactions']
+
+// Navigation guard for authentication and authorization
+router.beforeEach(async (to, from, next) => {
+    const token = localStorage.getItem('token')
+    const isPublicRoute = publicRoutes.includes(to.name)
+    
     // If trying to navigate away from login page using browser back button
     if (from.name === 'Login' && to.name === undefined) {
         // Stay on login page
@@ -211,6 +219,69 @@ router.beforeEach((to, from, next) => {
         if (router._loginPopStateHandler) {
             window.removeEventListener('popstate', router._loginPopStateHandler)
             router._loginPopStateHandler = null
+        }
+    }
+    
+    // If route is public (login, signup), allow access
+    if (isPublicRoute) {
+        // If user is already logged in and tries to access login/signup, redirect to dashboard
+        if (token && (to.name === 'Login' || to.name === 'Signup')) {
+            next('/dashboard')
+            return
+        }
+        next()
+        return
+    }
+    
+    // Protected routes - check authentication
+    if (!token) {
+        // No token, redirect to login
+        next({
+            name: 'Login',
+            query: { redirect: to.fullPath }
+        })
+        return
+    }
+    
+    // Check if route requires admin access
+    if (adminRoutes.includes(to.name)) {
+        try {
+            // Fetch current user to check role using axiosClient
+            const response = await axiosClient.get('/user')
+            
+            if (response.data) {
+                const user = response.data
+                const role = (user.role || '').toLowerCase()
+                
+                if (role !== 'admin' && role !== 'super_admin') {
+                    // Not an admin, redirect to dashboard
+                    next('/dashboard')
+                    return
+                }
+            } else {
+                // No user data, redirect to login
+                localStorage.removeItem('token')
+                localStorage.removeItem('user')
+                next({
+                    name: 'Login',
+                    query: { redirect: to.fullPath }
+                })
+                return
+            }
+        } catch (error) {
+            console.error('Error checking user role:', error)
+            // On error (401/403), redirect to login
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                localStorage.removeItem('token')
+                localStorage.removeItem('user')
+                next({
+                    name: 'Login',
+                    query: { redirect: to.fullPath }
+                })
+                return
+            }
+            // For other errors, still check but allow with warning
+            next()
         }
     }
     

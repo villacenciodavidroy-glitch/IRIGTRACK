@@ -12,7 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // CORS is handled automatically by Laravel if cors.php config exists
+        // No need to manually add HandleCors middleware in Laravel 11
         
+        // Register custom middleware aliases
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+        ]);
     })
     
     ->withExceptions(function (Exceptions $exceptions) {

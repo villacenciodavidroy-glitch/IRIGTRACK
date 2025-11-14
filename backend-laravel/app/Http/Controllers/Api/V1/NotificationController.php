@@ -16,7 +16,7 @@ class NotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Notification::with('item')
+            $query = Notification::with(['item', 'borrowRequest'])
                 ->orderBy('created_at', 'desc');
 
             // Apply search filter
@@ -108,6 +108,69 @@ class NotificationController extends Controller
                 'success' => false,
                 'message' => 'Failed to fetch unread count',
                 'count' => 0
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a notification
+     */
+    public function destroy($id): JsonResponse
+    {
+        try {
+            $notification = Notification::find($id);
+            
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            $notification->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Notification deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting notification: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete notification: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete multiple notifications
+     */
+    public function deleteMultiple(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'ids' => 'required|array',
+                'ids.*' => 'required|integer|exists:notifications,notification_id'
+            ]);
+
+            $deletedCount = Notification::whereIn('notification_id', $request->ids)->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => "{$deletedCount} notification(s) deleted successfully",
+                'deleted_count' => $deletedCount
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error deleting multiple notifications: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete notifications: ' . $e->getMessage()
             ], 500);
         }
     }

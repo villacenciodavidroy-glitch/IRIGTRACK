@@ -80,7 +80,7 @@ const getIconAndColors = () => {
   switch (props.type) {
     case 'error':
       return {
-        icon: 'error',
+        icon: 'close',
         iconColor: 'text-white',
         iconBg: 'bg-red-500',
         buttonClass: 'bg-red-500 hover:bg-red-600 focus:ring-red-500'
@@ -99,7 +99,14 @@ const getIconAndColors = () => {
         iconBg: 'bg-blue-500',
         buttonClass: 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500'
       }
-    default: // success
+    case 'success':
+      return {
+        icon: 'check',
+        iconColor: 'text-white',
+        iconBg: 'bg-green-500',
+        buttonClass: 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
+      }
+    default: // fallback to success
       return {
         icon: 'check',
         iconColor: 'text-white',
@@ -122,26 +129,26 @@ const { icon, iconColor, iconBg, buttonClass } = getIconAndColors()
     <!-- Modal Content -->
     <div
       ref="modalRef"
-      class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 ease-in-out"
+      class="bg-white dark:bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-md w-[calc(100vw-2rem)] sm:w-full mx-4 transform transition-all duration-300 ease-in-out"
       @click.stop
       tabindex="-1"
     >
       <!-- Modal Body -->
-      <div class="px-8 py-8 text-center">
+      <div class="px-4 xs:px-6 sm:px-8 py-6 xs:py-8 text-center">
         <!-- Icon -->
-        <div class="flex justify-center mb-6">
-          <div class="w-16 h-16 rounded-full flex items-center justify-center" :class="iconBg">
-            <span class="material-icons-outlined text-3xl" :class="iconColor">{{ icon }}</span>
+        <div class="flex justify-center mb-4 xs:mb-6">
+          <div class="w-12 h-12 xs:w-16 xs:h-16 rounded-full flex items-center justify-center" :class="iconBg">
+            <span class="material-icons-outlined text-2xl xs:text-3xl" :class="iconColor">{{ icon }}</span>
           </div>
         </div>
 
         <!-- Title -->
-        <h3 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        <h3 class="text-lg xs:text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-900 mb-3 xs:mb-4">
           {{ title }}
         </h3>
 
         <!-- Message -->
-        <p class="text-gray-600 dark:text-gray-300 text-base leading-relaxed mb-8">
+        <p class="text-gray-600 dark:text-gray-600 text-sm xs:text-base leading-relaxed mb-6 xs:mb-8 px-2">
           {{ message }}
         </p>
 
@@ -149,7 +156,7 @@ const { icon, iconColor, iconBg, buttonClass } = getIconAndColors()
         <button
           ref="buttonRef"
           @click="handleConfirm"
-          class="px-8 py-3 text-white font-semibold rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105"
+          class="w-full xs:w-auto px-6 xs:px-8 py-2.5 xs:py-3 text-white font-semibold rounded-lg xs:rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105 text-sm xs:text-base"
           :class="buttonClass"
         >
           {{ buttonText }}
@@ -197,7 +204,7 @@ const { icon, iconColor, iconBg, buttonClass } = getIconAndColors()
   animation: fadeIn 0.3s ease-out;
 }
 
-.bg-white.dark\:bg-gray-800 {
+.bg-white.dark\:bg-white {
   animation: slideIn 0.4s ease-out;
 }
 
@@ -222,8 +229,8 @@ button:active {
 
 /* Dark mode adjustments */
 @media (prefers-color-scheme: dark) {
-  .bg-white {
-    background-color: #1f2937;
+  .bg-white.dark\:bg-white {
+    background-color: #ffffff !important;
   }
 }
 </style>

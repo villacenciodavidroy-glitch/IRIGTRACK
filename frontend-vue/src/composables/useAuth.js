@@ -31,6 +31,21 @@ export default function useAuth() {
     return user.value.fullname || user.value.username || 'User'
   }
 
+  const isAuthenticated = () => {
+    return !!user.value && !!localStorage.getItem('token')
+  }
+
+  const isAdmin = () => {
+    if (!user.value) return false
+    const role = (user.value.role || '').toLowerCase()
+    return role === 'admin' || role === 'super_admin'
+  }
+
+  const hasRole = (role) => {
+    if (!user.value) return false
+    return (user.value.role || '').toLowerCase() === role.toLowerCase()
+  }
+
   const logout = async () => {
     try {
       loading.value = true
@@ -79,6 +94,9 @@ export default function useAuth() {
     error,
     fetchCurrentUser,
     getUserDisplayName,
-    logout
+    logout,
+    isAuthenticated,
+    isAdmin,
+    hasRole
   }
 }

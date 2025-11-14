@@ -51,16 +51,25 @@ const inventoryItems = computed(() => {
 
 const filteredItems = computed(() => {
   const query = searchQuery.value?.toLowerCase().trim()
-  if (!query) return inventoryItems.value
+  let result = inventoryItems.value
   
-  // Optimize search: only search relevant fields
-  return inventoryItems.value.filter(item => {
-    return (
-      (item.article || '').toLowerCase().includes(query) ||
-      (item.description || '').toLowerCase().includes(query) ||
-      (item.category || '').toLowerCase().includes(query) ||
-      (item.propertyAccountCode || '').toLowerCase().includes(query)
-    )
+  if (query) {
+    // Optimize search: only search relevant fields
+    result = inventoryItems.value.filter(item => {
+      return (
+        (item.article || '').toLowerCase().includes(query) ||
+        (item.description || '').toLowerCase().includes(query) ||
+        (item.category || '').toLowerCase().includes(query) ||
+        (item.propertyAccountCode || '').toLowerCase().includes(query)
+      )
+    })
+  }
+  
+  // Sort alphabetically by article
+  return result.sort((a, b) => {
+    const articleA = (a.article || '').toLowerCase()
+    const articleB = (b.article || '').toLowerCase()
+    return articleA.localeCompare(articleB)
   })
 })
 
@@ -166,59 +175,165 @@ const printQrCode = () => {
     <head>
       <title>QR Code - ${qrItem.article || 'Item'}</title>
       <style>
+        @page {
+          size: A4;
+          margin: 0;
+        }
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
         body {
-          font-family: Arial, sans-serif;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background: white;
+          padding: 40px 20px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+        }
+        .print-container {
+          width: 100%;
+          max-width: 800px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 30px;
+        }
+        .header {
           text-align: center;
-          padding: 20px;
+          margin-bottom: 20px;
         }
-        .qr-container {
-          margin: 20px auto;
-          max-width: 400px;
-        }
-        .qr-code {
-          width: 300px;
-          height: 300px;
-          margin: 0 auto 20px;
-        }
-        .item-details {
-          margin-top: 20px;
-          text-align: left;
-          border-top: 1px solid #eee;
-          padding-top: 20px;
-        }
-        .item-details p {
-          margin: 5px 0;
-        }
-        .year-badge {
-          background-color: #10B981;
-          color: white;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-          font-weight: bold;
-          display: inline-block;
+        .header h1 {
+          font-size: 36px;
+          font-weight: 700;
+          color: #1f2937;
+          letter-spacing: 1px;
           margin-bottom: 10px;
         }
+        .year-badge {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          padding: 8px 20px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 600;
+          display: inline-block;
+          margin-top: 10px;
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        .qr-wrapper {
+          background: white;
+          border: 3px solid #10b981;
+          border-radius: 12px;
+          padding: 30px;
+          box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 20px 0;
+        }
+        .qr-code {
+          width: 350px;
+          height: 350px;
+          object-fit: contain;
+          display: block;
+        }
+        .paper-size {
+          font-size: 18px;
+          font-weight: 600;
+          color: #374151;
+          margin: 20px 0;
+          text-align: center;
+        }
+        .details-section {
+          width: 100%;
+          max-width: 600px;
+          background: #f9fafb;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 30px;
+          margin-top: 20px;
+        }
+        .details-section h2 {
+          font-size: 24px;
+          font-weight: 600;
+          color: #1f2937;
+          margin-bottom: 20px;
+          text-align: center;
+          border-bottom: 2px solid #10b981;
+          padding-bottom: 10px;
+        }
+        .detail-item {
+          margin-bottom: 18px;
+          padding: 12px;
+          background: white;
+          border-left: 4px solid #10b981;
+          border-radius: 4px;
+        }
+        .detail-label {
+          font-weight: 700;
+          color: #374151;
+          font-size: 14px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 6px;
+        }
+        .detail-value {
+          color: #1f2937;
+          font-size: 16px;
+          font-weight: 500;
+        }
+        .print-button {
+          margin-top: 30px;
+          padding: 12px 40px;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+          transition: all 0.3s ease;
+        }
+        .print-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
         @media print {
-          button {
+          body {
+            padding: 0;
+          }
+          .print-button {
             display: none;
+          }
+          .qr-wrapper {
+            box-shadow: none;
+          }
+          .details-section {
+            border: 1px solid #d1d5db;
           }
         }
       </style>
     </head>
     <body>
-      <h1>QR Code ${qrCodeUpdated.value ? '(Updated 2025)' : ''}</h1>
-      <div class="qr-container">
-        <img src="${qrCodeToPrint}" alt="QR Code" class="qr-code">
-        <h2>${qrItem.article || 'Item'}</h2>
-        ${qrCodeUpdated.value ? '<div class="year-badge">2025</div>' : ''}
-        <div class="item-details">
-          <p><strong>Description:</strong> ${qrItem.description || 'N/A'}</p>
-          <p><strong>Property Account Code:</strong> ${qrItem.propertyAccountCode || 'N/A'}</p>
-          <p><strong>Location:</strong> ${qrItem.location || 'N/A'}</p>
+      <div class="print-container">
+        <div class="header">
+          <h1>QR Code ${qrCodeUpdated.value ? '(Updated 2025)' : ''}</h1>
+          ${qrCodeUpdated.value ? '<div class="year-badge">Updated 2025</div>' : ''}
         </div>
+        
+        <div class="qr-wrapper">
+          <img src="${qrCodeToPrint}" alt="QR Code" class="qr-code">
+        </div>
+        
+        <div class="paper-size">Bondpaper A4 (size)</div>
+        
+        <button class="print-button" onclick="window.print(); return false;">Print</button>
       </div>
-      <button onclick="window.print(); return false;">Print</button>
     </body>
     </html>
   `
@@ -566,39 +681,136 @@ const navigateBack = () => {
 </script>
 
 <template>
-  <div class="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-white dark:bg-gray-900">
+  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8 space-y-6">
     <!-- QR Generation List View -->
     <div v-if="!showValidation">
-      <!-- Back Button -->
-      <div class="mb-4">
-        <button 
-          @click="navigateBack" 
-          class="flex items-center text-white bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors duration-200"
-        >
-          <span class="material-icons-outlined mr-2">arrow_back</span>
-          Back
-        </button>
-      </div>
-
-      <!-- Search Bar -->
-      <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0 mb-4">
-        <div class="relative w-full sm:w-96">
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
-              <span class="material-icons-outlined text-lg">search</span>
-            </span>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search item..."
-              class="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            >
+      <!-- Enhanced Header Section -->
+      <div class="relative overflow-hidden bg-gradient-to-r from-green-600 via-green-700 to-green-600 rounded-xl shadow-xl">
+        <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+                <span class="material-icons-outlined text-4xl text-white">qr_code</span>
+              </div>
+              <div>
+                <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">QR Generation Management</h1>
+                <p class="text-green-100 text-base sm:text-lg">Comprehensive QR code tracking and validation system</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+              <button 
+                @click="router.push('/category-management')"
+                class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
+              >
+                <span class="material-icons-outlined text-lg mr-1.5">category</span>
+                <span>Categories</span>
+              </button>
+              <button 
+                @click="router.push('/location-management')"
+                class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
+              >
+                <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
+                <span>Locations</span>
+              </button>
+              <button 
+                @click="goToAddItem"
+                class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg"
+              >
+                <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
+                <span>Add New Item</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Table Container -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+      <!-- Statistics Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <!-- Total Items Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Total Items</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ totalFilteredItems }}</p>
+            </div>
+            <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">inventory</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supply Items Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Supply Items</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ filteredItems.filter(item => item.category?.toLowerCase().includes('supply')).length }}</p>
+            </div>
+            <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+              <span class="material-icons-outlined text-blue-400 dark:text-blue-400 text-2xl">local_shipping</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Page Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Current Page</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ currentPage }} / {{ totalPages || 1 }}</p>
+            </div>
+            <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+              <span class="material-icons-outlined text-purple-400 dark:text-purple-400 text-2xl">description</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Search Bar -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+              <span class="material-icons-outlined text-green-600 text-xl">search</span>
+            </div>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search by article, description, category, PAC, or location..."
+              class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
+            >
+            <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+              <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons-outlined text-lg">close</span>
+              </button>
+            </div>
+          </div>
+          <button 
+            @click="printInventory"
+            class="btn-print flex items-center justify-center gap-2 px-4 py-3 whitespace-nowrap"
+          >
+            <span class="material-icons-outlined">print</span>
+            <span>Print Report</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Inventory Table Container -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <!-- Enhanced Table Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="material-icons-outlined text-white text-2xl">qr_code_scanner</span>
+              <h2 class="text-xl font-bold text-white">QR Generation Items</h2>
+            </div>
+            <div class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+              <span class="text-base font-semibold text-white">{{ totalFilteredItems }} items</span>
+            </div>
+          </div>
+        </div>
+          
         <!-- Mobile View (Card Layout) -->
         <div class="block sm:hidden">
           <!-- Loading indicator -->
@@ -609,10 +821,10 @@ const navigateBack = () => {
           <!-- Error state -->
           <div v-else-if="error" class="flex flex-col justify-center items-center py-10">
             <span class="material-icons-outlined text-4xl text-red-400 dark:text-red-500">error_outline</span>
-            <p class="mt-2 text-red-500 dark:text-red-400">{{ error }}</p>
+            <p class="mt-2 text-base text-red-500 dark:text-red-400">{{ error }}</p>
             <button 
               @click="fetchitems" 
-              class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              class="mt-4 px-4 py-2 text-base bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
               Try Again
             </button>
@@ -621,8 +833,8 @@ const navigateBack = () => {
           <!-- Empty state -->
           <div v-else-if="paginatedItems.length === 0" class="flex flex-col justify-center items-center py-10">
             <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">inventory_2</span>
-            <p class="mt-2 text-gray-500 dark:text-gray-400">No inventory items found</p>
-            <p v-if="searchQuery" class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search query</p>
+            <p class="mt-2 text-base text-gray-500 dark:text-gray-400">No inventory items found</p>
+            <p v-if="searchQuery" class="text-base text-gray-400 dark:text-gray-500">Try adjusting your search query</p>
           </div>
           
           <!-- Card layout for mobile -->
@@ -640,12 +852,12 @@ const navigateBack = () => {
                 
                 <!-- Item details -->
                 <div class="flex-1 min-w-0">
-                  <h3 class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ item.article }}</h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{{ item.description }}</p>
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white truncate">{{ item.article }}</h3>
+                  <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{{ item.description }}</p>
                   <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ item.category }}</span>
+                    <span class="text-sm font-medium px-2 py-0.5 rounded-full" style="background-color: #01200E; color: #FFFFFF;">{{ item.category }}</span>
                     <span class="inline-block h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
-                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ item.condition }}</span>
+                    <span class="text-sm font-medium px-2 py-0.5 rounded-full bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">{{ item.condition }}</span>
                   </div>
                 </div>
                 
@@ -660,13 +872,13 @@ const navigateBack = () => {
               
               <!-- Action buttons -->
               <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                <div class="text-xs text-gray-500 dark:text-gray-400">
+                <div class="text-sm text-gray-500 dark:text-gray-400">
                   <span class="font-medium">Location:</span> {{ item.location || 'N/A' }}
                 </div>
                 <div class="flex justify-end gap-2">
                   <button 
                     @click="openValidation(item)"
-                    class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                    class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-base"
                   >
                     Validate
                   </button>
@@ -686,10 +898,10 @@ const navigateBack = () => {
           <!-- Error state -->
           <div v-else-if="error" class="flex flex-col justify-center items-center py-10">
             <span class="material-icons-outlined text-4xl text-red-400 dark:text-red-500">error_outline</span>
-            <p class="mt-2 text-red-500 dark:text-red-400">{{ error }}</p>
+            <p class="mt-2 text-base text-red-500 dark:text-red-400">{{ error }}</p>
             <button 
               @click="fetchitems" 
-              class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              class="mt-4 px-4 py-2 text-base bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
               Try Again
             </button>
@@ -698,113 +910,117 @@ const navigateBack = () => {
           <!-- Empty state -->
           <div v-else-if="paginatedItems.length === 0" class="flex flex-col justify-center items-center py-10">
             <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">inventory_2</span>
-            <p class="mt-2 text-gray-500 dark:text-gray-400">No inventory items found</p>
-            <p v-if="searchQuery" class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search query</p>
+            <p class="mt-2 text-base text-gray-500 dark:text-gray-400">No inventory items found</p>
+            <p v-if="searchQuery" class="text-base text-gray-400 dark:text-gray-500">Try adjusting your search query</p>
           </div>
           
           <!-- Table with data -->
-          <table v-else class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
+          <table v-else class="min-w-full divide-y divide-gray-200 whitespace-nowrap">
             <thead>
-              <tr class="bg-gray-50 dark:bg-gray-800">
-                <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 w-10 px-4 py-3">
-                  <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
+              <tr class="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50">
+                <th class="sticky left-0 z-10 bg-gray-100 w-12 px-4 py-4 border-r border-gray-200">
+                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer">
                 </th>
-                <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QR CODE</th>
-                <th class="min-w-[80px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">IMAGE</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ARTICLE</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">CATEGORY</th>
-                <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DESCRIPTION</th>
-                 <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QUANTITY</th>
-                <th class="min-w-[200px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">PROPERTY ACCOUNT CODE</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">UNIT VALUE</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">DATE ACQUIRED</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">P.O. NUMBER</th>
-                <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">LOCATION</th>
-                <th class="min-w-[120px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">CONDITION</th>
-                <th class="min-w-[150px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ISSUED TO</th>
-                <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-800 min-w-[100px] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ACTIONS</th>
+                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">QR CODE</th>
+                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">IMAGE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">ARTICLE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">CATEGORY</th>
+                <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">DESCRIPTION</th>
+                <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">QUANTITY</th>
+                <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">PROPERTY ACCOUNT CODE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">UNIT VALUE</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">DATE ACQUIRED</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">P.O. NUMBER</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">LOCATION</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">CONDITION</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200">ISSUED TO</th>
+                <th class="sticky right-0 z-10 bg-gray-100 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">ACTIONS</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="item in paginatedItems" :key="item.id || item.propertyAccountCode" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td class="sticky left-0 z-10 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-2">
-                  <input type="checkbox" class="rounded border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-green-600 focus:ring-green-500">
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="(item, index) in paginatedItems" :key="item.id || item.propertyAccountCode" 
+                  class="group hover:bg-gradient-to-r hover:from-green-50 hover:to-transparent transition-all duration-200 border-l-4 border-transparent hover:border-green-500">
+                <td class="sticky left-0 z-10 bg-white group-hover:bg-green-50 px-4 py-3 border-r border-gray-200">
+                  <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer">
                 </td>
-                <td class="px-4 py-2">
+                <td class="px-4 py-3 border-r border-gray-200">
                   <div 
-                    class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-md overflow-hidden inline-block"
+                    class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-green-50 to-green-100"
                     @click="openQrPreviewModal(item)"
+                    title="View QR Code"
                   >
-                    <img :src="item.qrCode" alt="QR Code" class="h-8 w-8 object-contain">
+                    <img :src="item.qrCode" alt="QR Code" class="h-10 w-10 object-contain">
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-md overflow-hidden inline-block">
-                    <img :src="item.image" alt="Item" class="h-8 w-8 object-contain">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-blue-50 to-blue-100">
+                    <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded">
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.article">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base font-semibold text-gray-900 truncate max-w-[130px]" :title="item.article">
                     {{ item.article }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.category">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">
                     {{ item.category }}
-                  </div>
+                  </span>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.description">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base text-gray-700 truncate max-w-[220px]" :title="item.description">
                     {{ item.description }}
                   </div>
                 </td>
-                 <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.quantity">
-                    {{ item.quantity }}
-                  </div>
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
+                    {{ item.quantity || '0' }}
+                  </span>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[200px]" :title="item.propertyAccountCode">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base font-mono text-gray-700 truncate max-w-[180px]" :title="item.propertyAccountCode">
                     {{ item.propertyAccountCode }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.unitValue">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base font-medium text-gray-700 truncate max-w-[130px]" :title="item.unitValue">
                     {{ item.unitValue }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.dateAcquired">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base text-gray-600 truncate max-w-[130px]" :title="item.dateAcquired">
                     {{ item.dateAcquired }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.poNumber">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base text-gray-600 truncate max-w-[130px]" :title="item.poNumber">
                     {{ item.poNumber }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[150px]" :title="item.location">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base text-gray-700 truncate max-w-[160px]" :title="item.location">
+                    <span class="material-icons-outlined text-base align-middle mr-1 text-gray-400">location_on</span>
                     {{ item.location }}
                   </div>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[120px]" :title="item.condition">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
                     {{ item.condition }}
-                  </div>
+                  </span>
                 </td>
-                <td class="px-4 py-2">
-                  <div class="text-sm text-gray-900 dark:text-white truncate max-w-[150px]" :title="item.issuedTo">
+                <td class="px-4 py-3 border-r border-gray-200">
+                  <div class="text-base text-gray-700 truncate max-w-[160px]" :title="item.issuedTo">
                     {{ item.issuedTo }}
                   </div>
                 </td>
-                <td class="sticky right-0 z-10 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-2">
+                <td class="sticky right-0 z-10 bg-white group-hover:bg-green-50 px-4 py-3">
                   <div class="flex justify-center gap-2">
                     <button 
                       @click="openValidation(item)"
-                      class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                      class="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
+                      title="Validate"
                     >
-                      Validate
+                      <span class="material-icons-outlined text-sm">check_circle</span>
                     </button>
                   </div>
                 </td>
@@ -813,75 +1029,82 @@ const navigateBack = () => {
           </table>
         </div>
 
-        <!-- Pagination - only show when not loading and has items -->
-        <div v-if="!loading && totalFilteredItems > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <div class="text-sm text-gray-600 dark:text-gray-300">
-              Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }} of {{ totalFilteredItems }}
-            </div>
-            <div class="flex items-center gap-2">
-              <label class="text-sm text-gray-600 dark:text-gray-300">Items per page:</label>
-              <select 
-                v-model="itemsPerPage" 
-                @change="changeItemsPerPage($event.target.value)"
-                class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="8">8</option>
-                <option value="16">16</option>
-                <option value="24">24</option>
-                <option value="32">32</option>
-              </select>
-            </div>
-          </div>
-          <div class="flex items-center justify-center sm:justify-end gap-1 flex-wrap">
-            <button 
-              @click="goToPage(1)"
-              :disabled="currentPage === 1"
-              class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              First
-            </button>
-            <button 
-              @click="goToPage(currentPage - 1)"
-              :disabled="currentPage === 1"
-              class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              &lt; Previous
-            </button>
-            <div class="flex items-center gap-1">
-              <template v-for="page in totalPages" :key="page">
-                <!-- Show first page, last page, current page, and pages around current -->
-                <button 
-                  v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
-                  @click="goToPage(page)"
-                  :class="[
-                    'px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-                    currentPage === page ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-500 dark:border-green-400' : ''
-                  ]"
+        <!-- Enhanced Pagination -->
+        <div v-if="!loading && totalFilteredItems > 0" class="bg-gradient-to-r from-gray-50 to-gray-100 border-t-2 border-gray-200">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-green-600 text-lg">info</span>
+                <span class="text-base font-semibold text-gray-700">
+                  Showing <span class="text-green-600 font-bold">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                  <span class="text-green-600 font-bold">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
+                  <span class="text-green-600 font-bold">{{ totalFilteredItems }}</span> items
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-base font-medium text-gray-700">Items per page:</label>
+                <select 
+                  v-model="itemsPerPage" 
+                  @change="changeItemsPerPage($event.target.value)"
+                  class="bg-white border-2 border-gray-300 text-gray-900 rounded-lg px-3 py-1.5 text-base font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
                 >
-                  {{ page }}
-                </button>
-                <!-- Show dots for skipped pages -->
-                <span 
-                  v-else-if="page === currentPage - 2 || page === currentPage + 2"
-                  class="px-2 text-gray-500 dark:text-gray-400"
-                >...</span>
-              </template>
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                  <option value="24">24</option>
+                  <option value="32">32</option>
+                </select>
+              </div>
             </div>
-            <button 
-              @click="goToPage(currentPage + 1)"
-              :disabled="currentPage === totalPages"
-              class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              Next &gt;
-            </button>
-            <button 
-              @click="goToPage(totalPages)"
-              :disabled="currentPage === totalPages"
-              class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              Last
-            </button>
+            <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">
+              <button 
+                @click="goToPage(1)"
+                :disabled="currentPage === 1"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">first_page</span>
+              </button>
+              <button 
+                @click="goToPage(currentPage - 1)"
+                :disabled="currentPage === 1"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_left</span>
+              </button>
+              <div class="flex items-center gap-1">
+                <template v-for="page in totalPages" :key="page">
+                  <button 
+                    v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                    @click="goToPage(page)"
+                    :class="[
+                      'px-3 py-2 text-base font-semibold border-2 rounded-lg transition-all shadow-sm hover:shadow-md',
+                      currentPage === page 
+                        ? 'bg-gradient-to-r from-green-600 to-green-700 text-white border-green-600 shadow-lg' 
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-green-400'
+                    ]"
+                  >
+                    {{ page }}
+                  </button>
+                  <span 
+                    v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                    class="px-2 text-gray-500"
+                  >...</span>
+                </template>
+              </div>
+              <button 
+                @click="goToPage(currentPage + 1)"
+                :disabled="currentPage === totalPages"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_right</span>
+              </button>
+              <button 
+                @click="goToPage(totalPages)"
+                :disabled="currentPage === totalPages"
+                class="px-3 py-2 text-base font-medium border-2 border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">last_page</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -932,70 +1155,99 @@ const navigateBack = () => {
       </div>
       
       <!-- QR Code Preview Modal -->
-      <div v-if="showQrPreviewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-4 sm:p-6 relative">
-          <!-- Close button (X) in the top-right corner -->
-          <button 
-            @click="closeQrPreviewModal" 
-            class="absolute top-3 right-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 bg-white dark:bg-gray-700 rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-            title="Close"
-          >
-            <span class="material-icons-outlined">close</span>
-          </button>
-          
-          <div class="flex justify-between items-center mb-4 sm:mb-6">
-            <h3 class="text-lg sm:text-xl font-medium text-green-700 dark:text-green-400">QR Code Preview</h3>
-          </div>
-          
-          <div class="flex flex-col md:flex-row items-center md:items-start gap-4 sm:gap-6">
-            <!-- Left side: QR Code Image with pulsing border effect -->
-            <div class="flex flex-col items-center">
-              <div class="border-4 border-green-500 dark:border-green-400 rounded-lg p-2 mb-4 bg-white dark:bg-gray-700 qr-pulse-border">
-                <img 
-                  :src="selectedQrItem?.qrCode" 
-                  alt="QR Code" 
-                  class="w-48 h-48 sm:w-64 sm:h-64 object-contain"
-                >
+      <div v-if="showQrPreviewModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden border-2 border-gray-200">
+          <!-- Enhanced Header with Green Bar -->
+          <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5">
+            <div class="flex justify-between items-center">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                  <span class="material-icons-outlined text-white text-2xl">qr_code_scanner</span>
+                </div>
+                <h3 class="text-xl font-bold text-white">QR Code Preview</h3>
               </div>
-              
-              <!-- Print Button -->
               <button 
-                @click="printQrCode" 
-                class="w-full sm:w-auto px-4 sm:px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
+                @click="closeQrPreviewModal" 
+                class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+                title="Close"
               >
-                <span class="material-icons-outlined">print</span>
-                Print QR Code
+                <span class="material-icons-outlined">close</span>
               </button>
             </div>
-            
-            <!-- Right side: Item details and image -->
-            <div class="flex-1">
-              <!-- Item Title -->
-              <h4 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-center md:text-left text-gray-900 dark:text-white">{{ selectedQrItem?.article || 'Item' }}</h4>
-              
-              <!-- Item Image - Always show, use default if not available -->
-              <div class="mb-3 sm:mb-4 flex justify-center md:justify-start">
-                <img 
-                  :src="selectedQrItem?.image" 
-                  alt="Item" 
-                  class="h-32 sm:h-40 object-contain border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm"
+          </div>
+          
+          <!-- Modal Content -->
+          <div class="p-6 sm:p-8">
+            <div class="flex flex-col lg:flex-row items-center lg:items-start gap-6 sm:gap-8">
+              <!-- Left side: QR Code Display -->
+              <div class="flex flex-col items-center w-full lg:w-auto">
+                <!-- QR Code in White Card with Green Border -->
+                <div class="bg-white border-2 border-green-500 rounded-lg p-4 mb-4 shadow-md">
+                  <img 
+                    :src="selectedQrItem?.qrCode" 
+                    alt="QR Code" 
+                    class="w-56 h-56 sm:w-64 sm:h-64 object-contain"
+                  >
+                </div>
+                
+                <!-- Print Button -->
+                <button 
+                  @click="printQrCode" 
+                  class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold"
                 >
+                  <span class="material-icons-outlined">print</span>
+                  Print QR Code
+                </button>
               </div>
               
-              <!-- Item Details -->
-              <div class="bg-gray-50 dark:bg-gray-700 p-3 sm:p-4 rounded-lg">
-                <div class="grid grid-cols-2 gap-2">
-                  <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Description:</div>
-                  <div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">{{ selectedQrItem?.description || 'N/A' }}</div>
-                  
-                  <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Property Account Code:</div>
-                  <div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">{{ selectedQrItem?.propertyAccountCode || 'N/A' }}</div>
-                  
-                  <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Location:</div>
-                  <div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">{{ selectedQrItem?.location || 'N/A' }}</div>
-                  
-                  <div class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Condition:</div>
-                  <div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">{{ selectedQrItem?.condition || 'N/A' }}</div>
+              <!-- Right side: Item Details -->
+              <div class="flex-1 w-full lg:w-auto">
+                <!-- Item Title -->
+                <h4 class="text-2xl font-bold mb-4 text-gray-900">{{ selectedQrItem?.article || 'Item' }}</h4>
+                
+                <!-- Item Image -->
+                <div class="mb-4 flex justify-center lg:justify-start">
+                  <img 
+                    :src="selectedQrItem?.image" 
+                    alt="Item" 
+                    class="h-40 sm:h-48 object-contain border border-gray-200 rounded-lg shadow-sm"
+                  >
+                </div>
+                
+                <!-- Property Details Card -->
+                <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Left Column -->
+                    <div class="space-y-3">
+                      <div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">DESCRIPTION</div>
+                        <div class="text-sm font-medium text-gray-900">{{ selectedQrItem?.description || 'N/A' }}</div>
+                      </div>
+                      <div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">LOCATION</div>
+                        <div class="text-sm font-medium text-gray-900 flex items-center gap-1">
+                          <span class="material-icons-outlined text-green-600 text-base">location_on</span>
+                          {{ selectedQrItem?.location || 'N/A' }}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Right Column -->
+                    <div class="space-y-3">
+                      <div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">PROPERTY ACCOUNT CODE</div>
+                        <div class="text-sm font-medium text-gray-900">{{ selectedQrItem?.propertyAccountCode || 'N/A' }}</div>
+                      </div>
+                      <div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">CONDITION</div>
+                        <div class="text-sm">
+                          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                            {{ selectedQrItem?.condition || 'N/A' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1005,98 +1257,191 @@ const navigateBack = () => {
     </div>
 
     <!-- Validation View -->
-    <div v-else>
-      <!-- Back Button -->
-      <button @click="goBack" class="mb-6 flex items-center text-white bg-green-600 hover:bg-green-700 px-4 py-2 rounded">
-        <span class="material-icons-outlined mr-1">arrow_back</span>
-        Back
-      </button>
-
-      <!-- Title -->
-      <h1 class="text-2xl font-semibold text-green-600 dark:text-green-400 mb-8">{{ selectedItem?.description }}</h1>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <!-- Left Column -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 class="text-green-600 dark:text-green-400 text-xl font-medium mb-4">QR Code Calendar Year 2024</h2>
-          
-          <div class="flex justify-center mb-4">
-            <img :src="selectedItem?.qrCode" alt="QR Code" class="w-48 h-48">
-          </div>
-          
-          <p class="text-center text-gray-700 dark:text-gray-300 mb-6">{{ selectedItem?.propertyAccountCode }}</p>
-          
-          <div class="mb-6">
-            <h3 class="font-medium mb-2 text-gray-900 dark:text-white">Item Details:</h3>
-            <div class="bg-gray-50 dark:bg-gray-700 rounded p-4 space-y-2">
-              <p class="text-gray-900 dark:text-white"><strong>Article:</strong> {{ specs.article }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Category:</strong> {{ specs.category }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Quantity:</strong> {{ specs.quantity }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Property Account Code:</strong> {{ specs.propertyAccountCode }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Unit Value:</strong> {{ specs.unitValue }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Date Acquired:</strong> {{ specs.dateAcquired }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>P.O. Number:</strong> {{ specs.poNumber }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Location:</strong> {{ specs.location }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Condition:</strong> {{ specs.condition }}</p>
-              <p class="text-gray-900 dark:text-white"><strong>Issued To:</strong> {{ specs.issuedTo }}</p>
+    <div v-else class="max-w-7xl mx-auto space-y-6">
+      <!-- Enhanced Header Section -->
+      <div class="relative overflow-hidden bg-gradient-to-r from-green-600 via-green-700 to-green-600 rounded-xl shadow-xl">
+        <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+          <div class="flex items-center gap-4">
+            <button 
+              @click="goBack" 
+              class="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+              title="Go back"
+            >
+              <span class="material-icons-outlined text-white text-xl">arrow_back</span>
+            </button>
+            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+              <span class="material-icons-outlined text-4xl text-white">qr_code_scanner</span>
+            </div>
+            <div>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">QR Code Validation</h1>
+              <p class="text-green-100 text-sm sm:text-base">{{ selectedItem?.description || 'Item Validation' }}</p>
             </div>
           </div>
-
-          <button 
-            @click="editItem(selectedItem)"
-            class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
-          >
-            EDIT
-          </button>
-
-          <button 
-            @click="generateNewQrCode"
-            class="w-full mt-3 bg-green-600 text-white py-2 rounded hover:bg-green-700 validate-button disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            VALIDATE
-          </button>
         </div>
+      </div>
 
-        <!-- Right Column -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 class="text-gray-700 dark:text-gray-300 mb-4">New QR Code:</h2>
-          <h3 class="text-green-600 dark:text-green-400 text-xl font-medium mb-4">QR Code Calendar Year 2025</h3>
-          
-          <div class="flex justify-center mb-4">
-            <img 
-              :src="qrCodeUpdated ? newQrCode : selectedItem?.qrCode" 
-              alt="New QR Code" 
-              class="w-48 h-48"
-            >
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Current QR Code (2024) -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-xl">qr_code</span>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-white">Current QR Code</h2>
+                <p class="text-xs text-green-100">Calendar Year 2024</p>
+              </div>
+            </div>
           </div>
           
-          <p class="text-center text-gray-700 dark:text-gray-300 mb-6">{{ selectedItem?.propertyAccountCode }}</p>
-
-          <div v-if="qrCodeUpdated" class="space-y-4">
-            <div class="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg p-4">
-              <div class="flex items-center">
-                <span class="material-icons-outlined text-green-600 dark:text-green-400 mr-2">check_circle</span>
-                <p class="text-green-800 dark:text-green-300 font-medium">QR Code Updated Successfully!</p>
+          <div class="p-6 space-y-6">
+            <!-- QR Code Display -->
+            <div class="flex flex-col items-center">
+              <div class="bg-white border-2 border-green-500 rounded-lg p-4 shadow-md mb-4">
+                <img :src="selectedItem?.qrCode" alt="QR Code 2024" class="w-56 h-56 object-contain">
               </div>
-              <p class="text-green-700 dark:text-green-400 text-sm mt-1">The QR code has been updated from 2024 to 2025.</p>
+              <p class="text-center text-gray-700 font-semibold text-sm mb-2">Property Account Code</p>
+              <p class="text-center text-gray-900 font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
             </div>
             
-            <button 
-              @click="printQrCode"
-              class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 flex items-center justify-center gap-2"
-            >
-              <span class="material-icons-outlined">print</span>
-              Print New QR Code
-            </button>
+            <!-- Item Details Section -->
+            <div class="border-t border-gray-200 pt-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span class="material-icons-outlined text-green-600 text-xl">inventory_2</span>
+                Item Details
+              </h3>
+              <div class="bg-gradient-to-br from-gray-50 to-green-50/30 rounded-lg p-5 space-y-3 border border-gray-200">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Article</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.article || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Category</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.category || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Quantity</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.quantity || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Property Account Code</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.propertyAccountCode || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Unit Value</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.unitValue || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date Acquired</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.dateAcquired || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">P.O. Number</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.poNumber || 'N/A' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location</div>
+                    <div class="text-sm font-bold text-gray-900 flex items-center gap-1">
+                      <span class="material-icons-outlined text-green-600 text-sm">location_on</span>
+                      {{ specs.location || 'N/A' }}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Condition</div>
+                    <div class="text-sm">
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                        {{ specs.condition || 'N/A' }}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Issued To</div>
+                    <div class="text-sm font-bold text-gray-900">{{ specs.issuedTo || 'N/A' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-3 pt-4 border-t border-gray-200">
+              <button 
+                @click="generateNewQrCode"
+                class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold validate-button disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span class="material-icons-outlined">verified</span>
+                Validate & Generate 2025 QR Code
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: New QR Code (2025) -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-xl">qr_code_2</span>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-white">New QR Code</h2>
+                <p class="text-xs text-green-100">Calendar Year 2025</p>
+              </div>
+            </div>
           </div>
           
-          <div v-else class="space-y-4">
-            <div class="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-              <div class="flex items-center">
-                <span class="material-icons-outlined text-gray-500 dark:text-gray-400 mr-2">info</span>
-                <p class="text-gray-700 dark:text-gray-300 font-medium">Click VALIDATE to generate new QR Code</p>
+          <div class="p-6 space-y-6">
+            <!-- QR Code Display -->
+            <div class="flex flex-col items-center">
+              <div class="bg-white border-2 border-green-500 rounded-lg p-4 shadow-md mb-4" :class="{ 'qr-pulse-border': qrCodeUpdated }">
+                <img 
+                  :src="qrCodeUpdated ? newQrCode : selectedItem?.qrCode" 
+                  alt="QR Code 2025" 
+                  class="w-56 h-56 object-contain"
+                >
               </div>
-              <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">This will update the QR code from 2024 to 2025.</p>
+              <p class="text-center text-gray-700 font-semibold text-sm mb-2">Property Account Code</p>
+              <p class="text-center text-gray-900 font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
+            </div>
+
+            <!-- Status Messages -->
+            <div v-if="qrCodeUpdated" class="space-y-4">
+              <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg p-5">
+                <div class="flex items-start gap-3">
+                  <div class="p-2 bg-green-500 rounded-full flex-shrink-0">
+                    <span class="material-icons-outlined text-white text-xl">check_circle</span>
+                  </div>
+                  <div>
+                    <p class="text-green-800 font-bold text-base mb-1">QR Code Updated Successfully!</p>
+                    <p class="text-green-700 text-sm">The QR code has been validated and updated from Calendar Year 2024 to 2025.</p>
+                  </div>
+                </div>
+              </div>
+              
+              <button 
+                @click="printQrCode"
+                class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold"
+              >
+                <span class="material-icons-outlined">print</span>
+                Print New QR Code
+              </button>
+            </div>
+            
+            <div v-else class="space-y-4">
+              <div class="bg-gradient-to-br from-gray-50 to-blue-50/30 border-2 border-gray-300 rounded-lg p-5">
+                <div class="flex items-start gap-3">
+                  <div class="p-2 bg-blue-100 rounded-full flex-shrink-0">
+                    <span class="material-icons-outlined text-blue-600 text-xl">info</span>
+                  </div>
+                  <div>
+                    <p class="text-gray-800 font-bold text-base mb-1">Validation Required</p>
+                    <p class="text-gray-700 text-sm">Click the <span class="font-semibold text-green-600">"Validate & Generate 2025 QR Code"</span> button to generate the new QR code for Calendar Year 2025.</p>
+                    <p class="text-gray-600 text-xs mt-2 italic">This will update the QR code from 2024 to 2025.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1117,6 +1462,19 @@ const navigateBack = () => {
 </template>
 
 <style scoped>
+/* Enhanced Button Styles */
+.btn-primary-enhanced {
+  @apply bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2.5 rounded-xl hover:from-green-700 hover:to-green-800 flex items-center text-base font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+}
+
+.btn-secondary-enhanced {
+  @apply bg-white text-gray-700 px-4 py-2.5 rounded-xl border-2 border-gray-300 hover:bg-gray-50 hover:border-green-400 flex items-center text-base font-semibold transition-all duration-200 shadow-sm hover:shadow-md;
+}
+
+.btn-print {
+  @apply bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 font-semibold shadow-md hover:shadow-lg transition-all duration-200;
+}
+
 .btn-primary {
   @apply bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow;
 }
@@ -1244,5 +1602,13 @@ button:focus, a:focus, input:focus, select:focus, textarea:focus {
 
 .qr-code-container:hover {
   transform: scale(1.1);
+}
+
+/* Grid pattern background */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 </style> 

@@ -81,7 +81,7 @@ const entriesPerPage = ref(10)
 
     <!-- Table -->
     <div class="overflow-x-auto">
-      <table class="min-w-full bg-white border">
+      <table class="min-w-full bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700">
         <thead>
           <tr class="bg-gray-100">
             <th class="border px-4 py-2">NO.</th>

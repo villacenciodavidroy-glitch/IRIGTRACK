@@ -20,12 +20,44 @@ const { items, fetchitems, loading, error } = useItems()
 // Get user data from auth composable
 const { user, getUserDisplayName } = useAuth()
 
+// Signature editing state
+const showSignatureModal = ref(false)
+const signatureData = ref({
+  preparedBy: {
+    name: '',
+    title: 'Property Officer B'
+  },
+  reviewedBy: {
+    name: 'ANA LIZA C. DINOPOL',
+    title: 'Administrative Services Officer A'
+  },
+  notedBy: {
+    name: 'LARRY C. FRANADA',
+    title: 'Division Manager A'
+  }
+})
+
 // Fetch items when component mounts
+// Force refresh to ensure we get the latest data matching Inventory.vue
 onMounted(async () => {
+  // Force a fresh fetch to ensure data matches Inventory.vue
   await fetchitems()
+  // Log to verify we're getting the same data structure
+  if (process.env.NODE_ENV === 'development' && items.value.length > 0) {
+    console.log('Monitoring Assets - Sample item data:', {
+      location: items.value[0]?.location,
+      issued_to: items.value[0]?.issued_to,
+      fullItem: items.value[0]
+    })
+  }
 })
 
 // Map API data to the format expected by the table
+// IMPORTANT: This mapping MUST match Inventory.vue EXACTLY to ensure data consistency
+// Both pages use the same API endpoint (/items) via useItems() composable
+// The API (ItemResource) returns:
+// - location: location name as string (from location relationship)
+// - issued_to: location.personnel (priority) or user.fullname (fallback) as string
 const inventoryItems = computed(() => {
   return items.value.map(item => ({
     qrCode: item.qr_code_image || '/images/qr-sample.png',
@@ -37,8 +69,10 @@ const inventoryItems = computed(() => {
     unitValue: item.unit_value || '',
     dateAcquired: item.date_acquired || '',
     poNumber: item.po_number || '',
+    // EXACT match to Inventory.vue line 334
     location: item.location || '',
     condition: item.condition || '',
+    // EXACT match to Inventory.vue line 336
     issuedTo: item.issued_to || 'Not Assigned',
     id: item.id,
     uuid: item.uuid,
@@ -124,21 +158,6 @@ const categoryItems = computed(() => {
   return inventoryItems.value.filter(item => item.category === selectedCategory.value)
 })
 
-// Status counts for summary
-const statusCounts = computed(() => {
-  const counts = { excellent: 0, good: 0, poor: 0, maintenance: 0 }
-  
-  filteredItems.value.forEach(item => {
-    const condition = item.condition?.toLowerCase() || ''
-    if (condition.includes('excellent')) counts.excellent++
-    else if (condition.includes('good')) counts.good++
-    else if (condition.includes('poor')) counts.poor++
-    else if (condition.includes('maintenance')) counts.maintenance++
-  })
-  
-  return counts
-})
-
 // Navigation functions
 const showCategoryDetails = (categoryName) => {
   selectedCategory.value = categoryName
@@ -152,8 +171,24 @@ const showAllCategories = () => {
   currentPage.value = 1
 }
 
-// Print report
+// Open signature edit modal before printing
+const openPrintDialog = () => {
+  // Initialize signature data with current user
+  const userName = getUserDisplayName() || 'Admin User'
+  signatureData.value.preparedBy.name = userName
+  signatureData.value.preparedBy.title = 'Property Officer B'
+  signatureData.value.reviewedBy.name = 'ANA LIZA C. DINOPOL'
+  signatureData.value.reviewedBy.title = 'Administrative Services Officer A'
+  signatureData.value.notedBy.name = 'LARRY C. FRANADA'
+  signatureData.value.notedBy.title = 'Division Manager A'
+  
+  showSignatureModal.value = true
+}
+
+// Print report with edited signature data
 const printReport = () => {
+  showSignatureModal.value = false
+  
   const printWindow = window.open('', '_blank')
   
   const now = new Date()
@@ -162,8 +197,13 @@ const printReport = () => {
   // Get category name for report title
   const categoryName = selectedCategory.value || 'DESKTOP'
   
-  // Get logged-in user info
-  const userName = getUserDisplayName() || 'Admin User'
+  // Use edited signature data
+  const preparedByName = signatureData.value.preparedBy.name || getUserDisplayName() || 'Admin User'
+  const preparedByTitle = signatureData.value.preparedBy.title || 'Property Officer B'
+  const reviewedByName = signatureData.value.reviewedBy.name || 'ANA LIZA C. DINOPOL'
+  const reviewedByTitle = signatureData.value.reviewedBy.title || 'Administrative Services Officer A'
+  const notedByName = signatureData.value.notedBy.name || 'LARRY C. FRANADA'
+  const notedByTitle = signatureData.value.notedBy.title || 'Division Manager A'
   
   const tableRows = filteredItems.value.map((item, index) => `
     <tr>
@@ -175,11 +215,6 @@ const printReport = () => {
       <td style="text-align: left; padding: 4px;">${item.poNumber || 'N/A'}</td>
       <td style="text-align: left; padding: 4px;">${item.location || 'N/A'}</td>
       <td style="text-align: left; padding: 4px;">${item.condition || 'N/A'}</td>
-      <td style="text-align: center; padding: 4px;"></td>
-      <td style="text-align: center; padding: 4px;"></td>
-      <td style="text-align: center; padding: 4px;"></td>
-      <td style="text-align: center; padding: 4px;"></td>
-      <td style="text-align: center; padding: 4px;"></td>
     </tr>
   `).join('')
   
@@ -283,21 +318,6 @@ const printReport = () => {
         .monitoring-table .condition-col {
           width: 8%;
         }
-        .monitoring-table .maintenance-col {
-          width: 10%;
-        }
-        .maintenance-subheader {
-          font-size: 8px;
-          font-weight: bold;
-          text-align: center;
-          padding: 2px;
-        }
-        .maintenance-year {
-          font-size: 8px;
-          font-weight: bold;
-          text-align: center;
-          padding: 2px;
-        }
         .print-button {
           background-color: #10B981;
           color: white;
@@ -325,16 +345,19 @@ const printReport = () => {
           font-size: 10px;
           font-weight: bold;
           margin-bottom: 20px;
+          color: #000;
         }
         .signature-name {
           font-size: 10px;
           font-weight: bold;
           margin-bottom: 5px;
           text-transform: uppercase;
+          color: #000;
         }
         .signature-title {
           font-size: 9px;
           font-weight: normal;
+          color: #000;
         }
         @media print {
           .print-button { display: none; }
@@ -368,22 +391,6 @@ const printReport = () => {
             <th class="po-col">P.O. NUMBER</th>
             <th class="location-col">LOCATION</th>
             <th class="condition-col">CONDITION</th>
-            <th colspan="5" class="maintenance-col">SCHEDULE OF MAINTENANCE (CLEANING)</th>
-          </tr>
-          <tr>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th></th>
-            <th class="maintenance-year">${currentYear}</th>
-            <th class="maintenance-subheader">1st</th>
-            <th class="maintenance-subheader">2nd</th>
-            <th class="maintenance-subheader">3rd</th>
-            <th class="maintenance-subheader">4th</th>
           </tr>
         </thead>
         <tbody>
@@ -394,18 +401,18 @@ const printReport = () => {
       <div class="signature-section">
         <div class="signature-item">
           <div class="signature-label">Prepared by:</div>
-          <div class="signature-name">${userName}</div>
-          <div class="signature-title">Property Officer B</div>
+          <div class="signature-name">${preparedByName}</div>
+          <div class="signature-title">${preparedByTitle}</div>
         </div>
         <div class="signature-item">
           <div class="signature-label">Reviewed by:</div>
-          <div class="signature-name">ANA LIZA C. DINOPOL</div>
-          <div class="signature-title">Administrative Services Officer A</div>
+          <div class="signature-name">${reviewedByName}</div>
+          <div class="signature-title">${reviewedByTitle}</div>
         </div>
         <div class="signature-item">
           <div class="signature-label">Noted by:</div>
-          <div class="signature-name">LARRY C. FRANADA</div>
-          <div class="signature-title">Division Manager A</div>
+          <div class="signature-name">${notedByName}</div>
+          <div class="signature-title">${notedByTitle}</div>
         </div>
       </div>
       
@@ -479,158 +486,203 @@ const exportToExcel = async () => {
 </script>
 
 <template>
-  <div class="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 bg-white dark:bg-gray-900">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
-      <div class="flex items-center gap-3">
-        <button 
-          @click="goBack"
-          class="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center hover:bg-green-700 transition-colors"
-        >
-          <span class="material-icons-outlined mr-2">arrow_back</span>
-          Back
-        </button>
-        <h1 class="text-xl sm:text-2xl font-semibold text-green-700 dark:text-green-400">Asset Monitoring Report</h1>
-      </div>
-      <div class="flex items-center gap-2">
-        <button @click="exportToExcel" class="btn-primary flex items-center bg-blue-600 hover:bg-blue-700">
-          <span class="material-icons-outlined text-lg mr-1">file_download</span>
-          <span>Export Excel</span>
-        </button>
-        <button @click="printReport" class="btn-primary flex items-center">
-          <span class="material-icons-outlined text-lg mr-1">print</span>
-          <span>Print Report</span>
-        </button>
+  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8 space-y-6">
+    <!-- Enhanced Header Section -->
+    <div class="relative overflow-hidden bg-gradient-to-r from-green-600 via-green-700 to-green-600 rounded-xl shadow-xl">
+      <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+      <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div class="flex items-center gap-4">
+            <button 
+              @click="goBack" 
+              class="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+              title="Go back"
+            >
+              <span class="material-icons-outlined text-white text-xl">arrow_back</span>
+            </button>
+            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+              <span class="material-icons-outlined text-4xl text-white">desktop_windows</span>
+            </div>
+            <div>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Asset Monitoring Report</h1>
+              <p class="text-green-100 text-sm sm:text-base">Track and monitor asset status and performance</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button 
+              @click="exportToExcel" 
+              class="btn-secondary-enhanced flex items-center gap-2"
+            >
+              <span class="material-icons-outlined text-lg">file_download</span>
+              <span>Export Excel</span>
+            </button>
+            <button 
+              @click="openPrintDialog" 
+              class="btn-primary-enhanced flex items-center gap-2 shadow-lg"
+            >
+              <span class="material-icons-outlined text-lg">print</span>
+              <span>Print Report</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
 
 
-    <!-- Search and Filter Bar -->
-    <div v-if="viewMode === 'table'" class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0">
-      <div class="relative w-full sm:w-96">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
-            <span class="material-icons-outlined text-lg">search</span>
-          </span>
+    <!-- Enhanced Search and Filter Bar -->
+    <div v-if="viewMode === 'table'" class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-100 dark:border-gray-700 p-4">
+      <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">search</span>
+          </div>
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search assets..."
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            class="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium"
           >
+          <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+            <button @click="searchQuery = ''" class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <select 
-          v-model="selectedLocation"
-          class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-        >
-          <option value="all">All Locations</option>
-          <option v-for="location in uniqueLocations" :key="location" :value="location">
-            {{ location }}
-          </option>
-        </select>
+        <div class="flex items-center gap-2">
+          <select 
+            v-model="selectedLocation"
+            class="bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <option value="all">All Locations</option>
+            <option v-for="location in uniqueLocations" :key="location" :value="location">
+              {{ location }}
+            </option>
+          </select>
+        </div>
       </div>
     </div>
 
     <!-- Category Cards View -->
     <div v-if="viewMode === 'cards'" class="space-y-6">
-      <!-- Search Bar for Categories -->
-      <div class="relative w-full max-w-md">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 dark:text-gray-500">
-            <span class="material-icons-outlined text-lg">search</span>
-          </span>
+      <!-- Enhanced Search Bar for Categories -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-xl border border-gray-100 dark:border-gray-700 p-4">
+        <div class="relative max-w-md">
+          <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">search</span>
+          </div>
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search categories..."
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            class="w-full pl-12 pr-10 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium"
           >
+          <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+            <button @click="searchQuery = ''" class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Category Cards Grid -->
-      <div v-if="loading" class="flex justify-center items-center py-10">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+      <div v-if="loading" class="flex justify-center items-center py-20">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
       
-      <div v-else-if="error" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-red-400 dark:text-red-500">error_outline</span>
-        <p class="mt-2 text-red-500 dark:text-red-400">{{ error }}</p>
+      <div v-else-if="error" class="flex flex-col justify-center items-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl p-6">
+        <span class="material-icons-outlined text-5xl text-red-400 dark:text-red-400 mb-4">error_outline</span>
+        <p class="mt-2 text-red-500 dark:text-red-400 text-lg font-semibold mb-4">{{ error }}</p>
         <button 
           @click="fetchitems" 
-          class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md hover:shadow-lg transition-all"
         >
           Try Again
         </button>
       </div>
       
-      <div v-else-if="categoryCards.length === 0" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">category</span>
-        <p class="mt-2 text-gray-500 dark:text-gray-400">No categories found</p>
+      <div v-else-if="categoryCards.length === 0" class="flex flex-col justify-center items-center py-20 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl p-6">
+        <span class="material-icons-outlined text-5xl text-gray-400 dark:text-gray-500 mb-4">category</span>
+        <p class="mt-2 text-gray-500 dark:text-gray-400 text-lg font-semibold">No categories found</p>
       </div>
       
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <div 
           v-for="category in categoryCards.filter(cat => 
             !searchQuery || cat.name.toLowerCase().includes(searchQuery.toLowerCase())
           )" 
           :key="category.name"
           @click="showCategoryDetails(category.name)"
-          class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow cursor-pointer p-6 hover:border-green-300 dark:hover:border-green-600"
+          class="group bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-green-400 dark:hover:border-green-500 shadow-lg dark:shadow-xl hover:shadow-2xl dark:hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden"
         >
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center space-x-3">
-              <div class="bg-green-100 dark:bg-green-900/30 rounded-full p-3">
-                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">category</span>
+          <!-- Card Header -->
+          <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                  <span class="material-icons-outlined text-white text-xl">category</span>
+                </div>
+                <h3 class="text-lg font-bold text-white">{{ category.name }}</h3>
               </div>
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ category.name }}</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ category.count }} items</p>
-              </div>
+              <span class="material-icons-outlined text-white group-hover:translate-x-1 transition-transform">chevron_right</span>
             </div>
-            <span class="material-icons-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
           </div>
           
-          <div class="space-y-2">
-            <div class="flex justify-between text-sm">
-              <span class="text-gray-500 dark:text-gray-400">Total Items:</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ category.count }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-gray-500 dark:text-gray-400">Status:</span>
-              <span class="text-green-600 dark:text-green-400 font-medium">Active</span>
+          <!-- Card Body -->
+          <div class="p-6">
+            <div class="space-y-4">
+              <div class="flex justify-between items-center p-3 bg-gradient-to-br from-gray-50 to-green-50/30 dark:from-gray-700 dark:to-green-900/20 rounded-lg border border-gray-200 dark:border-gray-600">
+                <span class="text-sm font-semibold text-gray-600 dark:text-gray-400">Total Items:</span>
+                <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ category.count }}</span>
+              </div>
             </div>
           </div>
+          
+          <!-- Decorative Element -->
+          <div class="h-1 bg-gradient-to-r from-green-600 via-green-500 to-green-600"></div>
         </div>
       </div>
     </div>
 
-    <!-- Table Container -->
-    <div v-if="viewMode === 'table'" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+    <!-- Enhanced Table Container -->
+    <div v-if="viewMode === 'table'" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       <!-- Category Details Header -->
-      <div v-if="selectedCategory" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+      <div v-if="selectedCategory" class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
         <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center gap-4">
             <button 
               @click="showAllCategories"
-              class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              class="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
             >
-              <span class="material-icons-outlined">arrow_back</span>
+              <span class="material-icons-outlined text-white">arrow_back</span>
             </button>
+            <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+              <span class="material-icons-outlined text-white text-xl">category</span>
+            </div>
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedCategory }} Items</h2>
-              <p class="text-sm text-gray-500 dark:text-gray-400">{{ filteredItems.length }} items found</p>
+              <h2 class="text-xl font-bold text-white">{{ selectedCategory }} Items</h2>
+              <p class="text-xs text-green-100">{{ filteredItems.length }} items found</p>
             </div>
           </div>
           <button 
             @click="showAllCategories"
-            class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
+            class="px-4 py-2 text-sm bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-lg transition-colors font-semibold"
           >
             View All Categories
           </button>
+        </div>
+      </div>
+      
+      <!-- Table Header -->
+      <div v-else class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">table_chart</span>
+            <h2 class="text-xl font-bold text-white">Asset Details</h2>
+          </div>
+          <div class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+            <span class="text-sm font-semibold text-white">{{ filteredItems.length }} items</span>
+          </div>
         </div>
       </div>
       <!-- Loading indicator -->
@@ -640,11 +692,11 @@ const exportToExcel = async () => {
       
       <!-- Error state -->
       <div v-else-if="error" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-red-400 dark:text-red-500">error_outline</span>
-        <p class="mt-2 text-red-500 dark:text-red-400">{{ error }}</p>
+        <span class="material-icons-outlined text-5xl text-red-400 dark:text-red-400 mb-4">error_outline</span>
+        <p class="mt-2 text-red-500 dark:text-red-400 text-lg font-semibold mb-4">{{ error }}</p>
         <button 
           @click="fetchitems" 
-          class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md hover:shadow-lg transition-all"
         >
           Try Again
         </button>
@@ -652,143 +704,257 @@ const exportToExcel = async () => {
       
       <!-- Empty state -->
       <div v-else-if="paginatedItems.length === 0" class="flex flex-col justify-center items-center py-10">
-        <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">monitoring</span>
-        <p class="mt-2 text-gray-500 dark:text-gray-400">
+        <span class="material-icons-outlined text-5xl text-gray-400 dark:text-gray-500 mb-4">monitoring</span>
+        <p class="mt-2 text-gray-500 dark:text-gray-400 text-lg font-semibold">
           {{ selectedCategory ? `No items found in ${selectedCategory}` : 'No assets found' }}
         </p>
-        <p v-if="searchQuery || selectedLocation !== 'all'" class="text-sm text-gray-400 dark:text-gray-500">Try adjusting your search or filters</p>
+        <p v-if="searchQuery || selectedLocation !== 'all'" class="text-sm text-gray-400 dark:text-gray-500 mt-2">Try adjusting your search or filters</p>
       </div>
       
-      <!-- Table with data -->
+      <!-- Enhanced Table with data -->
       <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-800">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">QR Code</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Image</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Article</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Category</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Description</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Property Account Code</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Unit Value</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Date Acquired</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Location</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Condition</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Issued To</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Quantity</th>
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead>
+            <tr class="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QR CODE</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">IMAGE</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ARTICLE</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CATEGORY</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DESCRIPTION</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.A.C.</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">LOCATION</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider">QUANTITY</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="item in paginatedItems" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-              <td class="px-4 py-2">
-                <img :src="item.qrCode" alt="QR Code" class="h-8 w-8 object-contain">
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="item in paginatedItems" :key="item.id" 
+                class="group hover:bg-gradient-to-r hover:from-green-50 dark:hover:from-green-900/20 hover:to-transparent transition-all duration-200 border-l-4 border-transparent hover:border-green-500 dark:hover:border-green-500">
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <img :src="item.qrCode" alt="QR Code" class="h-10 w-10 object-contain rounded-lg border border-gray-200 dark:border-gray-600">
               </td>
-              <td class="px-4 py-2">
-                <img :src="item.image" alt="Item" class="h-8 w-8 object-contain">
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded-lg border border-gray-200 dark:border-gray-600">
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ item.article }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ item.article }}</div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.category }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                  {{ item.category }}
+                </span>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white max-w-xs truncate" :title="item.description">
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" :title="item.description">
                   {{ item.description }}
                 </div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.propertyAccountCode }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm font-mono text-gray-700 dark:text-gray-300">{{ item.propertyAccountCode }}</div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.unitValue }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ item.unitValue }}</div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.dateAcquired }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm text-gray-600 dark:text-gray-400">{{ item.dateAcquired }}</div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.location }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <span class="material-icons-outlined text-sm text-gray-400 dark:text-gray-500">location_on</span>
+                  {{ item.location }}
+                </div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.condition }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                  {{ item.condition }}
+                </span>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.issuedTo }}</div>
+              <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-700">
+                <div class="text-sm text-gray-700 dark:text-gray-300">{{ item.issuedTo }}</div>
               </td>
-              <td class="px-4 py-2">
-                <div class="text-sm text-gray-900 dark:text-white">{{ item.quantity }}</div>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-sm font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
+                  {{ item.quantity || '0' }}
+                </span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Pagination -->
-      <div v-if="!loading && filteredItems.length > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <div class="text-sm text-gray-600 dark:text-gray-300">
-            Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }} of {{ filteredItems.length }}
+      <!-- Enhanced Pagination -->
+      <div v-if="!loading && filteredItems.length > 0" class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-700 border-t-2 border-gray-200 dark:border-gray-700">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-outlined text-green-600 dark:text-green-400 text-lg">info</span>
+              <span class="text-sm font-semibold text-gray-700 dark:text-white">
+                Showing <span class="text-green-600 dark:text-green-400 font-bold">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                <span class="text-green-600 dark:text-green-400 font-bold">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of 
+                <span class="text-green-600 dark:text-green-400 font-bold">{{ filteredItems.length }}</span> items
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm font-medium text-gray-700 dark:text-white">Items per page:</label>
+              <select 
+                v-model="itemsPerPage" 
+                @change="changeItemsPerPage($event.target.value)"
+                class="bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <label class="text-sm text-gray-600 dark:text-gray-300">Items per page:</label>
-            <select 
-              v-model="itemsPerPage" 
-              @change="changeItemsPerPage($event.target.value)"
-              class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">
+            <button 
+              @click="goToPage(1)"
+              :disabled="currentPage === 1"
+              class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
             >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+              <span class="material-icons-outlined text-base align-middle">first_page</span>
+            </button>
+            <button 
+              @click="goToPage(currentPage - 1)"
+              :disabled="currentPage === 1"
+              class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+            >
+              <span class="material-icons-outlined text-base align-middle">chevron_left</span>
+            </button>
+            <div class="flex items-center gap-1">
+              <template v-for="page in totalPages" :key="page">
+                <button 
+                  v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+                  @click="goToPage(page)"
+                  :class="[
+                    'px-3 py-2 text-sm font-semibold border-2 rounded-lg transition-all shadow-sm hover:shadow-md',
+                    currentPage === page 
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white border-green-600 shadow-lg' 
+                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500'
+                  ]"
+                >
+                  {{ page }}
+                </button>
+                <span 
+                  v-else-if="page === currentPage - 2 || page === currentPage + 2"
+                  class="px-2 text-gray-500 dark:text-gray-400"
+                >...</span>
+              </template>
+            </div>
+            <button 
+              @click="goToPage(currentPage + 1)"
+              :disabled="currentPage === totalPages"
+              class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+            >
+              <span class="material-icons-outlined text-base align-middle">chevron_right</span>
+            </button>
+            <button 
+              @click="goToPage(totalPages)"
+              :disabled="currentPage === totalPages"
+              class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+            >
+              <span class="material-icons-outlined text-base align-middle">last_page</span>
+            </button>
           </div>
         </div>
-        <div class="flex items-center justify-center sm:justify-end gap-1 flex-wrap">
-          <button 
-            @click="goToPage(1)"
-            :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            First
-          </button>
-          <button 
-            @click="goToPage(currentPage - 1)"
-            :disabled="currentPage === 1"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            &lt; Previous
-          </button>
-          <div class="flex items-center gap-1">
-            <template v-for="page in totalPages" :key="page">
-              <button 
-                v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
-                @click="goToPage(page)"
-                :class="[
-                  'px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
-                  currentPage === page ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border-green-500 dark:border-green-400' : ''
-                ]"
-              >
-                {{ page }}
-              </button>
-              <span 
-                v-else-if="page === currentPage - 2 || page === currentPage + 2"
-                class="px-2 text-gray-500 dark:text-gray-400"
-              >...</span>
-            </template>
+      </div>
+    </div>
+
+    <!-- Signature Edit Modal -->
+    <div 
+      v-if="showSignatureModal" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="showSignatureModal = false"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 rounded-t-xl">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-white">Edit Signature Information</h3>
+            <button 
+              @click="showSignatureModal = false"
+              class="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+            >
+              <span class="material-icons-outlined">close</span>
+            </button>
           </div>
-          <button 
-            @click="goToPage(currentPage + 1)"
-            :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+        </div>
+        
+        <div class="p-6 space-y-6">
+          <!-- Prepared By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Prepared by:
+            </label>
+            <input
+              v-model="signatureData.preparedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.preparedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+
+          <!-- Reviewed By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Reviewed by:
+            </label>
+            <input
+              v-model="signatureData.reviewedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.reviewedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+
+          <!-- Noted By Section -->
+          <div class="space-y-3">
+            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Noted by:
+            </label>
+            <input
+              v-model="signatureData.notedBy.name"
+              type="text"
+              placeholder="Enter name"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+            <input
+              v-model="signatureData.notedBy.title"
+              type="text"
+              placeholder="Enter title/position"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
+            />
+          </div>
+        </div>
+
+        <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 rounded-b-xl flex justify-end gap-3">
+          <button
+            @click="showSignatureModal = false"
+            class="px-5 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
           >
-            Next &gt;
+            Cancel
           </button>
-          <button 
-            @click="goToPage(totalPages)"
-            :disabled="currentPage === totalPages"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          <button
+            @click="printReport"
+            class="px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg"
           >
-            Last
+            Print Report
           </button>
         </div>
       </div>
@@ -797,31 +963,33 @@ const exportToExcel = async () => {
 </template>
 
 <style scoped>
+/* Enhanced Button Styles */
+.btn-primary-enhanced {
+  @apply bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2.5 rounded-xl hover:from-green-700 hover:to-green-800 flex items-center text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+}
+
+.btn-secondary-enhanced {
+  @apply bg-white dark:bg-gray-700 text-gray-700 dark:text-white px-4 py-2.5 rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-green-400 dark:hover:border-green-500 flex items-center text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md;
+}
+
 .btn-primary {
   @apply bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow;
 }
 
-.status-excellent {
-  @apply text-green-600 font-bold;
-}
-
-.status-good {
-  @apply text-blue-600 font-bold;
-}
-
-.status-poor {
-  @apply text-red-600 font-bold;
-}
-
-.status-maintenance {
-  @apply text-yellow-600 font-bold;
-}
-
-.status-unknown {
-  @apply text-gray-600 font-bold;
-}
-
 .material-icons-outlined {
   font-size: 24px;
+}
+
+/* Grid pattern background */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Dark mode support for select options */
+select option {
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
 }
 </style>

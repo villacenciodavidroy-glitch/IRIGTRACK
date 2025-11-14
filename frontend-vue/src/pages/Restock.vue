@@ -1,7 +1,7 @@
 <template>
   <div class="p-6">
     <div class="flex items-center mb-6">
-      <router-link :to="{ name: 'analytics' }" class="flex items-center text-gray-600 hover:text-gray-800">
+      <router-link :to="{ name: 'Analytics' }" class="flex items-center text-gray-600 hover:text-gray-800">
         <span class="material-icons-outlined mr-2">arrow_back</span>
         Back
       </router-link>
@@ -12,7 +12,7 @@
 
     <form @submit.prevent="handleSubmit" class="max-w-xl space-y-6">
       <!-- Paper -->
-      <div class="bg-white p-4 rounded-lg shadow-sm">
+      <div class="bg-gray-800 dark:bg-gray-800 p-4 rounded-lg shadow-sm dark:shadow-lg">
         <label class="block text-green-600 font-medium mb-2">Paper</label>
         <div>
           <label class="block text-gray-600 mb-1">Quantity:</label>
@@ -26,7 +26,7 @@
       </div>
 
       <!-- Ballpens -->
-      <div class="bg-white p-4 rounded-lg shadow-sm">
+      <div class="bg-gray-800 dark:bg-gray-800 p-4 rounded-lg shadow-sm dark:shadow-lg">
         <label class="block text-green-600 font-medium mb-2">Ballpens</label>
         <div>
           <label class="block text-gray-600 mb-1">Quantity:</label>
@@ -40,7 +40,7 @@
       </div>
 
       <!-- Flashdrive -->
-      <div class="bg-white p-4 rounded-lg shadow-sm">
+      <div class="bg-gray-800 dark:bg-gray-800 p-4 rounded-lg shadow-sm dark:shadow-lg">
         <label class="block text-green-600 font-medium mb-2">Flashdrive</label>
         <div>
           <label class="block text-gray-600 mb-1">Quantity:</label>

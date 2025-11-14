@@ -43,12 +43,30 @@ class DatabaseSeeder extends Seeder
         ]);
         }
 
-         $condition_numbers = ['A1', 'A2', 'A3', 'A4', 'A5'];
+         $condition_numbers = [
+            'A1' => 'Good',
+            'A2' => 'Less Reliable',
+            'A3' => 'Un-operational',
+            'A4' => null, // A4 should have null status
+            'R' => 'Disposal',
+        ];
 
-        foreach ($condition_numbers as $conn) {
-            ConditionNumber::factory()->create([
-                'condition_number' => $conn,
-            ]);
+        foreach ($condition_numbers as $conn => $status) {
+            $conditionNumber = ConditionNumber::firstOrCreate(
+                ['condition_number' => $conn],
+                [
+                    'condition_number' => $conn,
+                    'condition_status' => $status
+                ]
+            );
+            
+            // Update status if it's null and we have a status for it
+            // For A4, ensure it stays null
+            if ($conn === 'A4') {
+                $conditionNumber->update(['condition_status' => null]);
+            } elseif ($conditionNumber->condition_status === null && $status !== null) {
+                $conditionNumber->update(['condition_status' => $status]);
+            }
         }
 
         $categories = ['Desktop', 'Consumables', 'ICT'];

@@ -9,7 +9,7 @@ class ConditionNumber extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['condition_number'];
+    protected $fillable = ['condition_number', 'condition_status'];
 
     public function item()
     {

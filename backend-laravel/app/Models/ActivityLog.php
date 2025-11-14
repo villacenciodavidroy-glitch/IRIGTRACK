@@ -56,10 +56,15 @@ class ActivityLog extends Model
      */
     public function scopeSearch($query, $search)
     {
-        return $query->whereHas('user', function ($q) use ($search) {
-            $q->where('fullname', 'like', "%{$search}%")
-              ->orWhere('email', 'like', "%{$search}%");
-        })->orWhere('action', 'like', "%{$search}%")
-          ->orWhere('description', 'like', "%{$search}%");
+        return $query->where(function($q) use ($search) {
+            // Search in user fields (only if user exists)
+            $q->whereHas('user', function ($userQuery) use ($search) {
+                $userQuery->where('fullname', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            })
+            // Search in action, description (for all logs including those without users)
+            ->orWhere('action', 'like', "%{$search}%")
+            ->orWhere('description', 'like', "%{$search}%");
+        });
     }
 }

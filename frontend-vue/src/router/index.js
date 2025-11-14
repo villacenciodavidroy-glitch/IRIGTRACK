@@ -9,7 +9,6 @@ import ItemValidation from '../pages/ItemValidation.vue'
 import DashboardView from '../pages/DashboardView.vue'
 import ActivityLog from '../pages/ActivityLog.vue'
 import DeletedItems from '../pages/DeletedItems.vue'
-import DeletedAccounts from '../pages/DeletedAccounts.vue'
 import NotFound from '../pages/NotFound.vue'
 import AddSupply from '../pages/AddSupply.vue'
 import EditItems from '../pages/EditItems.vue'
@@ -43,11 +42,6 @@ const router = createRouter({
           path: 'deleted-items',
           name: 'DeletedItems',
           component: DeletedItems
-        },
-        {
-          path: 'deleted-accounts',
-          name: 'DeletedAccounts',
-          component: DeletedAccounts
         }
       ]
     },
@@ -75,6 +69,11 @@ const router = createRouter({
       path: '/analytics',
       name: 'Analytics',
       component: Analytics
+    },
+    {
+      path: '/transactions',
+      name: 'Transactions',
+      component: () => import('../pages/Transactions.vue')
     },
     {
       path: '/SuppliesOverview',

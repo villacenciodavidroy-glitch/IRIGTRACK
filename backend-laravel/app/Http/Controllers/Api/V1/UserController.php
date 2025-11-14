@@ -48,16 +48,61 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         
+        // Log incoming request data BEFORE validation
+        // Try to get data from different sources to debug FormData parsing
+        \Log::info('User update request', [
+            'user_id' => $id,
+            'method' => $request->method(),
+            'content_type' => $request->header('Content-Type'),
+            'all_request_data' => $request->all(),
+            'input' => $request->input(),
+            'get' => $request->query->all(),
+            'post' => $request->request->all(),
+            'has_fullname' => $request->has('fullname'),
+            'has_username' => $request->has('username'),
+            'has_email' => $request->has('email'),
+            'has_role' => $request->has('role'),
+            'has_location_id' => $request->has('location_id'),
+            'files' => $request->allFiles(),
+            'request_keys' => array_keys($request->all())
+        ]);
+        
+        // For PUT requests with FormData, Laravel sometimes doesn't parse it correctly
+        // Try to get data from request->request (POST data bag) if request->all() is empty
+        $requestData = $request->all();
+        if (empty($requestData) && !empty($request->request->all())) {
+            \Log::info('FormData not in request->all(), trying request->request');
+            // Manually merge request data from POST bag
+            $postData = $request->request->all();
+            foreach ($postData as $key => $value) {
+                $request->merge([$key => $value]);
+            }
+            $requestData = $request->all();
+            \Log::info('After manual merge', ['data' => $requestData]);
+        }
+        
         // Get validated data
         $validatedData = $request->validated();
         
+        // Handle location_id - convert empty string to null
+        if (isset($validatedData['location_id']) && ($validatedData['location_id'] === '' || $validatedData['location_id'] === null)) {
+            $validatedData['location_id'] = null;
+        }
+        
+        // Log validated data
+        \Log::info('Validated data', ['validated' => $validatedData]);
+        
         // Check if password is being updated
         $passwordChanged = false;
-        if (isset($validatedData['password'])) {
+        if (isset($validatedData['password']) && !empty($validatedData['password'])) {
             $validatedData['password'] = Hash::make($validatedData['password']);
             // Remove password_confirmation from data to be saved
             unset($validatedData['password_confirmation']);
             $passwordChanged = true;
+        } else {
+            // Remove password fields if not being updated
+            unset($validatedData['password']);
+            unset($validatedData['password_confirmation']);
         }
         
         // Handle image upload if present
@@ -72,8 +117,24 @@ class UserController extends Controller
             $validatedData['image'] = $path;
         }
         
+        // Log what will be updated
+        \Log::info('Updating user with data', ['data' => $validatedData]);
+        
         // Update user with validated data
         $user->update($validatedData);
+        
+        // Refresh to get updated data
+        $user->refresh();
+        
+        // Log after update
+        \Log::info('User updated', [
+            'user_id' => $user->id,
+            'fullname' => $user->fullname,
+            'username' => $user->username,
+            'email' => $user->email,
+            'role' => $user->role,
+            'location_id' => $user->location_id
+        ]);
         
         // Log specific activity based on what was updated
         if ($passwordChanged) {
@@ -109,11 +170,15 @@ class UserController extends Controller
             ], 422);
         }
         
-        // Delete the user
-        $user->delete();
+        // Store user info for logging before deletion
+        $userFullname = $user->fullname;
+        $userId = $user->id;
+        
+        // Permanently delete the user from the database
+        $user->forceDelete();
         
         // Log user deletion
-        $this->logUserActivity($request, 'Deleted', $user->fullname, $user->id);
+        $this->logUserActivity($request, 'Deleted', $userFullname, $userId);
         
         return response()->json([
             'message' => 'User deleted successfully',

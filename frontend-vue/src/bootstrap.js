@@ -17,16 +17,20 @@ try {
   // For Laravel Reverb, we use wsHost/wsPort
   // Pusher.js requires a cluster when using wsHost, so we provide a dummy value
   // The cluster value is ignored when wsHost is set
+  // For localhost/Reverb, force non-secure WebSocket
+  const isLocalhost = pusherHost === 'localhost' || pusherHost === '127.0.0.1' || pusherHost.includes('localhost')
+  const useTLS = !isLocalhost && import.meta.env.VITE_PUSHER_FORCE_TLS === 'true'
+  
   const echoConfig = {
     broadcaster: 'pusher',
     key: pusherKey,
     wsHost: pusherHost,
     wsPort: pusherPort,
     wssPort: pusherPort,
-    forceTLS: false, // Set to true in production with HTTPS
-    enabledTransports: ['ws', 'wss'],
+    forceTLS: useTLS, // Force TLS only if not localhost
+    enabledTransports: isLocalhost ? ['ws'] : ['ws', 'wss'], // Only use ws for localhost
     disableStats: true,
-    encrypted: false, // Set to true with HTTPS
+    encrypted: useTLS, // Only encrypt if not localhost
     // Add a dummy cluster to satisfy Pusher.js requirement
     // This is ignored when wsHost is set (Reverb mode)
     cluster: pusherCluster || 'mt1'
@@ -83,6 +87,7 @@ try {
 
   console.log('🚀 Laravel Echo initialized')
   console.log('📡 Connecting to:', pusherHost + ':' + pusherPort)
+  console.log('🔒 Using secure WebSocket:', useTLS ? 'Yes (wss://)' : 'No (ws://)')
   console.log('🔑 Using key:', pusherKey.substring(0, 10) + '...')
   
   // Warn if using default key
@@ -90,6 +95,11 @@ try {
     console.warn('⚠️ WARNING: Using default Pusher key!')
     console.warn('💡 Set VITE_PUSHER_APP_KEY in your .env file to match REVERB_APP_KEY from backend')
     console.warn('💡 Or set it in your Vite config')
+  }
+  
+  // Additional debug info
+  if (isLocalhost) {
+    console.log('🏠 Localhost detected - using non-secure WebSocket (ws://)')
   }
   
 } catch (error) {

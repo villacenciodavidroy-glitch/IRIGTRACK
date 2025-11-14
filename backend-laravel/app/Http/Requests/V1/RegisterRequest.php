@@ -28,7 +28,7 @@ class RegisterRequest extends FormRequest
             'location_id' => 'required|exists:locations,id',
             'password' => 'required|string|min:8|confirmed',
             'password_confirmation' => 'required_with:password|same:password',
-            'role'     => 'nullable|in:admin,user',
+            'role'     => 'nullable|in:admin,user,supply',
             'image' =>'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:5120'
         ];
     }
@@ -51,7 +51,7 @@ class RegisterRequest extends FormRequest
             'password.confirmed' => 'Password confirmation does not match.',
             'password_confirmation.required_with' => 'Please confirm your password.',
             'password_confirmation.same' => 'Password confirmation does not match.',
-            'role.in' => 'Role must be either admin or user.',
+            'role.in' => 'Role must be either admin, user, or supply.',
             'image.image' => 'File must be an image.',
             'image.mimes' => 'Image must be jpeg, png, jpg, gif, or svg.',
             'image.max' => 'Image size must not exceed 5MB.',

@@ -17,6 +17,7 @@ class ConditionNumberResource extends JsonResource
         return [
             'id' => $this->id,
             'condition_number' => $this->condition_number,
+            'condition_status' => $this->condition_status,
         ];
     }
 }

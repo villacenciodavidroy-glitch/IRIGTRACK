@@ -1,192 +1,315 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 md:p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-4 sm:mb-6 md:mb-8">
-      <div class="flex items-center gap-2 sm:gap-3">
-        <button @click="goBack" class="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 px-2 py-1 sm:px-0 transition-colors">
-          <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
-          <span class="ml-1 text-sm sm:text-base">Back</span>
-        </button>
-        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white">Category Management</h1>
+  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8">
+    <!-- Enhanced Header Section -->
+    <div class="relative overflow-hidden bg-gradient-to-r from-green-600 via-green-700 to-green-600 rounded-xl shadow-xl mb-6">
+      <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+      <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+          <div class="flex items-center gap-4">
+            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+              <span class="material-icons-outlined text-4xl text-white">category</span>
+            </div>
+            <div>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Category Management</h1>
+              <p v-if="!loading" class="text-green-100 text-sm sm:text-base">
+                {{ pagination.total || 0 }} {{ pagination.total === 1 ? 'category' : 'categories' }} found
+              </p>
+              <p v-else class="text-green-100 text-sm sm:text-base">Loading categories...</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 w-full sm:w-auto">
+            <button 
+              @click="openCreateModal"
+              class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg"
+            >
+              <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
+              <span>Add Category</span>
+            </button>
+          </div>
+        </div>
       </div>
-      <button 
-        @click="openCreateModal"
-        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-      >
-        <span class="material-icons-outlined text-sm">add</span>
-        <span class="text-sm sm:text-base">Add Category</span>
-      </button>
     </div>
 
-    <!-- Categories Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 w-full">
-      <div v-if="loading" class="text-center py-8">
-        <span class="material-icons-outlined animate-spin text-4xl text-gray-400">refresh</span>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">Loading categories...</p>
+    <!-- Statistics Card -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Categories</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ pagination.total || 0 }}</p>
+          </div>
+          <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">category</span>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Current Page</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ pagination.current_page || 1 }} / {{ pagination.last_page || 1 }}</p>
+          </div>
+          <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+            <span class="material-icons-outlined text-blue-400 dark:text-blue-400 text-2xl">description</span>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Items Per Page</p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ pagination.per_page || 10 }}</p>
+          </div>
+          <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+            <span class="material-icons-outlined text-purple-400 dark:text-purple-400 text-2xl">list</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <!-- Enhanced Table Header -->
+      <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">inventory</span>
+            <h2 class="text-xl font-bold text-white">All Categories</h2>
+          </div>
+          <div class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+            <span class="text-sm font-semibold text-white">{{ pagination.total || 0 }} categories</span>
+          </div>
+        </div>
       </div>
 
-      <div v-else-if="categories.length === 0" class="text-center py-8">
-        <span class="material-icons-outlined text-6xl text-gray-300 dark:text-gray-600">category</span>
-        <p class="mt-4 text-gray-600 dark:text-gray-400">No categories found. Create your first category!</p>
-      </div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                #
+      <!-- Enhanced Table Container -->
+      <div class="overflow-x-auto">
+        <table v-if="!loading && categories.length > 0" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead>
+            <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">
+                <div class="flex items-center gap-2 cursor-pointer hover:text-green-400 dark:hover:text-green-400 transition-colors" @click="toggleSort('category')">
+                  <span class="material-icons-outlined text-base">sort</span>
+                  <span>Name</span>
+                </div>
               </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                Category Name
-              </th>
-              <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                Actions
-              </th>
+              <th class="px-6 py-4 text-right text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Action</th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="(category, index) in categories" :key="category.id || category.category_id" class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                {{ (pagination.current_page - 1) * pagination.per_page + index + 1 }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                <div class="flex items-center gap-2">
-                  <span class="material-icons-outlined text-base text-gray-400">label</span>
-                  {{ category.category }}
+            <tr 
+              v-for="(category, index) in categories" 
+              :key="category.id || category.category_id" 
+              :class="[
+                'group transition-all duration-200 border-l-4 border-transparent cursor-pointer',
+                selectedCategory === category.id || selectedCategory === category.category_id 
+                  ? 'bg-gray-50 dark:bg-gray-700 border-l-green-500 shadow-sm' 
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-l-green-400'
+              ]"
+              @click="selectedCategory = category.id || category.category_id"
+            >
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center gap-4">
+                  <div class="relative">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-md group-hover:shadow-lg transition-all group-hover:scale-110">
+                      <span class="material-icons-outlined text-white text-xl">category</span>
+                    </div>
+                    <div class="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white"></div>
+                  </div>
+                  <span class="text-sm font-bold text-gray-900 dark:text-white">{{ category.category }}</span>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex items-center justify-end gap-2">
                   <button 
-                    @click="openEditModal(category)"
-                    class="px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors flex items-center gap-1"
+                    @click.stop="openEditModal(category)"
+                    class="p-2.5 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
                     title="Edit Category"
                   >
                     <span class="material-icons-outlined text-base">edit</span>
-                    <span class="hidden sm:inline">Edit</span>
                   </button>
                   <button 
-                    @click="confirmDelete(category)"
-                    class="px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-1"
-                    title="Delete Category"
+                    @click.stop="openActionsMenu(category)"
+                    class="p-2.5 rounded-lg bg-gradient-to-br from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 shadow-md hover:shadow-lg transition-all duration-200 relative"
+                    title="More Actions"
                   >
-                    <span class="material-icons-outlined text-base">delete</span>
-                    <span class="hidden sm:inline">Delete</span>
+                    <span class="material-icons-outlined text-base">more_vert</span>
+                    <!-- Enhanced Actions Dropdown -->
+                    <div 
+                      v-if="actionsMenuOpen === (category.id || category.category_id)"
+                      class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 z-20 py-2 overflow-hidden"
+                      @click.stop
+                    >
+                      <button 
+                        @click="openEditModal(category)"
+                        class="w-full text-left px-4 py-3 text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-all"
+                      >
+                        <span class="material-icons-outlined text-lg text-blue-400 dark:text-blue-400">edit</span>
+                        <span>Edit Category</span>
+                      </button>
+                      <div class="h-px bg-gray-50 dark:bg-gray-700 my-1"></div>
+                      <button 
+                        @click="confirmDelete(category)"
+                        class="w-full text-left px-4 py-3 text-sm font-medium text-red-400 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-all"
+                      >
+                        <span class="material-icons-outlined text-lg">delete</span>
+                        <span>Delete Category</span>
+                      </button>
+                    </div>
                   </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
 
-      <!-- Pagination Controls -->
-      <div v-if="!loading && categories.length > 0" class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 gap-3 sm:gap-0">
-        <div class="text-sm text-gray-600 dark:text-gray-300">
-          Result {{ (pagination.current_page - 1) * pagination.per_page + 1 }}-{{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of {{ pagination.total }}
-        </div>
-        <div class="flex items-center justify-center sm:justify-end gap-1 flex-wrap">
-          <button 
-            @click="changePage(1)"
-            :disabled="pagination.current_page === 1"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            First
-          </button>
-          <button 
-            @click="changePage(pagination.current_page - 1)"
-            :disabled="pagination.current_page === 1"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            &lt; Previous
-          </button>
-          <div class="flex items-center gap-1">
-            <template v-for="page in pagination.last_page" :key="page">
-              <!-- Show first page, last page, current page, and pages around current -->
-              <button 
-                v-if="page === 1 || page === pagination.last_page || (page >= pagination.current_page - 1 && page <= pagination.current_page + 1)"
-                @click="changePage(page)"
-                :class="[
-                  'px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700',
-                  pagination.current_page === page ? 'bg-green-600 text-white border-green-500' : ''
-                ]"
-              >
-                {{ page }}
-              </button>
-              <!-- Show dots for skipped pages -->
-              <span 
-                v-else-if="page === pagination.current_page - 2 || page === pagination.current_page + 2"
-                class="px-2"
-              >...</span>
-            </template>
+        <!-- Enhanced Loading State -->
+        <div v-if="loading" class="text-center py-20">
+          <div class="inline-block p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+            <span class="material-icons-outlined animate-spin text-5xl text-green-400 dark:text-green-400">refresh</span>
           </div>
+          <p class="text-lg font-semibold text-gray-900 dark:text-white">Loading categories...</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Please wait a moment</p>
+        </div>
+
+        <!-- Enhanced Empty State -->
+        <div v-else-if="categories.length === 0" class="text-center py-20">
+          <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+            <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">category</span>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No categories found</h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-6">Create your first category to get started!</p>
           <button 
-            @click="changePage(pagination.current_page + 1)"
-            :disabled="pagination.current_page === pagination.last_page"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+            @click="openCreateModal"
+            class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all font-semibold flex items-center gap-2 mx-auto"
           >
-            Next &gt;
+            <span class="material-icons-outlined">add_circle</span>
+            <span>Create First Category</span>
           </button>
-          <button 
-            @click="changePage(pagination.last_page)"
-            :disabled="pagination.current_page === pagination.last_page"
-            class="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            Last
-          </button>
+        </div>
+
+        <!-- Enhanced Pagination -->
+        <div v-if="!loading && categories.length > 0" class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
+            <div class="flex items-center gap-2">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-lg">info</span>
+              <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                Showing <span class="text-green-400 dark:text-green-400 font-bold">{{ String((pagination.current_page - 1) * pagination.per_page + 1).padStart(2, '0') }}</span> to 
+                <span class="text-green-400 dark:text-green-400 font-bold">{{ String(Math.min(pagination.current_page * pagination.per_page, pagination.total)).padStart(2, '0') }}</span> of 
+                <span class="text-green-400 dark:text-green-400 font-bold">{{ pagination.total }}</span>
+              </span>
+            </div>
+            <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">
+              <button 
+                @click="changePage(1)"
+                :disabled="pagination.current_page === 1"
+                class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">first_page</span>
+              </button>
+              <button 
+                @click="changePage(pagination.current_page - 1)"
+                :disabled="pagination.current_page === 1"
+                class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_left</span>
+              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  v-for="page in visiblePages"
+                  :key="page"
+                  @click="changePage(page)"
+                  :class="[
+                    'px-3 py-2 text-sm font-semibold border-2 rounded-lg transition-all shadow-sm hover:shadow-md',
+                    pagination.current_page === page
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white border-green-600 shadow-lg' 
+                      : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-600 dark:hover:bg-gray-600 hover:border-green-400'
+                  ]"
+                >
+                  {{ page }}
+                </button>
+              </div>
+              <button 
+                @click="changePage(pagination.current_page + 1)"
+                :disabled="pagination.current_page === pagination.last_page"
+                class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">chevron_right</span>
+              </button>
+              <button 
+                @click="changePage(pagination.last_page)"
+                :disabled="pagination.current_page === pagination.last_page"
+                class="px-3 py-2 text-sm font-medium border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 hover:border-green-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-base align-middle">last_page</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Create/Edit Modal -->
-    <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" @click.self="closeModal">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white">
-            {{ isEditing ? 'Edit Category' : 'Add New Category' }}
-          </h2>
-          <button @click="closeModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
-            <span class="material-icons-outlined">close</span>
-          </button>
+    <!-- Enhanced Create/Edit Modal -->
+    <div v-if="showModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-modalFadeIn" @click.self="closeModal">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 p-6 sm:p-8 max-w-md w-full transform transition-all animate-modalSlideIn overflow-hidden">
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5 -mx-6 -mt-6 mb-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-2xl">{{ isEditing ? 'edit' : 'add_circle' }}</span>
+              </div>
+              <div>
+                <h2 class="text-xl sm:text-2xl font-bold text-white">
+                  {{ isEditing ? 'Edit Category' : 'Add New Category' }}
+                </h2>
+                <p class="text-xs text-green-100 mt-0.5">{{ isEditing ? 'Update category information' : 'Create a new category for your inventory' }}</p>
+              </div>
+            </div>
+            <button @click="closeModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
+              <span class="material-icons-outlined text-xl">close</span>
+            </button>
+          </div>
         </div>
 
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <!-- Category Name -->
           <div class="form-group">
             <label class="form-label">Category Name</label>
-            <div class="relative flex items-center">
-              <span class="absolute left-4 text-gray-400">
-                <span class="material-icons-outlined">category</span>
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10">
+                <span class="material-icons-outlined text-xl leading-none">category</span>
               </span>
               <input
                 v-model="formData.category"
                 type="text"
                 placeholder="Enter category name"
-                class="form-input !pl-12"
+                class="form-input pl-12 pr-4 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500/20 relative z-0"
                 required
                 :disabled="isSubmitting"
               />
             </div>
-            <p v-if="errors.category" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.category[0] }}</p>
+            <p v-if="errors.category" class="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+              <span class="material-icons-outlined text-base">error_outline</span>
+              {{ errors.category[0] }}
+            </p>
           </div>
 
           <!-- Submit Button -->
-          <div class="flex justify-end gap-3">
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button 
               type="button"
               @click="closeModal"
               :disabled="isSubmitting"
-              class="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              class="px-6 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all font-medium shadow-sm hover:shadow disabled:opacity-50"
             >
               Cancel
             </button>
             <button 
               type="submit"
               :disabled="isSubmitting"
-              class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-75 disabled:cursor-not-allowed flex items-center gap-2"
+              class="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-75 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-lg hover:shadow-xl transition-all"
             >
-              <span v-if="isSubmitting" class="material-icons-outlined animate-spin text-sm">refresh</span>
+              <span v-if="isSubmitting" class="material-icons-outlined animate-spin text-base">refresh</span>
               {{ isSubmitting ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update' : 'Create') }}
             </button>
           </div>
@@ -194,42 +317,56 @@
       </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div v-if="showDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" @click.self="closeDeleteModal">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full">
-        <div class="flex items-center gap-4 mb-4">
-          <div class="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
-            <span class="material-icons-outlined text-red-600 dark:text-red-400">warning</span>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Delete Category</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone.</p>
+    <!-- Enhanced Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-modalFadeIn" @click.self="closeDeleteModal">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-md w-full overflow-hidden animate-modalSlideIn">
+        <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-5">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-2xl">delete_forever</span>
+              </div>
+              <h3 class="text-xl font-bold text-white">Delete Category</h3>
+            </div>
+            <button @click="closeDeleteModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
+              <span class="material-icons-outlined">close</span>
+            </button>
           </div>
         </div>
         
-        <p class="mb-6 text-gray-700 dark:text-gray-300">
-          Are you sure you want to delete <strong>"{{ categoryToDelete?.category }}"</strong>?
-          <span v-if="categoryToDelete?.items_count" class="block mt-2 text-red-600 dark:text-red-400 text-sm">
-            This category is used by {{ categoryToDelete.items_count }} item(s). Deletion will fail.
-          </span>
-        </p>
+        <div class="p-6">
+          <div class="mb-6">
+            <div class="flex items-center gap-3 mb-3 p-3 bg-red-900/20 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg">
+              <span class="material-icons-outlined text-red-400 dark:text-red-400">warning</span>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">
+                Are you sure you want to delete <span class="font-bold text-red-400 dark:text-red-400">"{{ categoryToDelete?.category }}"</span>?
+              </p>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">This action cannot be undone.</p>
+            <div v-if="categoryToDelete?.items_count" class="inline-flex items-center gap-2 px-4 py-2 bg-red-900/20 dark:bg-red-900/20 border border-red-700 dark:border-red-700 text-red-300 dark:text-red-300 text-sm rounded-lg">
+              <span class="material-icons-outlined text-base">info</span>
+              <span>This category is used by <strong>{{ categoryToDelete.items_count }}</strong> item(s). Deletion will fail.</span>
+            </div>
+          </div>
 
-        <div class="flex justify-end gap-3">
-          <button 
-            @click="closeDeleteModal"
-            :disabled="isDeleting"
-            class="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button 
-            @click="handleDelete"
-            :disabled="isDeleting"
-            class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-75 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <span v-if="isDeleting" class="material-icons-outlined animate-spin text-sm">refresh</span>
-            {{ isDeleting ? 'Deleting...' : 'Delete' }}
-          </button>
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button 
+              @click="closeDeleteModal"
+              :disabled="isDeleting"
+              class="px-5 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-xl text-gray-900 dark:text-white font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-gray-500 dark:hover:border-gray-500 transition-all shadow-sm disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button 
+              @click="handleDelete"
+              :disabled="isDeleting"
+              class="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 disabled:opacity-75 disabled:cursor-not-allowed flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl transition-all"
+            >
+              <span v-if="isDeleting" class="material-icons-outlined animate-spin text-base">refresh</span>
+              <span v-else class="material-icons-outlined text-base">delete</span>
+              {{ isDeleting ? 'Deleting...' : 'Delete Category' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -248,7 +385,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
 import useCategories from '../composables/useCategories'
@@ -269,6 +406,10 @@ const errors = ref({})
 const successMessage = ref('')
 const successModalType = ref('success')
 const categoryToDelete = ref(null)
+const selectedCategory = ref(null)
+const actionsMenuOpen = ref(null)
+const sortField = ref(null)
+const sortDirection = ref('asc')
 
 const formData = ref({
   id: null,
@@ -287,6 +428,7 @@ const openCreateModal = () => {
 }
 
 const openEditModal = (category) => {
+  actionsMenuOpen.value = null
   isEditing.value = true
   formData.value = {
     id: category.id || category.category_id,
@@ -305,6 +447,7 @@ const closeModal = () => {
 }
 
 const confirmDelete = (category) => {
+  actionsMenuOpen.value = null
   categoryToDelete.value = category
   showDeleteModal.value = true
 }
@@ -419,29 +562,211 @@ const changePage = async (page) => {
   await fetchcategories(page, perPage)
 }
 
-// Removed changePerPage - fixed to 10 items per page
+const toggleSort = (field) => {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortDirection.value = 'asc'
+  }
+  // Note: Implement actual sorting logic if needed
+}
+
+const openActionsMenu = (category) => {
+  const categoryId = category.id || category.category_id
+  actionsMenuOpen.value = actionsMenuOpen.value === categoryId ? null : categoryId
+}
+
+const visiblePages = computed(() => {
+  const pages = []
+  const current = pagination.value.current_page
+  const last = pagination.value.last_page
+  
+  if (last <= 5) {
+    for (let i = 1; i <= last; i++) {
+      pages.push(i)
+    }
+  } else {
+    if (current <= 3) {
+      for (let i = 1; i <= 5; i++) {
+        pages.push(i)
+      }
+    } else if (current >= last - 2) {
+      for (let i = last - 4; i <= last; i++) {
+        pages.push(i)
+      }
+    } else {
+      for (let i = current - 2; i <= current + 2; i++) {
+        pages.push(i)
+      }
+    }
+  }
+  return pages
+})
+
+// Close actions menu when clicking outside
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.relative')) {
+    actionsMenuOpen.value = null
+  }
+}
 
 onMounted(async () => {
   await fetchcategories(currentPage.value, perPage)
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
 <style scoped>
 .form-group {
-  @apply space-y-1;
+  @apply space-y-2;
 }
 
 .form-label {
-  @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+  @apply block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5;
 }
 
 .form-input {
-  @apply block w-full rounded-lg border-gray-200 dark:border-gray-600 shadow-sm focus:border-green-500 focus:ring-green-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
-  height: 45px;
+  @apply block w-full rounded-xl border border-gray-300 dark:border-gray-600 shadow-sm focus:border-green-500 focus:ring-2 focus:ring-green-500/20 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all duration-200;
+  height: 48px;
+  position: relative;
+  z-index: 0;
+  background-color: white !important;
+}
+
+.dark .form-input {
+  background-color: rgb(55 65 81) !important;
+}
+
+.form-input:focus {
+  @apply shadow-md;
+  background-color: white !important;
+}
+
+.dark .form-input:focus {
+  background-color: rgb(55 65 81) !important;
+}
+
+.form-input:hover:not(:disabled) {
+  @apply border-gray-400 dark:border-gray-500;
+}
+
+.form-input:disabled {
+  @apply opacity-60 cursor-not-allowed;
 }
 
 .material-icons-outlined {
   font-size: 20px;
+}
+
+/* Enhanced Button Styles */
+.btn-primary-enhanced {
+  @apply bg-gradient-to-r from-[#000000] to-[#575757] text-white px-4 py-2.5 rounded-xl hover:from-[#1a1a1a] hover:to-[#6b6b6b] flex items-center text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5;
+}
+
+/* Grid pattern background */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Modal animations */
+@keyframes modalFadeIn {
+  from { 
+    opacity: 0; 
+  }
+  to { 
+    opacity: 1; 
+  }
+}
+
+@keyframes modalSlideIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.9) translateY(-20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
+}
+
+.animate-modalFadeIn {
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+.animate-modalSlideIn {
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Enhanced table row hover effect */
+tbody tr {
+  transition: all 0.2s ease;
+}
+
+tbody tr:hover {
+  transform: translateX(2px);
+  box-shadow: inset 4px 0 0 theme('colors.green.500');
+}
+
+/* Enhanced scrollbar for tables */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  @apply bg-green-400 rounded-full hover:bg-green-500;
+}
+
+/* Enhanced hover effects */
+.group:hover .group-hover\:scale-105 {
+  transform: scale(1.05);
+}
+
+/* Smooth transitions */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
 </style>
 

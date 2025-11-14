@@ -267,7 +267,7 @@ class UsageController extends Controller
                         'id' => $item->id,
                         'unit' => $item->unit,
                         'description' => $item->description,
-                        'category' => $item->category ? $item->category->name : null,
+                        'category' => $item->category ? $item->category->category : null,
                     ],
                     'current_stock' => $item->quantity ?? 0,
                     'time_series' => $timeSeries,

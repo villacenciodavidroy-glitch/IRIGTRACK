@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\User;
+use App\Events\ActivityLogCreated;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -48,17 +50,39 @@ class ActivityLogController extends Controller
 
             // Transform the data for frontend
             $transformedLogs = $activityLogs->map(function ($log) {
+                // ALWAYS use the actual logged-in user's data from the activity log
+                // $log->user is the authenticated user who performed the action
+                $displayUser = $log->user;
+                
+                // If no user is associated with the log, try to find user by personnel name from description
+                // This handles cases where borrow was done without authentication
+                if (!$displayUser && $log->description) {
+                    // Extract personnel name after "by " from description (e.g., "Borrowed Item 'Ballpen' with quantity of 2 by [Personnel Name]")
+                    if (preg_match('/\sby\s+(.+)$/i', $log->description, $matches)) {
+                        $personnelName = trim($matches[1]);
+                        
+                        // Try to find user by matching the personnel name
+                        if ($personnelName) {
+                            $displayUser = User::with('location')->where(function($query) use ($personnelName) {
+                                $query->where('fullname', $personnelName)
+                                    ->orWhere('username', $personnelName)
+                                    ->orWhere('email', $personnelName);
+                            })->first();
+                        }
+                    }
+                }
+                
                 return [
                     'id' => $log->id,
-                    'name' => $log->user->fullname,
-                    'email' => $log->user->email,
+                    'name' => $displayUser ? $displayUser->fullname : 'Unknown User',
+                    'email' => $displayUser ? $displayUser->email : 'N/A',
                     'date' => $log->created_at->format('d-m-Y'),
                     'time' => $log->created_at->format('h:i A'),
                     'action' => $log->action,
-                    'role' => ucfirst($log->user->role),
+                    'role' => $displayUser ? ucfirst($displayUser->role) : 'Guest',
                     'description' => $log->description,
                     'ip_address' => $log->ip_address,
-                    'location' => $log->user->location->name ?? 'N/A',
+                    'location' => $displayUser && $displayUser->location ? $displayUser->location->location : 'N/A',
                     'created_at' => $log->created_at->toISOString()
                 ];
             });
@@ -102,12 +126,32 @@ class ActivityLogController extends Controller
                 ->limit(10)
                 ->get()
                 ->map(function ($log) {
+                    // ALWAYS use the actual logged-in user's data from the activity log
+                    $displayUser = $log->user;
+                    
+                    // If no user is associated with the log, only then try to extract borrower name
+                    if (!$displayUser && $log->description) {
+                        // Extract name after "by " from description
+                        if (preg_match('/\sby\s+(.+)$/i', $log->description, $matches)) {
+                            $borrowerName = trim($matches[1]);
+                            
+                            // Try to find user by the extracted name
+                            if ($borrowerName) {
+                                $displayUser = User::with('location')->where(function($query) use ($borrowerName) {
+                                    $query->where('fullname', $borrowerName)
+                                        ->orWhere('username', $borrowerName)
+                                        ->orWhere('email', $borrowerName);
+                                })->first();
+                            }
+                        }
+                    }
+                    
                     return [
-                        'name' => $log->user->fullname,
+                        'name' => $displayUser ? $displayUser->fullname : 'Unknown User',
                         'action' => $log->action,
                         'date' => $log->created_at->format('d-m-Y'),
                         'time' => $log->created_at->format('h:i A'),
-                        'role' => ucfirst($log->user->role)
+                        'role' => $displayUser ? ucfirst($displayUser->role) : 'Guest'
                     ];
                 });
 
@@ -145,6 +189,13 @@ class ActivityLogController extends Controller
             ]);
 
             $activityLog = ActivityLog::create($validated);
+
+            // Broadcast event for real-time updates
+            try {
+                event(new ActivityLogCreated($activityLog));
+            } catch (\Exception $e) {
+                \Log::warning("Failed to broadcast ActivityLogCreated event: " . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,

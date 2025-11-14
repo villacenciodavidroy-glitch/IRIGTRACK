@@ -44,42 +44,49 @@ def load_lifespan_model():
     """
     Load the CatBoost lifespan prediction model.
     Checks multiple locations for the model file.
+    
+    DISABLED: Using manual calculation method only (previous prediction method)
     """
     global lifespan_model
     
-    if lifespan_model is not None:
-        return lifespan_model
+    # DISABLED: Force manual calculation method (previous prediction method)
+    logger.info("⚠️ CatBoost model disabled - using manual calculation method (previous prediction method)")
+    return None
     
-    # Possible model file locations
-    possible_paths = [
-        MODEL_PATH,  # Environment variable path
-        'catboost_lifespan_model.cbm',
-        'models/catboost_lifespan_model.cbm',
-        'fastapi_lifespan_api/ml/models/catboost_lifespan_model.cbm',
-        os.path.join(os.path.dirname(__file__), 'catboost_lifespan_model.cbm'),
-        os.path.join(os.path.dirname(__file__), 'models', 'catboost_lifespan_model.cbm'),
-    ]
-    
-    model_path = None
-    for path in possible_paths:
-        if path and os.path.exists(path):
-            model_path = path
-            break
-    
-    if model_path is None:
-        logger.warning("CatBoost model file not found. Model-based predictions will not be available.")
-        logger.info(f"Checked paths: {possible_paths}")
-        return None
-    
-    try:
-        logger.info(f"Loading CatBoost model from: {model_path}")
-        lifespan_model = CatBoostRegressor()
-        lifespan_model.load_model(model_path)
-        logger.info("✅ CatBoost model loaded successfully")
-        return lifespan_model
-    except Exception as e:
-        logger.error(f"Failed to load CatBoost model: {str(e)}")
-        return None
+    # Commented out - model loading disabled to use previous prediction method
+    # if lifespan_model is not None:
+    #     return lifespan_model
+    # 
+    # # Possible model file locations
+    # possible_paths = [
+    #     MODEL_PATH,  # Environment variable path
+    #     'catboost_lifespan_model.cbm',
+    #     'models/catboost_lifespan_model.cbm',
+    #     'fastapi_lifespan_api/ml/models/catboost_lifespan_model.cbm',
+    #     os.path.join(os.path.dirname(__file__), 'catboost_lifespan_model.cbm'),
+    #     os.path.join(os.path.dirname(__file__), 'models', 'catboost_lifespan_model.cbm'),
+    # ]
+    # 
+    # model_path = None
+    # for path in possible_paths:
+    #     if path and os.path.exists(path):
+    #         model_path = path
+    #         break
+    # 
+    # if model_path is None:
+    #     logger.warning("CatBoost model file not found. Model-based predictions will not be available.")
+    #     logger.info(f"Checked paths: {possible_paths}")
+    #     return None
+    # 
+    # try:
+    #     logger.info(f"Loading CatBoost model from: {model_path}")
+    #     lifespan_model = CatBoostRegressor()
+    #     lifespan_model.load_model(model_path)
+    #     logger.info("✅ CatBoost model loaded successfully")
+    #     return lifespan_model
+    # except Exception as e:
+    #     logger.error(f"Failed to load CatBoost model: {str(e)}")
+    #     return None
 
 # Load model on module import (lazy loading - will load on first prediction request)
 # Model will be loaded when first prediction is requested
@@ -260,14 +267,16 @@ def predict_consumables():
             current_stock = item.get('current_stock', 0)
             
             if not historical_data:
-                logger.warning(f"No historical data for item {item_id}, using fallback")
                 avg_usage = forecast_features.get('avg_usage_per_quarter', 0)
+                logger.warning(f"No historical data for item {item_id} ({name}). Using average fallback: {round(avg_usage) if avg_usage else 0} units")
+                logger.info(f"💡 To enable Linear Regression predictions: Add usage records (ItemUsage entries) for this item across multiple quarters")
                 forecasts.append({
                     'item_id': item_id,
                     'name': name,
                     'predicted_usage': round(avg_usage) if avg_usage else 0,
                     'confidence': 0.3,
-                    'method': 'average_fallback'
+                    'method': 'average_fallback',
+                    'note': 'No historical usage data available - using average fallback method'
                 })
                 continue
             
@@ -283,14 +292,16 @@ def predict_consumables():
             
             # Need at least 2 data points for linear regression
             if len(usage_values) < 2:
-                logger.warning(f"Insufficient data points ({len(usage_values)}) for item {item_id}")
                 avg_usage = np.mean(usage_values) if usage_values else forecast_features.get('avg_usage_per_quarter', 0)
+                logger.warning(f"Insufficient data points ({len(usage_values)}) for item {item_id} ({name}). Need at least 2 quarters of usage data for Linear Regression. Using average method: {round(avg_usage)} units")
+                logger.info(f"💡 To get better predictions: Add usage records for at least 2 quarters (Q1-Q4) for item {item_id}")
                 forecasts.append({
                     'item_id': item_id,
                     'name': name,
                     'predicted_usage': round(avg_usage),
                     'confidence': 0.3,
-                    'method': 'average'
+                    'method': 'average',
+                    'note': f'Using average method (only {len(usage_values)} data point(s) available, need 2+ for Linear Regression)'
                 })
                 continue
             
@@ -349,9 +360,15 @@ def predict_consumables():
                 'method': 'linear_regression'
             })
             
-            logger.info(f"Forecast for item {item_id} ({name}): {predicted_usage} units (confidence: {confidence:.2%})")
+            # Enhanced logging for consumables predictions
+            confidence_pct = f"{confidence:.1%}"
+            shortage_info = f", potential shortage: {shortage_date}" if shortage_date else ""
+            logger.info(f"Forecast for item {item_id} ({name}): {predicted_usage} units (confidence: {confidence_pct}, R²: {r_squared:.3f}, data points: {len(usage_values)}{shortage_info})")
         
-        logger.info(f"Successfully generated forecasts for {len(forecasts)} items")
+        # Summary logging
+        successful_forecasts = len([f for f in forecasts if f.get('method') == 'linear_regression'])
+        fallback_forecasts = len([f for f in forecasts if f.get('method') in ['average', 'average_fallback']])
+        logger.info(f"✅ Successfully generated forecasts for {len(forecasts)} items: {successful_forecasts} Linear Regression, {fallback_forecasts} Average-based")
         
         return jsonify({
             'success': True,
@@ -408,13 +425,17 @@ def predict_items_lifespan():
             }), 400
         
         items = data.get('items', [])
-        logger.info(f"Received lifespan prediction request for {len(items)} items")
+        logger.info(f"📊 Received lifespan prediction request for {len(items)} items")
         
         # Load model if not already loaded
         model = load_lifespan_model()
+        # Always use manual calculation method (previous prediction method)
+        model = None  # Force manual calculation
+        logger.info("📊 Using manual calculation method (previous prediction method)")
         
+        # CatBoost model disabled - skip model prediction
         # Try to use CatBoost model if available
-        if model is not None:
+        if False:  # Changed from "if model is not None:" to disable model
             try:
                 # Prepare features from items
                 df, item_ids = prepare_features_for_prediction(items)
@@ -466,8 +487,9 @@ def predict_items_lifespan():
                 logger.warning("Falling back to manual calculation method")
                 # Fall through to manual calculation fallback
         
-        # Fallback: Manual calculation if model not available or prediction failed
-        logger.info("Using manual calculation method (model not available or failed)")
+        # Using previous prediction method: Manual calculation (deterministic)
+        logger.info("Using previous prediction method: Manual calculation (deterministic)")
+        logger.info("Method: Base lifespan calculation with penalties based on maintenance and condition")
         predictions = []
         
         for item in items:
@@ -479,35 +501,49 @@ def predict_items_lifespan():
             last_reason = item.get('last_reason', '').lower()
             
             # Calculate base remaining lifespan: 8 years max minus years in use
-            base_lifespan = 8.0 - years_in_use
+            base_lifespan = max(0.0, 8.0 - years_in_use)
             
             # Determine penalty based on maintenance_count, condition_number, and last_reason
+            # Using deterministic calculations instead of random values for consistency
             penalty = 0.0
             
-            # Base penalty if maintenance_count >= 2 OR condition_number >= 4
+            # Base penalty calculation (deterministic based on item characteristics)
             if maintenance_count >= 2 or condition_number >= 4:
-                # Random penalty between 0.5 and 1.5 years
-                base_penalty = np.random.uniform(0.5, 1.5)
-                penalty = base_penalty
+                # Deterministic base penalty: scales with maintenance count and condition
+                # Base: 1.0 year for maintenance_count=2 or condition_number=4
+                base_penalty = 1.0
+                
+                # Scale based on maintenance count (more maintenance = higher penalty)
+                if maintenance_count >= 4:
+                    base_penalty = 1.5  # Severe degradation
+                elif maintenance_count >= 3:
+                    base_penalty = 1.25  # Moderate-severe degradation
+                elif maintenance_count >= 2:
+                    base_penalty = 1.0  # Moderate degradation
+                
+                # Scale based on condition number (higher condition number = worse condition)
+                condition_factor = max(0.0, (condition_number - 3) * 0.25) if condition_number >= 4 else 0.0
+                base_penalty += condition_factor
                 
                 # Additional penalty multiplier based on maintenance reason severity
                 reason_multiplier = 1.0
                 if last_reason:
                     if 'wet' in last_reason or 'water' in last_reason:
-                        reason_multiplier = 1.5
+                        reason_multiplier = 1.5  # Water damage is severe
                     elif 'electrical' in last_reason or 'short' in last_reason or 'circuit' in last_reason:
-                        reason_multiplier = 1.4
+                        reason_multiplier = 1.4  # Electrical issues are serious
                     elif 'overheat' in last_reason or 'over heat' in last_reason or 'thermal' in last_reason:
-                        reason_multiplier = 1.3
+                        reason_multiplier = 1.3  # Thermal stress is significant
                     elif 'wear' in last_reason or 'worn' in last_reason:
-                        reason_multiplier = 1.1
+                        reason_multiplier = 1.1  # Normal wear is minor
                 
                 penalty = base_penalty * reason_multiplier
                 
-                if maintenance_count >= 3:
-                    penalty += 0.3
-                elif maintenance_count >= 4:
-                    penalty += 0.5
+                # Additional cumulative penalties for multiple maintenance issues
+                if maintenance_count >= 4:
+                    penalty += 0.5  # Heavy maintenance history
+                elif maintenance_count >= 3:
+                    penalty += 0.3  # Moderate maintenance history
             
             # Calculate remaining lifespan with penalty
             remaining_years = base_lifespan - penalty
@@ -524,7 +560,16 @@ def predict_items_lifespan():
                 'method': 'manual_calculation_fallback'
             })
             
-            logger.info(f"Lifespan prediction for item {item_id}: {remaining_years} years remaining (method: manual)")
+            # Enhanced logging with prediction details
+            status_indicator = ""
+            if remaining_years <= 0.082:
+                status_indicator = " [URGENT]"
+            elif remaining_years <= 0.164:
+                status_indicator = " [SOON]"
+            elif remaining_years <= 0.5:
+                status_indicator = " [MONITOR]"
+            
+            logger.info(f"Lifespan prediction for item {item_id}: {remaining_years} years remaining (method: manual, years_in_use: {years_in_use:.1f}, maintenance: {maintenance_count}, condition: {condition_number}){status_indicator}")
         
         logger.info(f"Successfully generated lifespan predictions for {len(predictions)} items")
         

@@ -40,6 +40,12 @@ class ItemResource extends JsonResource
             }
         }
         
+        // Get condition_status from condition_number
+        $conditionStatus = null;
+        if ($this->whenLoaded('condition_number') && $this->condition_number) {
+            $conditionStatus = $this->condition_number->condition_status;
+        }
+        
         // Get issued_to: priority is location personnel, fallback to user fullname
         $issuedTo = null;
         if ($this->whenLoaded('location') && $this->location && $this->location->personnel) {
@@ -73,12 +79,28 @@ class ItemResource extends JsonResource
             'location_id' => $this->location_id,
             'condition_id' => $this->condition_id,
             'condition_number_id' => $this->condition_number_id,
-            'maintenance_reason' => $this->maintenance_reason,
+            'condition_status' => $conditionStatus,
+            // Get maintenance_reason from latest maintenance record if available
+            'maintenance_reason' => $this->whenLoaded('maintenance_records') && $this->maintenance_records->isNotEmpty()
+                ? $this->maintenance_records->sortByDesc('maintenance_date')->first()->reason
+                : null,
             'maintenance_count' => $this->maintenance_count ?? 0,
             'lifespan_estimate' => $this->lifespan_estimate,
             'remaining_years' => $this->remaining_years,
             'deleted_at' => $this->deleted_at,
-            'deletion_reason' => $this->deletion_reason
+            'deletion_reason' => $this->deletion_reason, // Keep for backward compatibility
+            'reason_for_deletion' => $this->reason_for_deletion ?? null, // From deleted_items table
+            'deleted_by_user_id' => $this->deleted_by_user_id ?? null,
+            'maintenance_records' => $this->whenLoaded('maintenance_records') ? $this->maintenance_records->map(function ($record) {
+                return [
+                    'id' => $record->id,
+                    'maintenance_date' => $record->maintenance_date,
+                    'reason' => $record->reason,
+                    'technician_notes' => $record->technician_notes,
+                    'condition_before_id' => $record->condition_before_id,
+                    'condition_after_id' => $record->condition_after_id
+                ];
+            }) : null
         ];
     }
 }

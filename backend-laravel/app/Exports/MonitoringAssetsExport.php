@@ -87,6 +87,7 @@ class MonitoringAssetsExport implements FromCollection, WithHeadings, WithMappin
     {
         // Handle both array and object formats
         if (is_array($item)) {
+            // For array format, use the values as provided (should already be correct from API)
             return [
                 $item['article'] ?? $item['unit'] ?? '',
                 $item['description'] ?? '',
@@ -116,6 +117,29 @@ class MonitoringAssetsExport implements FromCollection, WithHeadings, WithMappin
             $item->load('user');
         }
         
+        // Get location name from relationship
+        $locationName = '';
+        if ($item->location) {
+            $locationName = $item->location->location ?? '';
+        }
+        
+        // Get issued_to: priority is location personnel, fallback to user fullname
+        // This matches the logic in ItemResource
+        $issuedTo = 'Not Assigned';
+        if ($item->location && $item->location->personnel && trim($item->location->personnel) !== '') {
+            // First priority: location's personnel
+            $issuedTo = $item->location->personnel;
+        } elseif ($item->user) {
+            // Second priority: user's fullname
+            if (!empty($item->user->fullname)) {
+                $issuedTo = $item->user->fullname;
+            } else {
+                // Construct from first_name and last_name
+                $fullname = trim(($item->user->first_name ?? '') . ' ' . ($item->user->last_name ?? ''));
+                $issuedTo = $fullname ?: 'Not Assigned';
+            }
+        }
+        
         return [
             $item->unit ?? '',
             $item->description ?? '',
@@ -123,10 +147,10 @@ class MonitoringAssetsExport implements FromCollection, WithHeadings, WithMappin
             $item->unit_value ?? '',
             $item->date_acquired ? date('Y-m-d', strtotime($item->date_acquired)) : '',
             $item->po_number ?? '',
-            $item->location ? ($item->location->location ?? '') : '',
+            $locationName,
             $item->category ? ($item->category->category ?? '') : '',
             $item->condition ? ($item->condition->condition ?? '') : '',
-            $item->user ? (($item->user->fullname ?? '') ?: (trim(($item->user->first_name ?? '') . ' ' . ($item->user->last_name ?? '')) ?: 'Not Assigned')) : 'Not Assigned',
+            $issuedTo,
             $item->quantity ?? 0,
         ];
     }
@@ -205,41 +229,75 @@ class MonitoringAssetsExport implements FromCollection, WithHeadings, WithMappin
                 if (file_exists($logoPath)) {
                     try {
                         // Center the logo perfectly in merged cell A4:K4
-                        // Use column F (middle column of A-K range) as anchor point
-                        // Calculate total width of merged range to center properly
+                        // Logo dimensions
+                        $logoWidth = 80;
+                        $logoHeight = 80;
+                        
+                        // Column widths for A through K (in character units)
+                        // These should match the widths set earlier in the code
+                        $columnWidths = [
+                            'A' => 15, 'B' => 30, 'C' => 25, 'D' => 15, 
+                            'E' => 18, 'F' => 18, 'G' => 20, 'H' => 20, 
+                            'I' => 15, 'J' => 25, 'K' => 12
+                        ];
+                        
+                        // Calculate total width of merged range A-K in character units
                         $totalWidth = 0;
                         foreach (range('A', 'K') as $col) {
                             $width = $sheet->getColumnDimension($col)->getWidth();
-                            if ($width == -1) {
-                                // Default width if not set
-                                $widths = ['A' => 15, 'B' => 30, 'C' => 25, 'D' => 15, 'E' => 18, 'F' => 18, 'G' => 20, 'H' => 20, 'I' => 15, 'J' => 25, 'K' => 12];
-                                $width = $widths[$col] ?? 15;
+                            if ($width == -1 || $width == 0) {
+                                $width = $columnWidths[$col] ?? 15;
                             }
                             $totalWidth += $width;
                         }
                         
-                        // Calculate cumulative width up to column E (before F)
-                        $widthBeforeF = 15 + 30 + 25 + 15 + 18; // A + B + C + D + E = 103
+                        // Calculate cumulative width up to column F (center column)
+                        $widthBeforeF = 0;
+                        foreach (range('A', 'E') as $col) {
+                            $width = $sheet->getColumnDimension($col)->getWidth();
+                            if ($width == -1 || $width == 0) {
+                                $width = $columnWidths[$col] ?? 15;
+                            }
+                            $widthBeforeF += $width;
+                        }
                         
-                        // Center point of merged cell = totalWidth / 2
-                        $centerPoint = $totalWidth / 2; // ~106.5
+                        // Get column F width
+                        $widthF = $sheet->getColumnDimension('F')->getWidth();
+                        if ($widthF == -1 || $widthF == 0) {
+                            $widthF = $columnWidths['F'] ?? 18;
+                        }
                         
-                        // Logo width is 80px, Excel character unit to pixel conversion is ~7 pixels per character unit
-                        // Position logo center at the calculated center point
-                        // Offset from column F start = (centerPoint - widthBeforeF) * 7 - (logoWidth / 2)
-                        $offsetX = (($centerPoint - $widthBeforeF) * 7) - 40; // 40 = half of 80px logo width
+                        // Calculate the exact center of the merged range
+                        $rangeCenter = $totalWidth / 2;
+                        
+                        // Calculate where column F's left edge starts
+                        $columnFLeft = $widthBeforeF;
+                        
+                        // Calculate where column F's center is
+                        $columnFCenter = $columnFLeft + ($widthF / 2);
+                        
+                        // Calculate how far we need to move from F's center to the range center
+                        // Excel character units: 1 char unit ≈ 7 pixels at default font size
+                        $pixelsPerChar = 7;
+                        $offsetInChars = $rangeCenter - $columnFCenter;
+                        $offsetX = $offsetInChars * $pixelsPerChar;
+                        
+                        // The logo's anchor point is at its top-left corner
+                        // To center it, we need to move it left by half its width
+                        $offsetX = $offsetX - ($logoWidth / 2);
                         
                         $drawing = new Drawing();
                         $drawing->setName('NIA Logo');
                         $drawing->setDescription('NIA Logo');
                         $drawing->setPath($logoPath);
-                        $drawing->setHeight(80);
-                        $drawing->setWidth(80); // Maintain aspect ratio
+                        $drawing->setHeight($logoHeight);
+                        $drawing->setWidth($logoWidth);
                         
-                        // Position at F4 (center column) with calculated offset
+                        // Position at F4 (which is roughly the center column)
+                        // The offsetX will adjust it to be perfectly centered
                         $drawing->setCoordinates('F4');
                         $drawing->setOffsetX((int)round($offsetX));
-                        $drawing->setOffsetY(5); // Small vertical offset from top
+                        $drawing->setOffsetY(0); // Center vertically
                         $drawing->setWorksheet($sheet);
                     } catch (\Exception $e) {
                         \Log::warning('Failed to insert logo in Excel: ' . $e->getMessage());

@@ -4,6 +4,7 @@ namespace App\Services\V1;
 
 use App\Models\User;
 use App\Models\ActivityLog;
+use App\Events\ActivityLogCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -86,13 +87,20 @@ class AuthService
     private function logActivity($userId, $action, $description = null, Request $request = null)
     {
         try {
-            ActivityLog::create([
+            $activityLog = ActivityLog::create([
                 'user_id' => $userId,
                 'action' => $action,
                 'description' => $description,
                 'ip_address' => $request ? $request->ip() : null,
                 'user_agent' => $request ? $request->userAgent() : null,
             ]);
+
+            // Broadcast event for real-time updates
+            try {
+                event(new ActivityLogCreated($activityLog));
+            } catch (\Exception $e) {
+                \Log::warning("Failed to broadcast ActivityLogCreated event: " . $e->getMessage());
+            }
         } catch (\Exception $e) {
             // Log error but don't break the main flow
             \Log::error('Failed to log activity: ' . $e->getMessage());

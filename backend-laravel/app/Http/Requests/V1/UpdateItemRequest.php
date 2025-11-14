@@ -34,7 +34,8 @@ class UpdateItemRequest extends FormRequest
             'condition_id' => 'sometimes|exists:conditions,id',
             'condition_number_id' => 'sometimes|exists:condition_numbers,id',
             'user_id' => 'sometimes|exists:users,id',
-            'maintenance_reason' => 'nullable|string|max:1000',
+            'maintenance_reason' => 'nullable|string|max:255|in:Overheat,Wear,Electrical,Wet,Component Failure,Physical Damage,Other',
+            'technician_notes' => 'nullable|string|max:1000',
             'image_path' =>'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10240'
         ];
     }

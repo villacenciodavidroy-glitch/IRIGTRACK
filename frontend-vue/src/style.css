@@ -1,3 +1,46 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Responsive utilities */
+@layer utilities {
+  /* Ensure modals are mobile-friendly */
+  .modal-responsive {
+    @apply w-[calc(100vw-1rem)] max-w-full mx-2 sm:mx-auto;
+  }
+  
+  /* Touch-friendly buttons */
+  @media (max-width: 640px) {
+    button, a, input[type="submit"], input[type="button"] {
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+  }
+  
+  /* Responsive form inputs */
+  @media (max-width: 640px) {
+    input, select, textarea {
+      font-size: 16px; /* Prevents zoom on iOS */
+    }
+  }
+  
+  /* Ensure tables scroll on mobile */
+  .table-responsive {
+    @apply overflow-x-auto -mx-2 sm:mx-0;
+  }
+  
+  /* Mobile-friendly spacing */
+  .responsive-padding {
+    @apply p-2 xs:p-3 sm:p-4 md:p-6;
+  }
+  
+  /* Responsive text sizing */
+  .responsive-text {
+    @apply text-sm xs:text-base sm:text-lg;
+  }
+  
+  /* Responsive heading */
+  .responsive-heading {
+    @apply text-lg xs:text-xl sm:text-2xl md:text-3xl;
+  }
+}

@@ -246,8 +246,8 @@ const handleApprove = async (notification) => {
   }
 }
 
-// Handle reject borrow request
-const handleReject = async (notification) => {
+// Open rejection confirmation modal
+const openRejectModal = (notification) => {
   if (!notification.borrowRequest || !notification.item) {
     showSuccessMessage('Error: Missing borrow request or item information', 'error')
     return
@@ -259,13 +259,27 @@ const handleReject = async (notification) => {
     return
   }
   
-  if (!confirm('Are you sure you want to reject this borrow request?')) {
-    return
-  }
+  notificationToReject.value = notification
+  showRejectModal.value = true
+}
+
+// Close rejection modal
+const closeRejectModal = () => {
+  showRejectModal.value = false
+  notificationToReject.value = null
+}
+
+// Handle reject borrow request (called from modal)
+const handleReject = async () => {
+  const notification = notificationToReject.value
+  if (!notification) return
   
   // Use UUID if available, otherwise use ID
   const itemId = notification.item.uuid || notification.item.id || notification.item_id
   const requestId = notification.borrowRequest.id
+  
+  // Close modal first
+  closeRejectModal()
   
   // Disable button to prevent multiple clicks
   const originalStatus = notification.borrowRequest.status
@@ -318,8 +332,9 @@ const handleApproveFromPopup = async (notification) => {
 }
 
 const handleRejectFromPopup = async (notification) => {
-  await handleReject(notification)
-  // Close popup after a short delay to ensure banner is shown
+  // Open the rejection modal instead of directly rejecting
+  openRejectModal(notification)
+  // Close popup after opening modal
   setTimeout(() => {
     showPopup.value = false
   }, 100)
@@ -354,6 +369,17 @@ const getPriorityColor = (priority) => {
   }
 }
 
+// Get priority for restock notifications (should be medium priority)
+const getNotificationPriority = (notification) => {
+  // If it's a restock notification, give it medium priority
+  if (notification.type === 'restocked_supply' || 
+      notification.type === 'restock' || 
+      notification.action === 'Restocked Supply') {
+    return 'medium'
+  }
+  return notification.priority || 'high'
+}
+
 const getTypeIcon = (type) => {
   switch (type) {
     case 'low_stock': return 'warning'
@@ -364,21 +390,52 @@ const getTypeIcon = (type) => {
     case 'delete': return 'delete'
     case 'borrow': return 'shopping_cart'
     case 'restore': return 'restore'
+    case 'restocked_supply':
+    case 'restock':
+    case 'Restocked Supply': return 'inventory_2'
     case 'info': return 'info'
     default: return 'notifications'
   }
 }
 
 const formatRelativeTime = (timestamp) => {
-  const now = new Date()
-  const time = new Date(timestamp)
-  const diffInSeconds = Math.floor((now - time) / 1000)
+  if (!timestamp) return 'Unknown time'
+  
+  try {
+    const now = new Date()
+    const time = new Date(timestamp)
+    
+    // Check if date is valid
+    if (isNaN(time.getTime())) {
+      return 'Invalid date'
+    }
+    
+    const diffInSeconds = Math.floor((now - time) / 1000)
 
-  if (diffInSeconds < 60) return 'Just now'
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
-  return time.toLocaleDateString()
+    if (diffInSeconds < 0) return 'Just now' // Future dates
+    if (diffInSeconds < 60) return 'Just now'
+    if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60)
+      return `${minutes}m ago`
+    }
+    if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600)
+      return `${hours}h ago`
+    }
+    if (diffInSeconds < 604800) {
+      const days = Math.floor(diffInSeconds / 86400)
+      return `${days}d ago`
+    }
+    // For older dates, show formatted date
+    return time.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: time.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    })
+  } catch (error) {
+    console.error('Error formatting time:', error)
+    return 'Invalid time'
+  }
 }
 
 // Store notification interval for cleanup
@@ -391,6 +448,10 @@ const showSuccessBanner = ref(false)
 const successBannerMessage = ref('')
 const successBannerType = ref('success') // 'success' or 'error'
 const successBannerDetails = ref(null)
+
+// Rejection confirmation modal state
+const showRejectModal = ref(false)
+const notificationToReject = ref(null)
 
 // Setup real-time listener with popup notification
 const setupRealtimeWithPopup = () => {
@@ -662,7 +723,7 @@ onBeforeUnmount(() => {
               'border-purple-400 dark:border-purple-400 bg-purple-50 dark:bg-purple-900/20': notification.selected
             }"
           >
-            <!-- Selection checkbox -->
+            <!-- Selection checkbox - positioned to not overlap with time text -->
             <div class="absolute top-4 right-4 z-10">
               <input
                 type="checkbox"
@@ -678,41 +739,41 @@ onBeforeUnmount(() => {
               <div class="flex-shrink-0">
                 <div class="w-12 h-12 rounded-lg flex items-center justify-center shadow-md"
                   :class="{
-                    'bg-green-900/30 dark:bg-green-900/30': notification.priority === 'low',
-                    'bg-yellow-900/30 dark:bg-yellow-900/30': notification.priority === 'medium',
-                    'bg-red-900/30 dark:bg-red-900/30': notification.priority === 'high',
-                    'bg-gray-50 dark:bg-gray-700': !notification.priority
+                    'bg-green-900/30 dark:bg-green-900/30': getNotificationPriority(notification) === 'low',
+                    'bg-yellow-900/30 dark:bg-yellow-900/30': getNotificationPriority(notification) === 'medium',
+                    'bg-red-900/30 dark:bg-red-900/30': getNotificationPriority(notification) === 'high',
+                    'bg-gray-50 dark:bg-gray-700': !getNotificationPriority(notification)
                   }"
                 >
                   <span class="material-icons-outlined"
                     :class="{
-                      'text-green-400 dark:text-green-400': notification.priority === 'low',
-                      'text-yellow-400 dark:text-yellow-400': notification.priority === 'medium',
-                      'text-red-400 dark:text-red-400': notification.priority === 'high',
-                      'text-gray-600 dark:text-gray-400': !notification.priority
+                      'text-green-400 dark:text-green-400': getNotificationPriority(notification) === 'low',
+                      'text-yellow-400 dark:text-yellow-400': getNotificationPriority(notification) === 'medium',
+                      'text-red-400 dark:text-red-400': getNotificationPriority(notification) === 'high',
+                      'text-gray-600 dark:text-gray-400': !getNotificationPriority(notification)
                     }"
                   >
-                    {{ getTypeIcon(notification.type) }}
+                    {{ getTypeIcon(notification.type || notification.action) }}
                   </span>
                 </div>
               </div>
               
               <!-- Content -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-start justify-between mb-2">
-                  <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex-1 min-w-0 pr-12">
+                <div class="flex items-start justify-between mb-2 gap-2">
+                  <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                     <h3 class="text-base font-semibold text-gray-900 dark:text-white">
                       {{ notification.title }}
                     </h3>
                     <span
-                      :class="getPriorityColor(notification.priority)"
+                      :class="getPriorityColor(getNotificationPriority(notification))"
                       class="px-3 py-1 text-xs font-semibold rounded-full"
                     >
-                      {{ notification.priority }}
+                      {{ getNotificationPriority(notification) }}
                     </span>
                     <span v-if="!notification.isRead" class="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></span>
                   </div>
-                  <p class="text-xs font-medium text-gray-500 flex-shrink-0">
+                  <p class="text-xs font-medium text-gray-500 flex-shrink-0 whitespace-nowrap">
                     {{ formatRelativeTime(notification.timestamp) }}
                   </p>
                 </div>
@@ -732,7 +793,7 @@ onBeforeUnmount(() => {
                     <span>{{ notification.borrowRequest.status === 'processing' ? 'Processing...' : 'Approve' }}</span>
                   </button>
                   <button
-                    @click.stop="handleReject(notification)"
+                    @click.stop="openRejectModal(notification)"
                     :disabled="notification.borrowRequest.status !== 'pending'"
                     class="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
                   >
@@ -1003,6 +1064,79 @@ onBeforeUnmount(() => {
             <div class="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
               <span>{{ new Date().toLocaleString() }}</span>
               <span>Transaction ID: {{ Date.now() }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rejection Confirmation Modal -->
+      <div
+        v-if="showRejectModal && notificationToReject"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4"
+        @click.self="closeRejectModal"
+      >
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+          <!-- Red Header -->
+          <div class="bg-red-600 dark:bg-red-700 px-6 py-4 flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">warning</span>
+            <h3 class="text-xl font-bold text-white">Confirm Rejection</h3>
+          </div>
+          
+          <!-- Body Content -->
+          <div class="p-6">
+            <p class="text-gray-900 dark:text-white text-base font-medium mb-4">
+              Are you sure you want to reject this Supplies Request?
+            </p>
+            
+            <!-- Request Details Box -->
+            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <span class="material-icons-outlined text-gray-600 dark:text-gray-400">description</span>
+                <span class="text-gray-900 dark:text-white font-medium">
+                  Item: {{ notificationToReject.item?.unit || 'N/A' }}
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="material-icons-outlined text-gray-600 dark:text-gray-400">person</span>
+                <span class="text-gray-900 dark:text-white font-medium">
+                  Requested by: {{ notificationToReject.borrowRequest?.borrowed_by || 'N/A' }}
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="material-icons-outlined text-gray-600 dark:text-gray-400">hash</span>
+                <span class="text-gray-900 dark:text-white font-medium">
+                  Quantity: {{ notificationToReject.borrowRequest?.quantity || 0 }} unit(s)
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="material-icons-outlined text-gray-600 dark:text-gray-400">location_on</span>
+                <span class="text-gray-900 dark:text-white font-medium">
+                  Location: {{ notificationToReject.borrowRequest?.location || 'N/A' }}
+                </span>
+              </div>
+            </div>
+            
+            <!-- Warning Message -->
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              This action cannot be undone. The Supplies Request will be marked as rejected.
+            </p>
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-end gap-3">
+              <button
+                @click="closeRejectModal"
+                class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+              >
+                <span class="material-icons-outlined text-lg">close</span>
+                <span>Cancel</span>
+              </button>
+              <button
+                @click="handleReject"
+                class="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+              >
+                <span class="material-icons-outlined text-lg">block</span>
+                <span>Reject Supplies Request</span>
+              </button>
             </div>
           </div>
         </div>

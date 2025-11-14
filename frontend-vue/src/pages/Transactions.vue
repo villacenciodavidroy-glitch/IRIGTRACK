@@ -791,7 +791,7 @@ const printTransactions = () => {
                 <th>Requested By</th>
                 <th>Approved By</th>
                 <th>Name of Receiver</th>
-                <th>Unit/Sectors</th>
+                <th>Unit/Sections</th>
                 <th>Item Name</th>
                 <th>Quantity</th>
                 <th>Transaction Time</th>
@@ -928,7 +928,7 @@ const printTransactions = () => {
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="Search by item, borrower, unit/sectors, or approver..."
+                placeholder="Search by item, borrower, unit/sections, or approver..."
                 class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium shadow-sm hover:shadow-md"
               />
               <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -976,7 +976,7 @@ const printTransactions = () => {
             </div>
           </div>
 
-          <!-- Unit/Sectors Filter -->
+          <!-- Unit/Sections Filter -->
           <div class="relative">
             <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
               <span class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">location_on</span>
@@ -985,7 +985,7 @@ const printTransactions = () => {
               v-model="locationFilter"
               class="w-full pl-10 pr-8 py-2.5 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-medium shadow-sm hover:shadow-md appearance-none cursor-pointer"
             >
-              <option value="">All Unit/Sectors</option>
+              <option value="">All Unit/Sections</option>
               <option v-for="location in uniqueLocations" :key="location" :value="location" class="bg-gray-700 text-white">{{ location }}</option>
             </select>
             <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
@@ -1102,7 +1102,7 @@ const printTransactions = () => {
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Requested By</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Approved By</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Name of Receiver</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sectors</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sections</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Item Name</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Quantity</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Transaction Time</th>

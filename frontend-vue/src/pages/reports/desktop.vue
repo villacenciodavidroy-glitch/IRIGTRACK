@@ -91,7 +91,7 @@ const entriesPerPage = ref(10)
             <th class="border px-4 py-2">UNIT VALUE</th>
             <th class="border px-4 py-2">DATE ACQUIRED</th>
             <th class="border px-4 py-2">P.O. NUMBER</th>
-            <th class="border px-4 py-2">UNIT/SECTORS</th>
+            <th class="border px-4 py-2">UNIT/SECTIONS</th>
             <th class="border px-4 py-2">CONDITION</th>
           </tr>
         </thead>

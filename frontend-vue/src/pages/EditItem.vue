@@ -1024,16 +1024,16 @@ const removeImage = () => {
                 <span class="material-icons-outlined text-white text-xl">location_on</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sectors</h2>
-                <p class="text-xs text-green-100">Item unit/sectors and personnel assignment</p>
+                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sections</h2>
+                <p class="text-xs text-green-100">Item unit/sections and personnel assignment</p>
               </div>
             </div>
           </div>
           <div class="p-6 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <!-- Unit/Sectors -->
+              <!-- Unit/Sections -->
               <div class="form-group">
-                <label class="form-label">Unit/Sectors <span class="text-red-500">*</span></label>
+                <label class="form-label">Unit/Sections <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">location_on</span>
@@ -1044,7 +1044,7 @@ const removeImage = () => {
                     required
                     class="form-select-enhanced !pl-12"
                   >
-                    <option :value="null">Select Unit/Sector</option>
+                    <option :value="null">Select Unit/Section</option>
                     <option v-for="location in locations" :key="location.id" :value="Number(location.id || location.location_id)">
                       {{ location.location }}
                     </option>
@@ -1052,7 +1052,7 @@ const removeImage = () => {
                 </div>
                 <p v-if="locations.length === 0" class="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded border border-amber-200 dark:border-amber-700">
                   <span class="material-icons-outlined text-sm align-middle mr-1">info</span>
-                  Loading units/sectors...
+                  Loading units/sections...
                 </p>
               </div>
               
@@ -1079,7 +1079,7 @@ const removeImage = () => {
                 </div>
                 <p v-if="locationsWithPersonnel.length === 0" class="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border-l-4 border-amber-400 dark:border-amber-600 flex items-start gap-2">
                   <span class="material-icons-outlined text-sm text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5">info</span>
-                  <span>No personnel assigned to any unit/sector. Please assign personnel in Unit/Sectors Management first.</span>
+                  <span>No personnel assigned to any unit/section. Please assign personnel in Unit/Sections Management first.</span>
                 </p>
               </div>
             </div>

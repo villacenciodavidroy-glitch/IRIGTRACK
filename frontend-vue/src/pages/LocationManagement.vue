@@ -10,11 +10,11 @@
               <span class="material-icons-outlined text-4xl text-white">location_on</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Unit/Sectors Management</h1>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Unit/Sections Management</h1>
               <p v-if="!loading" class="text-green-100 text-sm sm:text-base">
-                {{ pagination.total || 0 }} {{ pagination.total === 1 ? 'unit/sector' : 'units/sectors' }} found
+                {{ pagination.total || 0 }} {{ pagination.total === 1 ? 'unit/section' : 'units/sections' }} found
               </p>
-              <p v-else class="text-green-100 text-sm sm:text-base">Loading units/sectors...</p>
+              <p v-else class="text-green-100 text-sm sm:text-base">Loading units/sections...</p>
             </div>
           </div>
           <div class="flex items-center gap-3 w-full sm:w-auto">
@@ -23,7 +23,7 @@
               class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg"
             >
               <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
-              <span>Add Unit/Sector</span>
+              <span>Add Unit/Section</span>
             </button>
           </div>
         </div>
@@ -35,7 +35,7 @@
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Units/Sectors</p>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Units/Sections</p>
             <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ pagination.total || 0 }}</p>
           </div>
           <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
@@ -74,10 +74,10 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <span class="material-icons-outlined text-white text-2xl">business</span>
-            <h2 class="text-xl font-bold text-white">All Units/Sectors</h2>
+            <h2 class="text-xl font-bold text-white">All Units/Sections</h2>
           </div>
           <div class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
-            <span class="text-sm font-semibold text-white">{{ pagination.total || 0 }} units/sectors</span>
+            <span class="text-sm font-semibold text-white">{{ pagination.total || 0 }} units/sections</span>
           </div>
         </div>
       </div>
@@ -90,7 +90,7 @@
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">
                 <div class="flex items-center gap-2 cursor-pointer hover:text-green-400 dark:hover:text-green-400 transition-colors" @click="toggleSort('location')">
                   <span class="material-icons-outlined text-base">sort</span>
-                  <span>Unit/Sector (Department)</span>
+                  <span>Unit/Section (Department)</span>
                 </div>
               </th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">
@@ -141,7 +141,7 @@
                   <button 
                     @click.stop="openEditModal(location)"
                     class="p-2.5 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
-                    title="Edit Unit/Sector"
+                    title="Edit Unit/Section"
                   >
                     <span class="material-icons-outlined text-base">edit</span>
                   </button>
@@ -162,7 +162,7 @@
                         class="w-full text-left px-4 py-3 text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-all"
                       >
                         <span class="material-icons-outlined text-lg text-blue-400 dark:text-blue-400">edit</span>
-                        <span>Edit Unit/Sector</span>
+                        <span>Edit Unit/Section</span>
                       </button>
                       <div class="h-px bg-gray-50 dark:bg-gray-700 my-1"></div>
                       <button 
@@ -170,7 +170,7 @@
                         class="w-full text-left px-4 py-3 text-sm font-medium text-red-400 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-all"
                       >
                         <span class="material-icons-outlined text-lg">delete</span>
-                        <span>Delete Unit/Sector</span>
+                        <span>Delete Unit/Section</span>
                       </button>
                     </div>
                   </button>
@@ -185,7 +185,7 @@
           <div class="inline-block p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
             <span class="material-icons-outlined animate-spin text-5xl text-green-400 dark:text-green-400">refresh</span>
           </div>
-          <p class="text-lg font-semibold text-gray-900 dark:text-white">Loading units/sectors...</p>
+          <p class="text-lg font-semibold text-gray-900 dark:text-white">Loading units/sections...</p>
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Please wait a moment</p>
         </div>
 
@@ -194,14 +194,14 @@
           <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
             <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">location_on</span>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No units/sectors found</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-6">Create your first unit/sector to get started!</p>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No units/sections found</h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-6">Create your first unit/section to get started!</p>
           <button 
             @click="openCreateModal"
             class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all font-semibold flex items-center gap-2 mx-auto"
           >
             <span class="material-icons-outlined">add_circle</span>
-            <span>Create First Unit/Sector</span>
+            <span>Create First Unit/Section</span>
           </button>
         </div>
 
@@ -277,9 +277,9 @@
               </div>
               <div>
                 <h2 class="text-xl sm:text-2xl font-bold text-white">
-                  {{ isEditing ? 'Edit Unit/Sector' : 'Add New Unit/Sector' }}
+                  {{ isEditing ? 'Edit Unit/Section' : 'Add New Unit/Section' }}
                 </h2>
-                <p class="text-xs text-green-100 mt-0.5">{{ isEditing ? 'Update unit/sector information' : 'Create a new unit/sector for your inventory' }}</p>
+                <p class="text-xs text-green-100 mt-0.5">{{ isEditing ? 'Update unit/section information' : 'Create a new unit/section for your inventory' }}</p>
               </div>
             </div>
             <button @click="closeModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
@@ -289,9 +289,9 @@
         </div>
 
         <form @submit.prevent="handleSubmit" class="space-y-6">
-          <!-- Unit/Sector Name -->
+          <!-- Unit/Section Name -->
           <div class="form-group">
-            <label class="form-label">Unit/Sector Name (Department)</label>
+            <label class="form-label">Unit/Section Name (Department)</label>
             <div class="relative">
               <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10">
                 <span class="material-icons-outlined text-xl leading-none">location_on</span>
@@ -299,7 +299,7 @@
               <input
                 v-model="formData.location"
                 type="text"
-                placeholder="Enter unit/sector/department name"
+                placeholder="Enter unit/section/department name"
                 class="form-input pl-12 pr-4 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500/20 relative z-0"
                 required
                 :disabled="isSubmitting"
@@ -364,7 +364,7 @@
               <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
                 <span class="material-icons-outlined text-white text-2xl">delete_forever</span>
               </div>
-              <h3 class="text-xl font-bold text-white">Delete Unit/Sector</h3>
+              <h3 class="text-xl font-bold text-white">Delete Unit/Section</h3>
             </div>
             <button @click="closeDeleteModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
               <span class="material-icons-outlined">close</span>
@@ -384,7 +384,7 @@
             <div v-if="locationToDelete?.items_count || locationToDelete?.users_count" class="inline-flex items-center gap-2 px-4 py-2 bg-red-900/20 dark:bg-red-900/20 border border-red-700 dark:border-red-700 text-red-300 dark:text-red-300 text-sm rounded-lg">
               <span class="material-icons-outlined text-base">info</span>
               <span>
-                This unit/sector is used by 
+                This unit/section is used by 
                 <span v-if="locationToDelete.items_count"><strong>{{ locationToDelete.items_count }}</strong> item(s)</span>
                 <span v-if="locationToDelete.items_count && locationToDelete.users_count"> and </span>
                 <span v-if="locationToDelete.users_count"><strong>{{ locationToDelete.users_count }}</strong> user(s)</span>.
@@ -408,7 +408,7 @@
             >
               <span v-if="isDeleting" class="material-icons-outlined animate-spin text-base">refresh</span>
               <span v-else class="material-icons-outlined text-base">delete</span>
-              {{ isDeleting ? 'Deleting...' : 'Delete Unit/Sector' }}
+              {{ isDeleting ? 'Deleting...' : 'Delete Unit/Section' }}
             </button>
           </div>
         </div>
@@ -512,7 +512,7 @@ const handleSubmit = async () => {
     errors.value = {}
 
     if (!formData.value.location.trim()) {
-      errors.value.location = ['Unit/Sector name is required']
+      errors.value.location = ['Unit/Section name is required']
       isSubmitting.value = false
       return
     }
@@ -531,8 +531,8 @@ const handleSubmit = async () => {
 
     if (response.data?.success) {
       successMessage.value = isEditing.value 
-        ? 'Unit/Sector updated successfully!' 
-        : 'Unit/Sector created successfully!'
+        ? 'Unit/Section updated successfully!' 
+        : 'Unit/Section created successfully!'
       successModalType.value = 'success'
       showSuccessModal.value = true
       
@@ -540,7 +540,7 @@ const handleSubmit = async () => {
       closeModal()
     }
   } catch (error) {
-    console.error('Error saving unit/sector:', error)
+    console.error('Error saving unit/section:', error)
     
     if (error.response?.data?.errors) {
       errors.value = error.response.data.errors
@@ -574,7 +574,7 @@ const handleDelete = async () => {
     const response = await axiosClient.delete(`/locations/${locationId}`)
     
     if (response.data?.success) {
-      successMessage.value = 'Unit/Sector deleted successfully!'
+      successMessage.value = 'Unit/Section deleted successfully!'
       successModalType.value = 'success'
       showSuccessModal.value = true
       
@@ -582,14 +582,14 @@ const handleDelete = async () => {
       closeDeleteModal()
     }
   } catch (error) {
-    console.error('Error deleting unit/sector:', error)
+    console.error('Error deleting unit/section:', error)
     
     if (error.response?.data?.message) {
       successMessage.value = error.response.data.message
       successModalType.value = 'error'
       showSuccessModal.value = true
     } else {
-      successMessage.value = 'Failed to delete unit/sector. Please try again.'
+      successMessage.value = 'Failed to delete unit/section. Please try again.'
       successModalType.value = 'error'
       showSuccessModal.value = true
     }

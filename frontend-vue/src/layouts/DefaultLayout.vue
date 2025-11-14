@@ -94,12 +94,19 @@ const checkAndShowPendingRequestsBanner = () => {
     
     // ALWAYS update banner if there are pending requests (even if already showing)
     // This ensures the banner updates when new requests come in
+    // Force show the banner even if it's already showing to ensure it's visible
     console.log('📢 Showing/updating banner for pending requests:', message, 'Current banner showing:', showBanner.value)
-    showSimpleBanner(
-      message,
-      'success',
-      false // Don't auto-hide if there are pending requests
-    )
+    
+    // Clear any existing timeout that might hide the banner
+    if (bannerTimeout) {
+      clearTimeout(bannerTimeout)
+      bannerTimeout = null
+    }
+    
+    // Always show the banner when there are pending requests
+    bannerMessage.value = message
+    bannerType.value = 'success'
+    showBanner.value = true
   } else {
     // No pending requests, hide banner if it's showing a pending request message
     if (showBanner.value && (bannerMessage.value.includes('Pending borrow request') || bannerMessage.value.includes('pending borrow request'))) {
@@ -110,10 +117,26 @@ const checkAndShowPendingRequestsBanner = () => {
 }
 
 // Watch for changes in notifications and update banner accordingly
+// Use immediate and deep watching to catch all changes
 watch(notifications, () => {
   console.log('📬 Notifications changed, checking pending requests...')
-  checkAndShowPendingRequestsBanner()
+  // Use nextTick to ensure the notification array is fully updated
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 0)
 }, { deep: true, immediate: true })
+
+// Also watch for changes in individual notification properties
+watch(() => notifications.value.map(n => ({
+  id: n.id,
+  type: n.type,
+  status: n.borrowRequest?.status
+})), () => {
+  console.log('📬 Notification properties changed, checking pending requests...')
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 0)
+}, { deep: true })
 
 // Store interval for periodic banner check
 let bannerCheckInterval = null
@@ -121,7 +144,14 @@ let bannerCheckInterval = null
 // Wrapper for refreshNotifications to ensure banner check
 const handleRefreshNotifications = async () => {
   await refreshNotifications()
-  // Banner check will be triggered by watcher, but also check explicitly after a short delay
+  // Banner check will be triggered by watcher, but also check explicitly multiple times to ensure it shows
+  checkAndShowPendingRequestsBanner()
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 50)
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 100)
   setTimeout(() => {
     checkAndShowPendingRequestsBanner()
   }, 200)
@@ -169,8 +199,11 @@ const handleGlobalApprove = async (notification) => {
       await fetchNotifications(5)
       await fetchUnreadCount()
       
-      // Check and update banner for pending requests
+      // Check and update banner for pending requests - ensure it always shows if there are requests
       checkAndShowPendingRequestsBanner()
+      setTimeout(() => {
+        checkAndShowPendingRequestsBanner()
+      }, 100)
     } else {
       // Revert status on error
       notification.borrowRequest.status = originalStatus
@@ -242,8 +275,11 @@ const confirmReject = async () => {
       await fetchNotifications(5)
       await fetchUnreadCount()
       
-      // Check and update banner for pending requests
+      // Check and update banner for pending requests - ensure it always shows if there are requests
       checkAndShowPendingRequestsBanner()
+      setTimeout(() => {
+        checkAndShowPendingRequestsBanner()
+      }, 100)
     } else {
       // Revert status on error
       notification.borrowRequest.status = originalStatus
@@ -315,7 +351,7 @@ const baseNavigation = [
 // Admin-only navigation items
 const adminNavigation = [
   { name: 'Categories', path: '/categories', icon: 'category' },
-  { name: 'Units/Sectors', path: '/locations', icon: 'location_on' },
+  { name: 'Units/Sections', path: '/locations', icon: 'location_on' },
   { name: 'Admins', path: '/admin', icon: 'people' },
   { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' },
   { name: 'Activity Log', path: '/activity-log', icon: 'history' },
@@ -588,10 +624,20 @@ const setupGlobalNotificationListener = () => {
           // For NEW borrow requests, immediately check and show banner
           if (newNotification.type === 'borrow_request' && newNotification.borrowRequest?.status === 'pending') {
             console.log('🆕 New borrow request received, checking banner immediately')
-            // Force immediate check
+            // Force immediate check - check multiple times to ensure it shows
+            checkAndShowPendingRequestsBanner()
+            setTimeout(() => {
+              checkAndShowPendingRequestsBanner()
+            }, 10)
             setTimeout(() => {
               checkAndShowPendingRequestsBanner()
             }, 50)
+            setTimeout(() => {
+              checkAndShowPendingRequestsBanner()
+            }, 100)
+            setTimeout(() => {
+              checkAndShowPendingRequestsBanner()
+            }, 300)
           }
           
         } else {
@@ -609,8 +655,14 @@ const setupGlobalNotificationListener = () => {
         }
         
         // ALWAYS check and show banner for pending requests after any notification update
-        // Check multiple times to ensure it catches all updates
+        // Check multiple times to ensure it catches all updates and always shows if there are requests
         checkAndShowPendingRequestsBanner()
+        setTimeout(() => {
+          checkAndShowPendingRequestsBanner()
+        }, 10)
+        setTimeout(() => {
+          checkAndShowPendingRequestsBanner()
+        }, 50)
         setTimeout(() => {
           checkAndShowPendingRequestsBanner()
         }, 100)
@@ -646,9 +698,17 @@ onMounted(async () => {
   await fetchNotifications(5) // Fetch only 5 for the dropdown
   
   // Check for pending borrow requests and show banner after fetching notifications
+  // Check multiple times to ensure banner shows if there are requests
+  checkAndShowPendingRequestsBanner()
   setTimeout(() => {
     checkAndShowPendingRequestsBanner()
-  }, 200) // Small delay to ensure notifications are loaded
+  }, 100) // Small delay to ensure notifications are loaded
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 200) // Additional check
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 500) // Final check to ensure banner is shown
   
   // Setup global real-time listener for notifications (works on all pages)
   setTimeout(() => {
@@ -657,16 +717,21 @@ onMounted(async () => {
     setupRealtimeListener()
   }, 500) // Wait a bit for Echo to initialize
   
-  // Set up periodic banner check (every 3 seconds) to ensure banner always shows if there are requests
+  // Set up periodic banner check (every 2 seconds) to ensure banner always shows if there are requests
+  // More frequent checks ensure the banner is always visible when there are pending requests
   bannerCheckInterval = setInterval(() => {
     checkAndShowPendingRequestsBanner()
-  }, 3000) // Check every 3 seconds
+  }, 2000) // Check every 2 seconds to ensure banner always shows
   
   // Also refresh notifications periodically to ensure we have latest data
   const notificationRefreshInterval = setInterval(async () => {
     console.log('🔄 Periodic notification refresh...')
     await fetchNotifications(5)
-    // Check banner multiple times after refresh to ensure it updates
+    // Check banner multiple times after refresh to ensure it updates and always shows if there are requests
+    checkAndShowPendingRequestsBanner()
+    setTimeout(() => {
+      checkAndShowPendingRequestsBanner()
+    }, 50)
     setTimeout(() => {
       checkAndShowPendingRequestsBanner()
     }, 100)

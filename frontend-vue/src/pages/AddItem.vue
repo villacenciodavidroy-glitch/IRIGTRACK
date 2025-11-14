@@ -180,22 +180,22 @@
                 <span class="material-icons-outlined text-white text-xl">location_on</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sectors</h2>
-                <p class="text-xs text-green-100">Item unit/sectors and personnel assignment</p>
+                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sections</h2>
+                <p class="text-xs text-green-100">Item unit/sections and personnel assignment</p>
               </div>
             </div>
           </div>
           <div class="p-6 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <!-- Unit/Sectors -->
+              <!-- Unit/Sections -->
               <div class="form-group">
-                <label class="form-label">Unit/Sectors <span class="text-red-500">*</span></label>
+                <label class="form-label">Unit/Sections <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">location_on</span>
                   </span>
                   <select v-model="formData.location" class="form-select-enhanced !pl-12" required>
-                    <option value="" disabled>Select Unit/Sector</option>
+                    <option value="" disabled>Select Unit/Section</option>
                     <option  v-for="location in locations" 
                         :key="location.id" 
                         :value="location.id || location.location_id">
@@ -223,7 +223,7 @@
                 </div>
                 <p v-if="locationsWithPersonnel.length === 0" class="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border-l-4 border-amber-400 dark:border-amber-600 flex items-start gap-2">
                   <span class="material-icons-outlined text-sm text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5">info</span>
-                  <span>No personnel assigned to any unit/sector. Please assign personnel in Unit/Sectors Management first.</span>
+                  <span>No personnel assigned to any unit/section. Please assign personnel in Unit/Sections Management first.</span>
                 </p>
               </div>
             </div>
@@ -543,7 +543,7 @@ const handleSubmit = async () => {
     // Check if location is selected
     if (!formData.value.location) {
       console.error('No location selected')
-      errors.value.location = ['Please select a unit/sector']
+      errors.value.location = ['Please select a unit/section']
       isSubmitting.value = false
       return
     }

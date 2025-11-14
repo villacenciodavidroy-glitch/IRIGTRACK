@@ -643,7 +643,7 @@ onMounted(() => {
             <input
               v-model="adminSearchQuery"
               type="text"
-              placeholder="Search by name, email, or unit/sectors..."
+              placeholder="Search by name, email, or unit/sections..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium"
             >
             <div v-if="adminSearchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -671,7 +671,7 @@ onMounted(() => {
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Full Name</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">No.</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Date</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sectors</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sections</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -831,7 +831,7 @@ onMounted(() => {
             <input
               v-model="userSearchQuery"
               type="text"
-              placeholder="Search by name, email, or unit/sectors..."
+              placeholder="Search by name, email, or unit/sections..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium"
             >
             <div v-if="userSearchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -859,7 +859,7 @@ onMounted(() => {
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Full Name</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">No.</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Date</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sectors</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sections</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -1019,7 +1019,7 @@ onMounted(() => {
             <input
               v-model="supplySearchQuery"
               type="text"
-              placeholder="Search by name, email, or unit/sectors..."
+              placeholder="Search by name, email, or unit/sections..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium"
             >
             <div v-if="supplySearchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -1047,7 +1047,7 @@ onMounted(() => {
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Full Name</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">No.</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Date</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sectors</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sections</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Actions</th>
               </tr>
             </thead>

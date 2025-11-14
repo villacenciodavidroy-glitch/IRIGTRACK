@@ -496,7 +496,7 @@ const printInventory = () => {
             <th>Property Account Code</th>
             <th>Unit Value</th>
             <th>Date Acquired</th>
-            <th>Unit/Sectors</th>
+            <th>Unit/Sections</th>
             <th>Condition</th>
             <th>Issued To</th>
             <th>Quantity</th>
@@ -711,7 +711,7 @@ const navigateBack = () => {
                 class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
               >
                 <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
-                <span>Unit/Sectors</span>
+                <span>Unit/Sections</span>
               </button>
               <button 
                 @click="goToAddItem"
@@ -777,7 +777,7 @@ const navigateBack = () => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search by article, description, category, PAC, or unit/sectors..."
+              placeholder="Search by article, description, category, PAC, or unit/sections..."
               class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
             >
             <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -873,7 +873,7 @@ const navigateBack = () => {
               <!-- Action buttons -->
               <div class="flex justify-between items-center mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                 <div class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-medium">Unit/Sectors:</span> {{ item.location || 'N/A' }}
+                  <span class="font-medium">Unit/Sections:</span> {{ item.location || 'N/A' }}
                 </div>
                 <div class="flex justify-end gap-2">
                   <button 
@@ -931,7 +931,7 @@ const navigateBack = () => {
                 <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
                 <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
                 <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.O. NUMBER</th>
-                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTORS</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTIONS</th>
                 <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
                 <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
                 <th class="sticky right-0 z-10 bg-gray-100 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
@@ -1229,7 +1229,7 @@ const navigateBack = () => {
                         <div class="text-sm font-medium text-gray-900">{{ selectedQrItem?.description || 'N/A' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">UNIT/SECTORS</div>
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">UNIT/SECTIONS</div>
                         <div class="text-sm font-medium text-gray-900 flex items-center gap-1">
                           <span class="material-icons-outlined text-green-600 text-base">location_on</span>
                           {{ selectedQrItem?.location || 'N/A' }}
@@ -1348,7 +1348,7 @@ const navigateBack = () => {
                     <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.poNumber || 'N/A' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Unit/Sectors</div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Unit/Sections</div>
                     <div class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1">
                       <span class="material-icons-outlined text-green-600 dark:text-green-400 text-sm">location_on</span>
                       {{ specs.location || 'N/A' }}

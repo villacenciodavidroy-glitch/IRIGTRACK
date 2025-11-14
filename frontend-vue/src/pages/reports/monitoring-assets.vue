@@ -10,7 +10,7 @@ const router = useRouter()
 const searchQuery = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
-const selectedLocation = ref('all') // all units/sectors
+const selectedLocation = ref('all') // all units/sections
 const viewMode = ref('cards') // 'cards' or 'table'
 const selectedCategory = ref(null)
 
@@ -56,7 +56,7 @@ onMounted(async () => {
 // IMPORTANT: This mapping MUST match Inventory.vue EXACTLY to ensure data consistency
 // Both pages use the same API endpoint (/items) via useItems() composable
 // The API (ItemResource) returns:
-// - location: unit/sector name as string (from location relationship)
+// - location: unit/section name as string (from location relationship)
 // - issued_to: location.personnel (priority) or user.fullname (fallback) as string
 const inventoryItems = computed(() => {
   return items.value.map(item => ({
@@ -87,7 +87,7 @@ const inventoryItems = computed(() => {
 const filteredItems = computed(() => {
   let filtered = selectedCategory.value ? categoryItems.value : inventoryItems.value
 
-  // Filter by unit/sector
+  // Filter by unit/section
   if (selectedLocation.value !== 'all') {
     filtered = filtered.filter(item => item.location === selectedLocation.value)
   }
@@ -126,7 +126,7 @@ const changeItemsPerPage = (newValue) => {
 
 
 
-// Get unique units/sectors for filter
+// Get unique units/sections for filter
 const uniqueLocations = computed(() => {
   const locations = [...new Set(inventoryItems.value.map(item => item.location).filter(Boolean))]
   return locations.sort()
@@ -389,7 +389,7 @@ const printReport = () => {
             <th class="value-col">UNIT VALUE</th>
             <th class="date-col">DATE ACQUIRED</th>
             <th class="po-col">P.O. NUMBER</th>
-            <th class="location-col">UNIT/SECTORS</th>
+            <th class="location-col">UNIT/SECTIONS</th>
             <th class="condition-col">CONDITION</th>
           </tr>
         </thead>
@@ -554,7 +554,7 @@ const exportToExcel = async () => {
             v-model="selectedLocation"
             class="bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow"
           >
-            <option value="all">All Unit/Sectors</option>
+            <option value="all">All Unit/Sections</option>
             <option v-for="location in uniqueLocations" :key="location" :value="location">
               {{ location }}
             </option>
@@ -724,7 +724,7 @@ const exportToExcel = async () => {
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.A.C.</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTORS</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTIONS</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider">QUANTITY</th>

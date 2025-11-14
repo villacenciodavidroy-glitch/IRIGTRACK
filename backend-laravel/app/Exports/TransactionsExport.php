@@ -51,7 +51,7 @@ class TransactionsExport implements FromCollection, WithHeadings, WithMapping, W
             'Requested By',
             'Approved By',
             'Name of Receiver',
-            'Unit/Sectors',
+            'Unit/Sections',
             'Item Name',
             'Quantity',
             'Transaction Time',
@@ -115,7 +115,7 @@ class TransactionsExport implements FromCollection, WithHeadings, WithMapping, W
             'A' => 18,  // Requested By
             'B' => 18,  // Approved By
             'C' => 20,  // Name of Receiver
-            'D' => 15,  // Unit/Sectors
+            'D' => 15,  // Unit/Sections
             'E' => 25,  // Item Name
             'F' => 10,  // Quantity
             'G' => 25,  // Transaction Time

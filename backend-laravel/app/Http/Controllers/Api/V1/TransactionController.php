@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Exports\TransactionsExport;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 
 class TransactionController extends Controller
@@ -43,11 +45,20 @@ class TransactionController extends Controller
                 // approved_by now stores the full name directly, use it as-is
                 $approverName = $transaction->approved_by ?? 'N/A';
                 
+                // Get requested_by - ensure it's not null or empty
+                $requestedBy = $transaction->requested_by;
+                if (empty($requestedBy) || $requestedBy === null) {
+                    $requestedBy = 'N/A';
+                    // Log if requested_by is missing for debugging
+                    \Log::warning("Transaction ID {$transaction->id} has NULL or empty requested_by field");
+                }
+                
                 return [
                     'id' => $transaction->id,
                     'approved_by' => $approverName, // This is now the full name, not an ID
                     'approver_name' => $approverName, // Same as approved_by (full name)
                     'borrower_name' => $transaction->borrower_name,
+                    'requested_by' => $requestedBy, // The user who sent the request
                     'location' => $transaction->location,
                     'item_name' => $transaction->item_name,
                     'quantity' => $transaction->quantity,
@@ -68,6 +79,41 @@ class TransactionController extends Controller
                 'success' => false,
                 'message' => 'Error fetching transactions',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Export transactions to Excel
+     */
+    public function exportTransactions(Request $request)
+    {
+        try {
+            $transactionsParam = $request->input('transactions'); // Optional: JSON string of transactions from frontend
+
+            $fileName = 'Transactions_' . date('Y-m-d_His') . '.xlsx';
+            
+            // Decode transactions if provided as JSON string
+            $transactions = null;
+            if ($transactionsParam) {
+                $decodedTransactions = is_string($transactionsParam) ? json_decode($transactionsParam, true) : $transactionsParam;
+                if (is_array($decodedTransactions) && count($decodedTransactions) > 0) {
+                    $transactions = $decodedTransactions;
+                }
+            }
+            
+            if ($transactions) {
+                // Export filtered transactions from frontend
+                return Excel::download(new TransactionsExport($transactions), $fileName);
+            } else {
+                // Export all transactions
+                return Excel::download(new TransactionsExport(null), $fileName);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error exporting transactions: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to export transactions: ' . $e->getMessage(),
+                'status' => 'error'
             ], 500);
         }
     }

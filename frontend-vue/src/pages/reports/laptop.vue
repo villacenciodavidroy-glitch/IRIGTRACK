@@ -82,7 +82,7 @@ const entriesPerPage = ref(10)
             <th class="border px-4 py-2">UNIT VALUE</th>
             <th class="border px-4 py-2">DATE ACQUIRED</th>
             <th class="border px-4 py-2">P.O. NUMBER</th>
-            <th class="border px-4 py-2">LOCATION</th>
+            <th class="border px-4 py-2">UNIT/SECTORS</th>
             <th class="border px-4 py-2">CONDITION</th>
           </tr>
         </thead>
@@ -104,7 +104,7 @@ const entriesPerPage = ref(10)
 
     <!-- Pagination -->
     <div class="flex justify-between items-center mt-4">
-      <div>Showing 1 to {{ items.length }} of {{ items.length }} entries</div>
+      <div style="color: #01200E;">Showing <span style="color: #01200E; font-weight: bold;">1</span> to <span style="color: #01200E; font-weight: bold;">{{ items.length }}</span> of <span style="color: #01200E; font-weight: bold;">{{ items.length }}</span> entries</div>
       <div class="flex gap-2">
         <button class="px-3 py-1 border rounded" disabled>Previous</button>
         <button class="px-3 py-1 bg-green-600 text-white rounded">1</button>

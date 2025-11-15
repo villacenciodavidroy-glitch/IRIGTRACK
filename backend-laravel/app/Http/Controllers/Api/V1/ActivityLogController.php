@@ -72,6 +72,19 @@ class ActivityLogController extends Controller
                     }
                 }
                 
+                // Safely get location name
+                $locationName = 'N/A';
+                if ($displayUser) {
+                    if ($displayUser->relationLoaded('location')) {
+                        $location = $displayUser->getRelation('location');
+                        if ($location instanceof \App\Models\Location && isset($location->location)) {
+                            $locationName = $location->location;
+                        }
+                    } elseif ($displayUser->location instanceof \App\Models\Location && isset($displayUser->location->location)) {
+                        $locationName = $displayUser->location->location;
+                    }
+                }
+                
                 return [
                     'id' => $log->id,
                     'name' => $displayUser ? $displayUser->fullname : 'Unknown User',
@@ -82,7 +95,7 @@ class ActivityLogController extends Controller
                     'role' => $displayUser ? ucfirst($displayUser->role) : 'Guest',
                     'description' => $log->description,
                     'ip_address' => $log->ip_address,
-                    'location' => $displayUser && $displayUser->location ? $displayUser->location->location : 'N/A',
+                    'location' => $locationName,
                     'created_at' => $log->created_at->toISOString()
                 ];
             });

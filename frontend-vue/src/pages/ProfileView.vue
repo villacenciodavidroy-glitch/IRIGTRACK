@@ -406,16 +406,16 @@ const validatePasswords = () => {
             />
           </div>
 
-          <!-- Location -->
+          <!-- Unit/Sectors -->
           <div>
-            <label class="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Location</label>
+            <label class="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Unit/Sectors</label>
             <select
               v-model="user.location"
               @change="updateLocationId"
               :disabled="locationsLoading"
               class="w-full px-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="" disabled>Select Location</option>
+              <option value="" disabled>Select Unit/Sector</option>
               <option
                 v-for="location in locations"
                 :key="location.id || location.location_id"
@@ -426,11 +426,11 @@ const validatePasswords = () => {
             </select>
             <p v-if="locationsLoading" class="mt-2 text-xs text-yellow-600 flex items-center gap-1">
               <span class="material-icons-outlined text-sm">hourglass_empty</span>
-              Loading locations...
+              Loading units/sectors...
             </p>
             <p v-if="!locationsLoading && locations.length === 0" class="mt-2 text-xs text-red-600 flex items-center gap-1">
               <span class="material-icons-outlined text-sm">warning</span>
-              No locations available. Please add locations first.
+              No units/sectors available. Please add units/sectors first.
             </p>
           </div>
 
@@ -590,7 +590,7 @@ const validatePasswords = () => {
                 <p class="text-base font-semibold text-gray-900 dark:text-white break-words">{{ user.email || 'Not set' }}</p>
               </div>
               <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors">
-                <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Location</label>
+                <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Unit/Sectors</label>
                 <p class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <span v-if="user.location" class="material-icons-outlined text-green-400 dark:text-green-400 text-sm">location_on</span>
                   {{ user.location || 'Not set' }}

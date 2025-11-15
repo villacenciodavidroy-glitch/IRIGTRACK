@@ -9,7 +9,7 @@ class Transaction extends Model
     protected $table = 'transactions';
     
     protected $fillable = [
-        'approved_by', 'borrower_name', 'location', 'item_name', 'quantity', 'transaction_time', 'role', 'status'
+        'approved_by', 'borrower_name', 'requested_by', 'location', 'item_name', 'quantity', 'transaction_time', 'role', 'status'
     ];
 
     protected $casts = [

@@ -26,30 +26,34 @@ import axiosClient from './axios'
 const routes = [
     {
         path: '/',
+        redirect: '/login'
+    },
+    {
+        path: '/',
         component: DefaultLayout,
         children: [
             {
-                path: '/dashboard',
+                path: 'dashboard',
                 name: 'Dashboard',
                 component: Dashboard
             },
             {
-                path: '/profile',
+                path: 'profile',
                 name: 'Profile',
                 component: Profile
             },
             {
-                path: '/activity-log',
+                path: 'activity-log',
                 name: 'ActivityLog',
                 component: ActivityLog
             },
             {
-                path: '/history',
+                path: 'history',
                 name: 'History',
                 children: [
                     {
                         path: '',
-                        redirect: '/history/deleted-items'
+                        redirect: 'deleted-items'
                     },
                     {
                         path: 'deleted-items',
@@ -59,105 +63,100 @@ const routes = [
                 ]
             },
             {
-                path: '/inventory',
+                path: 'inventory',
                 name: 'Inventory',
                 component: Inventory
             },
             {
-                path: '/categories',
+                path: 'categories',
                 name: 'CategoryManagement',
                 component: () => import('./pages/CategoryManagement.vue')
             },
             {
-                path: '/locations',
+                path: 'locations',
                 name: 'LocationManagement',
                 component: () => import('./pages/LocationManagement.vue')
             },
             {
-                path: '/add-item',
+                path: 'add-item',
                 name: 'AddItem',
                 component: AddItem
             },
             {
-                path: '/admin',
+                path: 'admin',
                 name: 'Admin',
                 component: Admin
             },{
-                path: '/analytics',
+                path: 'analytics',
                 name: 'Analytics',
                 component: Analytics
             },
             {
-                path: '/supplies',
+                path: 'supplies',
                 name: 'SuppliesOverview',
                 component: SuppliesOverview
             },
             {
-                path: '/usage',
+                path: 'usage',
                 name: 'UsageOverview',
                 component: UsageOverview
             },
             {
-                path: '/add-account',
+                path: 'add-account',
                 name: 'AddAccount',
                 component: AddAccount
             },
             {
-                path: '/edit-account/:id',
+                path: 'edit-account/:id',
                 name: 'EditAccount',
                 component: EditAccount
             },
             {
-                path: '/reporting',
+                path: 'reporting',
                 name: 'Reporting',
                 component: Reporting
             },
             {
-                path: '/reports/desktop/:type?',
+                path: 'reports/desktop/:type?',
                 name: 'DesktopMonitoring',
                 component: DesktopMonitoring
             },
             {
-                path: '/reports/serviceable-items',
+                path: 'reports/serviceable-items',
                 name: 'ServiceableItems',
                 component: ServiceableItems
             },
             {
-                path: '/reports/monitoring-assets',
+                path: 'reports/monitoring-assets',
                 name: 'MonitoringAssets',
                 component: () => import('./pages/reports/monitoring-assets.vue')
             },
             {
-                path: '/reports/life-cycles-data',
+                path: 'reports/life-cycles-data',
                 name: 'LifeCyclesData',
                 component: () => import('./pages/reports/life-cycles-data.vue')
             },
             {
-                path: '/QRGeneration',
+                path: 'QRGeneration',
                 name: 'QRGeneration',
                 component: QRGeneration
             },
             {
-                path: '/edit-item/:uuid',
+                path: 'edit-item/:uuid',
                 name: 'EditItem',
                 component: () => import('./pages/EditItem.vue')
             },
             {
-                path: '/notifications',
+                path: 'notifications',
                 name: 'Notifications',
                 component: Notifications
             },
             {
-                path: '/transactions',
+                path: 'transactions',
                 name: 'Transactions',
                 component: () => import('./pages/Transactions.vue')
             }
         ]
-    },
-    {
-        path: '',
-        redirect: '/Login',
-        component: Login
     },
     {
         path: '/login',
@@ -192,6 +191,12 @@ const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Trans
 router.beforeEach(async (to, from, next) => {
     const token = localStorage.getItem('token')
     const isPublicRoute = publicRoutes.includes(to.name)
+    
+    // Handle root path - always redirect to login
+    if (to.path === '/' || (to.path === '/' && to.name === undefined)) {
+        next('/login')
+        return
+    }
     
     // If trying to navigate away from login page using browser back button
     if (from.name === 'Login' && to.name === undefined) {

@@ -531,7 +531,7 @@ const printReport = () => {
             <th>PROPERTY ACCOUNT CODE</th>
             <th>UNIT VALUE</th>
             <th>DATE ACQUIRED</th>
-            <th>LOCATION</th>
+            <th>UNIT/SECTORS</th>
             <th>CONDITION</th>
             <th>ISSUED TO</th>
             <th>QUANTITY</th>
@@ -727,7 +727,7 @@ const goBack = () => {
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Property Account Code</th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Unit Value</th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Date Acquired</th>
-                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Location</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Unit/Sectors</th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Condition</th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Issued To</th>
                 <th class="px-4 py-3 text-center text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Quantity</th>
@@ -802,8 +802,8 @@ const goBack = () => {
         <div v-if="!loading && filteredItems.length > 0" class="bg-gradient-to-r from-green-50 to-green-100 dark:from-gray-700 dark:to-gray-700 px-6 py-4 border-t border-green-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div class="text-sm font-medium text-gray-700 dark:text-white">
-                Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }} of {{ filteredItems.length }}
+              <div class="text-sm font-medium" style="color: #01200E;">
+                Result <span style="color: #01200E; font-weight: bold;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>-<span style="color: #01200E; font-weight: bold;">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of <span style="color: #01200E; font-weight: bold;">{{ filteredItems.length }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <label class="text-sm font-medium text-gray-700 dark:text-white">Items per page:</label>

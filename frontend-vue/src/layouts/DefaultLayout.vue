@@ -18,6 +18,15 @@ const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAs
 const showGlobalPopup = ref(false)
 const globalPopupNotification = ref(null)
 
+// Reject confirmation modal state
+const showRejectModal = ref(false)
+const notificationToReject = ref(null)
+
+// Simple banner state
+const showBanner = ref(false)
+const bannerMessage = ref('')
+const bannerType = ref('success') // 'success' or 'error'
+
 // Format relative time helper
 const formatRelativeTime = (timestamp) => {
   const now = new Date()
@@ -31,46 +40,229 @@ const formatRelativeTime = (timestamp) => {
   return time.toLocaleDateString()
 }
 
+// Show simple banner
+let bannerTimeout = null
+const showSimpleBanner = (message, type = 'success', autoHide = true, duration = 4000) => {
+  // Clear any existing timeout
+  if (bannerTimeout) {
+    clearTimeout(bannerTimeout)
+    bannerTimeout = null
+  }
+  
+  bannerMessage.value = message
+  bannerType.value = type
+  showBanner.value = true
+  
+  // Auto-hide after specified duration (default 4 seconds)
+  if (autoHide) {
+    bannerTimeout = setTimeout(() => {
+      showBanner.value = false
+      bannerTimeout = null
+    }, duration)
+  }
+}
+
+// Close banner
+const closeBanner = () => {
+  if (bannerTimeout) {
+    clearTimeout(bannerTimeout)
+    bannerTimeout = null
+  }
+  showBanner.value = false
+}
+
+// Check for pending borrow requests and show banner
+const checkAndShowPendingRequestsBanner = () => {
+  // Find all pending borrow requests
+  const pendingRequests = notifications.value.filter(
+    n => n.type === 'borrow_request' && n.borrowRequest?.status === 'pending'
+  )
+  
+  console.log('🔍 Checking pending requests:', pendingRequests.length, 'pending', pendingRequests)
+  
+  if (pendingRequests.length > 0) {
+    // Show banner with count of pending requests
+    const count = pendingRequests.length
+    const latestRequest = pendingRequests[0] // Most recent
+    const itemName = latestRequest.item?.name || latestRequest.item?.unit || 'Item'
+    const requestedBy = latestRequest.borrowRequest?.borrowed_by || 'User'
+    const quantity = latestRequest.borrowRequest?.quantity || 1
+    
+    const message = count === 1
+      ? `📦 Pending borrow request: ${itemName} (${quantity} unit(s)) from ${requestedBy}`
+      : `📦 ${count} pending borrow request(s) - Latest: ${itemName} (${quantity} unit(s)) from ${requestedBy}`
+    
+    // ALWAYS update banner if there are pending requests (even if already showing)
+    // This ensures the banner updates when new requests come in
+    console.log('📢 Showing/updating banner for pending requests:', message, 'Current banner showing:', showBanner.value)
+    showSimpleBanner(
+      message,
+      'success',
+      false // Don't auto-hide if there are pending requests
+    )
+  } else {
+    // No pending requests, hide banner if it's showing a pending request message
+    if (showBanner.value && (bannerMessage.value.includes('Pending borrow request') || bannerMessage.value.includes('pending borrow request'))) {
+      console.log('✅ No pending requests, hiding banner')
+      closeBanner()
+    }
+  }
+}
+
+// Watch for changes in notifications and update banner accordingly
+watch(notifications, () => {
+  console.log('📬 Notifications changed, checking pending requests...')
+  checkAndShowPendingRequestsBanner()
+}, { deep: true, immediate: true })
+
+// Store interval for periodic banner check
+let bannerCheckInterval = null
+
+// Wrapper for refreshNotifications to ensure banner check
+const handleRefreshNotifications = async () => {
+  await refreshNotifications()
+  // Banner check will be triggered by watcher, but also check explicitly after a short delay
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 200)
+}
+
 // Handle approve from global popup
 const handleGlobalApprove = async (notification) => {
   if (!notification.borrowRequest || !notification.item) {
     return
   }
   
-  // Navigate to notifications page to handle approval
-  router.push({ 
-    name: 'Notifications',
-    query: { highlight: notification.id, action: 'approve' }
-  })
-  showGlobalPopup.value = false
+  // Check if request is already processed
+  if (notification.borrowRequest.status !== 'pending') {
+    showSimpleBanner(`Request already ${notification.borrowRequest.status}`, 'error')
+    return
+  }
+  
+  // Use UUID if available, otherwise use ID
+  const itemId = notification.item.uuid || notification.item.id || notification.item_id
+  const requestId = notification.borrowRequest.id
+  
+  if (!itemId || !requestId) {
+    showSimpleBanner('Error: Missing item ID or request ID', 'error')
+    return
+  }
+  
+  // Disable button to prevent multiple clicks
+  const originalStatus = notification.borrowRequest.status
+  notification.borrowRequest.status = 'processing'
+  
+  try {
+    const result = await approveBorrowRequest(itemId, requestId)
+    
+    if (result.success === true) {
+      // Update status immediately to 'approved'
+      notification.borrowRequest.status = 'approved'
+      
+      // Close popup
+      showGlobalPopup.value = false
+      
+      // Show success banner
+      showSimpleBanner('✓ Borrow request approved successfully', 'success')
+      
+      // Refresh notifications to get updated data from server
+      await fetchNotifications(5)
+      await fetchUnreadCount()
+      
+      // Check and update banner for pending requests
+      checkAndShowPendingRequestsBanner()
+    } else {
+      // Revert status on error
+      notification.borrowRequest.status = originalStatus
+      showSimpleBanner(result.message || 'Failed to approve borrow request', 'error')
+    }
+  } catch (error) {
+    // Revert status on error
+    notification.borrowRequest.status = originalStatus
+    console.error('Error in handleGlobalApprove:', error)
+    showSimpleBanner(error.message || 'Failed to approve borrow request', 'error')
+  }
 }
 
-// Handle reject from global popup
-const handleGlobalReject = async (notification) => {
+// Handle reject from global popup - show confirmation modal
+const handleGlobalReject = (notification) => {
   if (!notification.borrowRequest || !notification.item) {
     return
   }
   
-  if (!confirm('Are you sure you want to reject this borrow request?')) {
+  // Check if request is already processed
+  if (notification.borrowRequest.status !== 'pending') {
+    showSimpleBanner(`Request already ${notification.borrowRequest.status}`, 'error')
     return
   }
   
+  // Show reject confirmation modal
+  notificationToReject.value = notification
+  showRejectModal.value = true
+}
+
+// Confirm reject action
+const confirmReject = async () => {
+  const notification = notificationToReject.value
+  if (!notification) {
+    return
+  }
+  
+  // Close the reject modal
+  showRejectModal.value = false
+  
+  // Use UUID if available, otherwise use ID
   const itemId = notification.item.uuid || notification.item.id || notification.item_id
   const requestId = notification.borrowRequest.id
   
-  const result = await rejectBorrowRequest(itemId, requestId)
-  
-  if (result.success) {
-    // Update status
-    if (notification.borrowRequest) {
-      notification.borrowRequest.status = 'rejected'
-    }
-    showGlobalPopup.value = false
-    // Refresh notifications
-    await fetchNotifications(5)
-  } else {
-    alert(`Error: ${result.message || 'Failed to reject borrow request'}`)
+  if (!itemId || !requestId) {
+    showSimpleBanner('Error: Missing item ID or request ID', 'error')
+    notificationToReject.value = null
+    return
   }
+  
+  // Disable button to prevent multiple clicks
+  const originalStatus = notification.borrowRequest.status
+  notification.borrowRequest.status = 'processing'
+  
+  try {
+    const result = await rejectBorrowRequest(itemId, requestId)
+    
+    if (result.success) {
+      // Update status immediately to 'rejected'
+      notification.borrowRequest.status = 'rejected'
+      
+      // Close popup
+      showGlobalPopup.value = false
+      
+      // Show success banner
+      showSimpleBanner('✓ Borrow request rejected', 'success')
+      
+      // Refresh notifications to get updated data from server
+      await fetchNotifications(5)
+      await fetchUnreadCount()
+      
+      // Check and update banner for pending requests
+      checkAndShowPendingRequestsBanner()
+    } else {
+      // Revert status on error
+      notification.borrowRequest.status = originalStatus
+      showSimpleBanner(result.message || 'Failed to reject borrow request', 'error')
+    }
+  } catch (error) {
+    // Revert status on error
+    notification.borrowRequest.status = originalStatus
+    console.error('Error in confirmReject:', error)
+    showSimpleBanner(error.message || 'Failed to reject borrow request', 'error')
+  } finally {
+    notificationToReject.value = null
+  }
+}
+
+// Cancel reject action
+const cancelReject = () => {
+  showRejectModal.value = false
+  notificationToReject.value = null
 }
 
 // Handle notification click in dropdown - mark as read and navigate
@@ -123,7 +315,7 @@ const baseNavigation = [
 // Admin-only navigation items
 const adminNavigation = [
   { name: 'Categories', path: '/categories', icon: 'category' },
-  { name: 'Locations', path: '/locations', icon: 'location_on' },
+  { name: 'Units/Sectors', path: '/locations', icon: 'location_on' },
   { name: 'Admins', path: '/admin', icon: 'people' },
   { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' },
   { name: 'Activity Log', path: '/activity-log', icon: 'history' },
@@ -356,7 +548,7 @@ const setupGlobalNotificationListener = () => {
           timestamp: data.notification.timestamp || data.notification.created_at,
           date: data.notification.date,
           time: data.notification.time,
-          action: data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert',
+          action: data.notification.title || (data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert'),
           isRead: data.notification.isRead ?? false,
           priority: data.notification.priority || 'high',
           item: data.notification.item,
@@ -387,17 +579,44 @@ const setupGlobalNotificationListener = () => {
             globalPopupNotification.value = newNotification
             showGlobalPopup.value = true
             
-            // Auto-hide after 10 seconds
+            // Auto-hide popup after 10 seconds
             setTimeout(() => {
               showGlobalPopup.value = false
             }, 10000)
           }
+          
+          // For NEW borrow requests, immediately check and show banner
+          if (newNotification.type === 'borrow_request' && newNotification.borrowRequest?.status === 'pending') {
+            console.log('🆕 New borrow request received, checking banner immediately')
+            // Force immediate check
+            setTimeout(() => {
+              checkAndShowPendingRequestsBanner()
+            }, 50)
+          }
+          
         } else {
-          // Notification already exists, just update unread count
+          // Notification already exists, update it in place to trigger reactivity
+          const existingIndex = notifications.value.findIndex(n => n.id === newNotification.id)
+          if (existingIndex !== -1) {
+            // Update the existing notification to trigger reactivity
+            notifications.value[existingIndex] = { ...notifications.value[existingIndex], ...newNotification }
+          }
+          
+          // Update unread count
           if (data.unread_count !== undefined) {
             unreadCount.value = data.unread_count
           }
         }
+        
+        // ALWAYS check and show banner for pending requests after any notification update
+        // Check multiple times to ensure it catches all updates
+        checkAndShowPendingRequestsBanner()
+        setTimeout(() => {
+          checkAndShowPendingRequestsBanner()
+        }, 100)
+        setTimeout(() => {
+          checkAndShowPendingRequestsBanner()
+        }, 300)
       }
     })
     
@@ -426,6 +645,11 @@ onMounted(async () => {
   // Fetch notifications when component mounts
   await fetchNotifications(5) // Fetch only 5 for the dropdown
   
+  // Check for pending borrow requests and show banner after fetching notifications
+  setTimeout(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 200) // Small delay to ensure notifications are loaded
+  
   // Setup global real-time listener for notifications (works on all pages)
   setTimeout(() => {
     setupGlobalNotificationListener()
@@ -433,11 +657,33 @@ onMounted(async () => {
     setupRealtimeListener()
   }, 500) // Wait a bit for Echo to initialize
   
+  // Set up periodic banner check (every 3 seconds) to ensure banner always shows if there are requests
+  bannerCheckInterval = setInterval(() => {
+    checkAndShowPendingRequestsBanner()
+  }, 3000) // Check every 3 seconds
+  
+  // Also refresh notifications periodically to ensure we have latest data
+  const notificationRefreshInterval = setInterval(async () => {
+    console.log('🔄 Periodic notification refresh...')
+    await fetchNotifications(5)
+    // Check banner multiple times after refresh to ensure it updates
+    setTimeout(() => {
+      checkAndShowPendingRequestsBanner()
+    }, 100)
+    setTimeout(() => {
+      checkAndShowPendingRequestsBanner()
+    }, 300)
+  }, 10000) // Refresh every 10 seconds
+  
   // Refresh unread count periodically (every 30 seconds) to keep badge updated
   // Note: Real-time updates will handle most cases, but this is a backup
   const unreadCountInterval = setInterval(async () => {
     await refreshUnreadCount()
   }, 30000) // 30 seconds
+  
+  // Store intervals for cleanup
+  window.bannerCheckInterval = bannerCheckInterval
+  window.notificationRefreshInterval = notificationRefreshInterval
   
   // Store interval ID for cleanup
   window.unreadCountInterval = unreadCountInterval
@@ -458,7 +704,19 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', closeSidebarOnOutsideClick)
   window.removeEventListener('resize', handleResize)
   
-  // Clear unread count refresh interval
+  // Clear all intervals
+  if (bannerCheckInterval) {
+    clearInterval(bannerCheckInterval)
+    bannerCheckInterval = null
+  }
+  if (window.bannerCheckInterval) {
+    clearInterval(window.bannerCheckInterval)
+    delete window.bannerCheckInterval
+  }
+  if (window.notificationRefreshInterval) {
+    clearInterval(window.notificationRefreshInterval)
+    delete window.notificationRefreshInterval
+  }
   if (window.unreadCountInterval) {
     clearInterval(window.unreadCountInterval)
     delete window.unreadCountInterval
@@ -653,7 +911,7 @@ onBeforeUnmount(() => {
               <div class="bg-gradient-to-r from-green-600 to-green-700 dark:bg-[#2D6A4F] px-5 py-3 border-b border-green-800 dark:border-[#388E3C] flex justify-between items-center">
                 <h3 class="text-base font-bold text-white">Recent Notifications</h3>
                 <button 
-                  @click="refreshNotifications"
+                  @click="handleRefreshNotifications"
                   class="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
                   title="Refresh notifications"
                 >
@@ -819,7 +1077,7 @@ onBeforeUnmount(() => {
               <span class="material-icons-outlined text-green-600 dark:text-green-400 text-2xl">shopping_cart</span>
             </div>
             <div>
-              <h3 class="text-lg font-bold text-gray-900 dark:text-white">New Borrow Request</h3>
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ globalPopupNotification.title || 'New Borrow Request' }}</h3>
               <p class="text-sm text-gray-600 dark:text-gray-400">{{ formatRelativeTime(globalPopupNotification.timestamp) }}</p>
             </div>
           </div>
@@ -868,6 +1126,115 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <!-- Reject Confirmation Modal -->
+    <Transition name="modal-fade">
+      <div
+        v-if="showRejectModal && notificationToReject"
+        class="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        @click.self="cancelReject"
+      >
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md animate-slide-up">
+          <!-- Header -->
+          <div class="bg-gradient-to-r from-red-600 to-red-700 dark:from-red-700 dark:to-red-800 px-6 py-4 rounded-t-xl border-b border-red-800 dark:border-red-900">
+            <div class="flex items-center gap-3">
+              <span class="material-icons-outlined text-2xl text-white">warning</span>
+              <h3 class="text-lg font-bold text-white">Confirm Rejection</h3>
+            </div>
+          </div>
+          
+          <!-- Content -->
+          <div class="p-6 space-y-4">
+            <p class="text-gray-700 dark:text-gray-300 text-base">
+              Are you sure you want to reject this borrow request?
+            </p>
+            
+            <!-- Request Details -->
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-3 border border-gray-200 dark:border-gray-600">
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-base text-blue-500">inventory_2</span>
+                <span class="text-gray-700 dark:text-gray-300">
+                  <strong>Item:</strong> {{ notificationToReject.item?.name || notificationToReject.item?.unit || 'N/A' }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-base text-purple-500">person</span>
+                <span class="text-gray-700 dark:text-gray-300">
+                  <strong>Requested by:</strong> {{ notificationToReject.borrowRequest?.borrowed_by || 'N/A' }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-base text-green-500">numbers</span>
+                <span class="text-gray-700 dark:text-gray-300">
+                  <strong>Quantity:</strong> {{ notificationToReject.borrowRequest?.quantity || 0 }} unit(s)
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="material-icons-outlined text-base text-orange-500">location_on</span>
+                <span class="text-gray-700 dark:text-gray-300">
+                  <strong>Location:</strong> {{ notificationToReject.borrowRequest?.location || 'N/A' }}
+                </span>
+              </div>
+            </div>
+            
+            <p class="text-sm text-gray-500 dark:text-gray-400 italic">
+              This action cannot be undone. The request will be marked as rejected.
+            </p>
+          </div>
+          
+          <!-- Actions -->
+          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700/30 rounded-b-xl border-t border-gray-200 dark:border-gray-600 flex items-center gap-3">
+            <button
+              @click="cancelReject"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md"
+            >
+              <span class="material-icons-outlined text-lg">close</span>
+              <span>Cancel</span>
+            </button>
+            <button
+              @click="confirmReject"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+            >
+              <span class="material-icons-outlined text-lg">cancel</span>
+              <span>Reject Request</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Simple Success/Error Banner -->
+    <Transition name="banner-slide">
+      <div
+        v-if="showBanner"
+        class="fixed top-4 left-4 z-[10000] max-w-sm w-auto"
+      >
+        <div
+          class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border-2 animate-banner-in"
+          :class="{
+            'bg-green-50 dark:bg-green-900/30 border-green-500 text-green-800 dark:text-green-200': bannerType === 'success',
+            'bg-red-50 dark:bg-red-900/30 border-red-500 text-red-800 dark:text-red-200': bannerType === 'error'
+          }"
+        >
+          <span
+            class="material-icons-outlined text-xl flex-shrink-0"
+            :class="{
+              'text-green-600 dark:text-green-400': bannerType === 'success',
+              'text-red-600 dark:text-red-400': bannerType === 'error'
+            }"
+          >
+            {{ bannerType === 'success' ? 'check_circle' : 'error' }}
+          </span>
+          <p class="text-sm font-semibold flex-1">{{ bannerMessage }}</p>
+          <button
+            @click="closeBanner"
+            class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex-shrink-0"
+          >
+            <span class="material-icons-outlined text-lg">close</span>
+          </button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -888,6 +1255,75 @@ onBeforeUnmount(() => {
 
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
+}
+
+/* Banner animations */
+@keyframes banner-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-banner-in {
+  animation: banner-in 0.3s ease-out;
+}
+
+.banner-slide-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.banner-slide-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.banner-slide-enter-from {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* Modal animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.modal-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.modal-fade-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .animate-slide-up,
+.modal-fade-leave-to .animate-slide-up {
+  transform: translateY(20px);
+  opacity: 0;
+}
+
+.banner-slide-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
 }
 
 :root {

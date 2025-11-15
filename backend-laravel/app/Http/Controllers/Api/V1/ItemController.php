@@ -9,6 +9,7 @@ use App\Models\MaintenanceRecord;
 use App\Models\Condition;
 use App\Models\DeletedItem;
 use App\Models\User;
+use App\Models\Location;
 use App\Http\Requests\V1\StoreItemRequest;
 use App\Http\Requests\V1\UpdateItemRequest;
 use App\Http\Resources\V1\ItemResource;
@@ -98,8 +99,7 @@ class ItemController extends Controller
         
         $qrCodeService = new QrCodeService();
 
-        $itemService = new ItemService();
-
+        $itemService = new ItemService();@
         $newItem = Item::create($request->validated());
 
         $image = $request->file('image');
@@ -1222,43 +1222,30 @@ class ItemController extends Controller
                 'quantity' => 'required|integer|min:1',
                 'location' => 'required|string|max:255',
                 'borrowed_by' => 'required|string|max:255',
+                'send_to' => 'required|string|max:255', // Location name (e.g., "Finance", "PIO") of the admin who should receive this request
+                'requested_by_user_id' => 'nullable|integer|exists:users,id', // Optional: user ID from mobile app
+                'user_id' => 'nullable|integer|exists:users,id', // Alternative field name
             ]);
 
-            // Try to get authenticated user (who scanned/created the request)
-            // Note: Authentication is optional for mobile apps scanning QR codes
-            $user = null;
-            $bearerToken = $request->bearerToken();
+            // Get authenticated user (who scanned/created the request)
+            // Since the route requires auth:sanctum middleware, the user is automatically authenticated
+            // when the mobile app sends the Bearer token in the Authorization header
+            $user = $request->user();
             
-            if ($bearerToken) {
-                try {
-                    // Find the token in the database
-                    $tokenModel = \Laravel\Sanctum\PersonalAccessToken::findToken($bearerToken);
-                    if ($tokenModel && $tokenModel->tokenable) {
-                        $user = $tokenModel->tokenable; // Get the user model
-                        
-                        // Verify token hasn't expired (if expiration is set)
-                        if (!$tokenModel->expires_at || $tokenModel->expires_at->isFuture()) {
-                            \Log::info('BorrowRequest: Authenticated user via token - ' . $user->fullname . ' (ID: ' . $user->id . ')');
-                        } else {
-                            \Log::warning('BorrowRequest: Token expired for user ID: ' . $tokenModel->tokenable_id);
-                            $user = null;
-                        }
-                    }
-                } catch (\Exception $e) {
-                    \Log::warning('BorrowRequest: Failed to authenticate token - ' . $e->getMessage());
-                }
-            }
-            
-            // Try standard Sanctum method as fallback
-            if (!$user) {
-                try {
-                    $user = $request->user();
-                    if ($user) {
-                        \Log::info('BorrowRequest: Authenticated user via Sanctum - ' . $user->fullname . ' (ID: ' . $user->id . ')');
-                    }
-                } catch (\Exception $e) {
-                    \Log::warning('BorrowRequest: Failed to get user via Sanctum - ' . $e->getMessage());
-                }
+            // Log user information for debugging
+            if ($user) {
+                \Log::info('BorrowRequest: Authenticated user - ' . ($user->fullname ?? 'N/A') . ' (ID: ' . $user->id . ', Email: ' . ($user->email ?? 'N/A') . ')');
+            } else {
+                // This should not happen since route requires auth:sanctum, but log if it does
+                \Log::error('BorrowRequest: CRITICAL - No authenticated user found even though route requires auth:sanctum middleware!');
+                \Log::error('BorrowRequest: This means the mobile app did not send a valid Bearer token.');
+                \Log::error('BorrowRequest: The request should have been rejected with 401 Unauthorized before reaching this point.');
+                
+                // Return error since we need to know who sent the request
+                return response()->json([
+                    'message' => 'Authentication required. Please send a valid Bearer token in the Authorization header.',
+                    'error' => 'No authenticated user found',
+                ], 401);
             }
 
             // Find item by UUID or ID
@@ -1288,22 +1275,65 @@ class ItemController extends Controller
                 ], 400);
             }
 
+            // Look up the location by name to get its ID
+            \Log::info("Looking up location by name: '{$validated['send_to']}'");
+            $sendToLocation = Location::where('location', $validated['send_to'])->first();
+            if (!$sendToLocation) {
+                \Log::warning("Location not found: '{$validated['send_to']}'");
+                return response()->json([
+                    'message' => 'Location not found',
+                    'error' => "The location '{$validated['send_to']}' does not exist. Please check the location name.",
+                    'send_to' => $validated['send_to'],
+                ], 404);
+            }
+            \Log::info("Location found: ID={$sendToLocation->id}, Name='{$sendToLocation->location}'");
+
             // Create borrow request with the user who scanned/created it
-            $borrowRequest = BorrowRequest::create([
-                'item_id' => $item->uuid ?? $item->id,
-                'quantity' => $validated['quantity'],
-                'location' => $validated['location'],
-                'borrowed_by' => $validated['borrowed_by'],
-                'requested_by_user_id' => $user ? $user->id : null, // User who scanned/created the request
-                'status' => 'pending',
-            ]);
+            // Log user information for debugging
+            if ($user) {
+                \Log::info("Creating borrow request with authenticated user: {$user->fullname} (ID: {$user->id}, Email: {$user->email})");
+            } else {
+                \Log::warning("Creating borrow request WITHOUT authenticated user - requested_by_user_id will be NULL");
+            }
+            
+            try {
+                $borrowRequest = BorrowRequest::create([
+                    'item_id' => $item->uuid ?? $item->id,
+                    'quantity' => $validated['quantity'],
+                    'location' => $validated['location'],
+                    'borrowed_by' => $validated['borrowed_by'],
+                    'send_to' => $sendToLocation->id, // Store location ID (looked up from location name)
+                    'requested_by_user_id' => $user ? $user->id : null, // User who scanned/created the request
+                    'status' => 'pending',
+                ]);
+                
+                \Log::info("Borrow request created successfully: ID={$borrowRequest->id}, send_to={$borrowRequest->send_to}, requested_by_user_id={$borrowRequest->requested_by_user_id}, borrowed_by={$borrowRequest->borrowed_by}");
+            } catch (\Exception $e) {
+                \Log::error("Failed to create borrow request: " . $e->getMessage());
+                \Log::error("Exception trace: " . $e->getTraceAsString());
+                return response()->json([
+                    'message' => 'Error creating borrow request',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
 
             // Create notification for the borrow request
             try {
+                // Get the requester's name for the message
+                $requesterName = 'Someone';
+                if ($user) {
+                    $requesterName = $user->fullname ?? $user->username ?? $user->email ?? 'Someone';
+                } elseif ($borrowRequest->requested_by_user_id) {
+                    $requestedByUser = \App\Models\User::find($borrowRequest->requested_by_user_id);
+                    if ($requestedByUser) {
+                        $requesterName = $requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'Someone';
+                    }
+                }
+                
                 $notification = Notification::create([
                     'item_id' => $item->id,
                     'borrow_request_id' => $borrowRequest->id,
-                    'message' => "New borrow request: {$validated['borrowed_by']} requested {$validated['quantity']} unit(s) of {$item->unit} from {$validated['location']}",
+                    'message' => "{$requesterName} Sent a Request",
                     'type' => 'borrow_request',
                     'is_read' => false,
                 ]);
@@ -1387,6 +1417,20 @@ class ItemController extends Controller
 
             if (!$borrowRequest) {
                 return response()->json(['message' => 'Borrow request not found'], 404);
+            }
+
+            // Check authorization: Only the admin assigned to this request (send_to) can approve it
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['message' => 'Authentication required'], 401);
+            }
+
+            $adminLocationId = $user->location_id;
+            if (!$adminLocationId || $borrowRequest->send_to != $adminLocationId) {
+                return response()->json([
+                    'message' => 'Unauthorized: You are not assigned to this borrow request',
+                    'error' => 'Only the admin assigned to this request can approve it',
+                ], 403);
             }
 
             // Check if already processed
@@ -1480,12 +1524,26 @@ class ItemController extends Controller
                 // Get the user who scanned/created the borrow request (the person who requested it)
                 $requestedByUser = null;
                 $requestedByName = 'N/A';
+                
+                // First, try to get from requested_by_user_id
                 if ($borrowRequest->requested_by_user_id) {
-                    $requestedByUser = \App\Models\User::find($borrowRequest->requested_by_user_id);
-                    if ($requestedByUser) {
-                        $requestedByName = $requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'N/A';
+                    try {
+                        $requestedByUser = \App\Models\User::find($borrowRequest->requested_by_user_id);
+                        if ($requestedByUser) {
+                            $requestedByName = $requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'N/A';
+                            \Log::info("Found requested_by user: {$requestedByName} (ID: {$borrowRequest->requested_by_user_id})");
+                        } else {
+                            \Log::warning("requested_by_user_id {$borrowRequest->requested_by_user_id} not found in users table");
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error("Error fetching requested_by user: " . $e->getMessage());
                     }
+                } else {
+                    \Log::warning("Borrow request ID {$borrowRequest->id} has no requested_by_user_id set");
                 }
+                
+                // Log the requested_by value before creating transaction
+                \Log::info("Creating transaction with requested_by: {$requestedByName}");
                 
                 // Create transaction record in transactions table with formatted values matching frontend display
                 // Use unit (item name) first, then description as fallback to match notifications
@@ -1502,7 +1560,7 @@ class ItemController extends Controller
                     'status' => $formattedStatus, // Store as "Approved" or "Rejected" to match frontend
                 ]);
                 
-                \Log::info("Transaction record created: ID={$transaction->id}");
+                \Log::info("Transaction record created: ID={$transaction->id}, requested_by={$transaction->requested_by}, borrower_name={$transaction->borrower_name}");
                 
                 // Commit transaction
                 DB::commit();
@@ -1599,6 +1657,20 @@ class ItemController extends Controller
                 return response()->json(['message' => 'Borrow request not found'], 404);
             }
 
+            // Check authorization: Only the admin assigned to this request (send_to) can reject it
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['message' => 'Authentication required'], 401);
+            }
+
+            $adminLocationId = $user->location_id;
+            if (!$adminLocationId || $borrowRequest->send_to != $adminLocationId) {
+                return response()->json([
+                    'message' => 'Unauthorized: You are not assigned to this borrow request',
+                    'error' => 'Only the admin assigned to this request can reject it',
+                ], 403);
+            }
+
             // Check if already processed
             if ($borrowRequest->status !== 'pending') {
                 return response()->json([
@@ -1645,12 +1717,37 @@ class ItemController extends Controller
             $status = strtolower($borrowRequest->status ?? 'rejected');
             $formattedStatus = ucfirst($status); // "approved" -> "Approved", "rejected" -> "Rejected"
             
+            // Get the user who scanned/created the borrow request (the person who requested it)
+            $requestedByUser = null;
+            $requestedByName = 'N/A';
+            
+            // First, try to get from requested_by_user_id
+            if ($borrowRequest->requested_by_user_id) {
+                try {
+                    $requestedByUser = \App\Models\User::find($borrowRequest->requested_by_user_id);
+                    if ($requestedByUser) {
+                        $requestedByName = $requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'N/A';
+                        \Log::info("Found requested_by user: {$requestedByName} (ID: {$borrowRequest->requested_by_user_id})");
+                    } else {
+                        \Log::warning("requested_by_user_id {$borrowRequest->requested_by_user_id} not found in users table");
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Error fetching requested_by user: " . $e->getMessage());
+                }
+            } else {
+                \Log::warning("Borrow request ID {$borrowRequest->id} has no requested_by_user_id set");
+            }
+            
+            // Log the requested_by value before creating transaction
+            \Log::info("Creating transaction with requested_by: {$requestedByName}");
+            
             // Create transaction record in transactions table with formatted values matching frontend display
             // Use unit (item name) first, then description as fallback to match notifications
             // Store rejector's full name directly in approved_by column to match database with system display
             $transaction = \App\Models\Transaction::create([
                 'approved_by' => $rejectorName, // Store rejector's full name directly (not ID)
                 'borrower_name' => $borrowRequest->borrowed_by,
+                'requested_by' => $requestedByName, // Account of who scanned/created the request
                 'location' => $borrowRequest->location,
                 'item_name' => $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A',
                 'quantity' => $borrowRequest->quantity,
@@ -1658,6 +1755,8 @@ class ItemController extends Controller
                 'role' => $rejectorRole, // Store as "ADMIN" or "USER" to match frontend
                 'status' => $formattedStatus, // Store as "Approved" or "Rejected" to match frontend
             ]);
+            
+            \Log::info("Transaction record created: ID={$transaction->id}, requested_by={$transaction->requested_by}, borrower_name={$transaction->borrower_name}");
 
             // Log activity for rejecting borrow request
             try {
@@ -1689,14 +1788,36 @@ class ItemController extends Controller
     }
 
     /**
-     * Get all borrow requests (admin only - all items)
+     * Get all borrow requests (admin only - filtered by send_to)
+     * Only shows requests assigned to the current admin's location
      */
     public function getAllBorrowRequests(Request $request)
     {
         try {
+            $user = auth()->user();
+            
+            // Check if user is authenticated
+            if (!$user) {
+                return response()->json([
+                    'message' => 'Authentication required',
+                    'error' => 'No authenticated user found',
+                ], 401);
+            }
+            
+            // Get the admin's location_id
+            $adminLocationId = $user->location_id;
+            
+            if (!$adminLocationId) {
+                return response()->json([
+                    'message' => 'Admin location not found',
+                    'error' => 'User does not have a location assigned',
+                ], 400);
+            }
+            
             $status = $request->query('status'); // Optional filter by status
             
-            $query = BorrowRequest::query();
+            // Only show requests assigned to this admin's location
+            $query = BorrowRequest::where('send_to', $adminLocationId);
             
             if ($status) {
                 $query->where('status', $status);
@@ -1735,6 +1856,7 @@ class ItemController extends Controller
                     'quantity' => $borrowRequest->quantity,
                     'location' => $borrowRequest->location,
                     'borrowed_by' => $borrowRequest->borrowed_by,
+                    'send_to' => $borrowRequest->send_to, // Location ID this request is assigned to
                     'status' => $borrowRequest->status,
                     'approved_at' => $borrowRequest->approved_at ? $borrowRequest->approved_at->format('Y-m-d H:i:s') : null,
                     'approved_by' => $borrowRequest->approved_by,

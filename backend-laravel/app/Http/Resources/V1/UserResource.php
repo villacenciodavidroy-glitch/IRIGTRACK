@@ -14,6 +14,15 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Safely get location name - check if relationship is loaded and is a Location model
+        $locationName = null;
+        if ($this->relationLoaded('location')) {
+            $location = $this->getRelation('location');
+            if ($location instanceof \App\Models\Location && isset($location->location)) {
+                $locationName = $location->location;
+            }
+        }
+        
         return [
             'id' => $this->id,
             'fullname' => $this->fullname,
@@ -22,7 +31,7 @@ class UserResource extends JsonResource
             'role' => $this->role,
             'image' => $this->image ? asset('storage/' . $this->image) : null,
             'location_id' => $this->location_id,
-            'location' => $this->location ? $this->location->location : null,
+            'location' => $locationName,
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
             'updated_at' => $this->updated_at ? $this->updated_at->toISOString() : null
         ];

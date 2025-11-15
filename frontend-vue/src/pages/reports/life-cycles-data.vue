@@ -172,8 +172,8 @@ const allItemsLifespan = computed(() => {
       
       if (remainingYears <= 0.082) {
         statusClass = 'bg-red-500'
-        statusText = 'DISPOSE'
-        recommendation = 'URGENT: Dispose immediately'
+        statusText = 'FOR CHECKING'
+        recommendation = 'URGENT: End of life reached - Replacement required'
       } else if (remainingYears <= 0.164) {
         statusClass = 'bg-orange-500'
         statusText = 'SOON'
@@ -226,7 +226,7 @@ const filteredItems = computed(() => {
   // Filter by status
   if (selectedStatus.value !== 'all') {
     filtered = filtered.filter(item => {
-      if (selectedStatus.value === 'urgent') return item.statusText === 'DISPOSE'
+      if (selectedStatus.value === 'urgent') return item.statusText === 'FOR CHECKING'
       if (selectedStatus.value === 'soon') return item.statusText === 'SOON'
       if (selectedStatus.value === 'monitor') return item.statusText === 'MONITOR'
       if (selectedStatus.value === 'good') return item.statusText === 'GOOD'
@@ -285,7 +285,7 @@ const goToPage = (page) => {
 const summaryStats = computed(() => {
   const items = filteredItems.value
   const total = items.length
-  const urgent = items.filter(i => i.statusText === 'DISPOSE').length
+  const urgent = items.filter(i => i.statusText === 'FOR CHECKING').length
   const soon = items.filter(i => i.statusText === 'SOON').length
   const monitor = items.filter(i => i.statusText === 'MONITOR').length
   const good = items.filter(i => i.statusText === 'GOOD').length
@@ -645,7 +645,7 @@ const printReport = () => {
         <p><strong>Total Items:</strong> ${summaryStats.value.total}</p>
         <p><strong>Average Remaining Lifespan:</strong> ${summaryStats.value.avgRemainingYears} years</p>
         <p><strong>Average Expected Lifespan:</strong> ${summaryStats.value.avgExpectedLifespan} years</p>
-        <p><strong>Status Breakdown:</strong> DISPOSE: ${summaryStats.value.urgent}, SOON: ${summaryStats.value.soon}, MONITOR: ${summaryStats.value.monitor}, GOOD: ${summaryStats.value.good}</p>
+        <p><strong>Status Breakdown:</strong> FOR CHECKING: ${summaryStats.value.urgent}, SOON: ${summaryStats.value.soon}, MONITOR: ${summaryStats.value.monitor}, GOOD: ${summaryStats.value.good}</p>
       </div>
       
       <table>
@@ -780,7 +780,7 @@ const goBack = () => {
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 p-6">
           <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-medium text-gray-600 dark:text-gray-400">DISPOSE Items</div>
+            <div class="text-sm font-medium text-gray-600 dark:text-gray-400">FOR CHECKING Items</div>
             <div class="p-3 bg-red-500 rounded-lg">
               <span class="material-icons-outlined text-white text-xl">warning</span>
             </div>
@@ -795,7 +795,7 @@ const goBack = () => {
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div class="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-700">
             <div class="text-3xl font-bold text-red-600 dark:text-red-400">{{ summaryStats.urgent }}</div>
-            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mt-1">DISPOSE</div>
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mt-1">FOR CHECKING</div>
           </div>
           <div class="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
             <div class="text-3xl font-bold text-orange-600 dark:text-orange-400">{{ summaryStats.soon }}</div>
@@ -845,7 +845,7 @@ const goBack = () => {
             class="px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20 transition-all"
           >
             <option value="all">All Status</option>
-            <option value="urgent">DISPOSE</option>
+            <option value="urgent">FOR CHECKING</option>
             <option value="soon">SOON</option>
             <option value="monitor">MONITOR</option>
             <option value="good">GOOD</option>
@@ -903,7 +903,7 @@ const goBack = () => {
                   </span>
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">PAC</th>
-                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Location</th>
+                <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Unit/Sectors</th>
                 <th class="px-4 py-3 text-left text-xs font-bold text-gray-700 dark:text-white uppercase border-b border-gray-200 dark:border-gray-600">Date Acquired</th>
                 <th 
                   @click="changeSorting('yearsInUse')"
@@ -973,7 +973,7 @@ const goBack = () => {
                 <td class="px-4 py-3 text-center">
                   <span 
                     :class="{
-                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300': item.statusText === 'DISPOSE',
+                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300': item.statusText === 'FOR CHECKING',
                       'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300': item.statusText === 'SOON',
                       'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300': item.statusText === 'MONITOR',
                       'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300': item.statusText === 'GOOD'
@@ -999,8 +999,8 @@ const goBack = () => {
         <div v-if="filteredItems.length > 0" class="bg-gradient-to-r from-green-50 to-green-100 dark:from-gray-700 dark:to-gray-700 px-6 py-4 border-t border-green-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div class="text-sm font-medium text-gray-700 dark:text-white">
-                Result {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }} of {{ filteredItems.length }}
+              <div class="text-sm font-medium" style="color: #01200E;">
+                Result <span style="color: #01200E; font-weight: bold;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>-<span style="color: #01200E; font-weight: bold;">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of <span style="color: #01200E; font-weight: bold;">{{ filteredItems.length }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <label class="text-sm font-medium text-gray-700 dark:text-white">Items per page:</label>

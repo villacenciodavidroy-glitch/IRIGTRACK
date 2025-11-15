@@ -30,7 +30,7 @@ class ItemBorrowed implements ShouldBroadcastNow
         
         // Load relationships for the broadcast
         try {
-            $this->item->load(['category', 'location', 'condition', 'conditionNumber', 'qrCode', 'user']);
+            $this->item->load(['category', 'location', 'condition', 'condition_number', 'qrCode', 'user']);
         } catch (\Exception $e) {
             \Log::warning("Failed to load some relationships for ItemBorrowed broadcast: " . $e->getMessage());
         }

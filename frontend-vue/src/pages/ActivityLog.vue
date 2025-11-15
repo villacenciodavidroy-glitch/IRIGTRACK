@@ -436,11 +436,11 @@ const pageNumbers = computed(() => {
       <div v-if="!loading && entries.length > 0" class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex items-center gap-2">
-            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-lg">info</span>
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">
-              Showing <span class="text-green-400 dark:text-green-400 font-bold">{{ totalEntries > 0 ? ((currentPage - 1) * entriesPerPage + 1) : 0 }}</span> to 
-              <span class="text-green-400 dark:text-green-400 font-bold">{{ Math.min(currentPage * entriesPerPage, totalEntries) }}</span> of 
-              <span class="text-green-400 dark:text-green-400 font-bold">{{ totalEntries }}</span> entries
+            <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
+            <span class="text-sm font-semibold" style="color: #01200E;">
+              Showing <span class="font-bold" style="color: #01200E;">{{ totalEntries > 0 ? ((currentPage - 1) * entriesPerPage + 1) : 0 }}</span> to 
+              <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * entriesPerPage, totalEntries) }}</span> of 
+              <span class="font-bold" style="color: #01200E;">{{ totalEntries }}</span> entries
             </span>
           </div>
           <div v-if="totalPages > 1" class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">

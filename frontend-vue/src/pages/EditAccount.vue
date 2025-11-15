@@ -466,7 +466,8 @@ const formData = ref({
 // Sample data for dropdowns
 const accountTypes = ref([
   { value: 'admin', label: 'Admin' },
-  { value: 'user', label: 'User' }
+  { value: 'user', label: 'User' },
+  { value: 'supply', label: 'Supply' }
 ])
 
 const { locations, fetchLocations } = useLocations(formData)

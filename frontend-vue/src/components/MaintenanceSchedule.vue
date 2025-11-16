@@ -1,0 +1,65 @@
+<script setup>
+import { ref } from 'vue'
+
+const emit = defineEmits(['add'])
+
+const maintenanceData = ref({
+  weekNumber: '',
+  date: ''
+})
+
+const handleAdd = () => {
+  emit('add', { ...maintenanceData.value })
+  maintenanceData.value = {
+    weekNumber: '',
+    date: ''
+  }
+}
+</script>
+
+<template>
+  <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+    <h3 class="text-base font-medium mb-1">Schedule Of Maintenance (CLEANING)</h3>
+    <p class="text-green-600 text-sm mb-4">For aircon and vehicle only</p>
+    
+    <div class="space-y-4">
+      <div class="form-group">
+        <label class="block text-sm mb-1">Monthly maintenance:</label>
+        <input 
+          type="text" 
+          v-model="maintenanceData.weekNumber"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 bg-white"
+          placeholder="Enter week number (1 to 4)"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="block text-sm mb-1">Date Acquired:</label>
+        <input 
+          type="text"
+          v-model="maintenanceData.date"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 bg-white"
+          placeholder="mm/dd/yyyy"
+          onfocus="(this.type='date')"
+          onblur="(this.type='text')"
+        >
+      </div>
+
+      <div>
+        <button 
+          @click="handleAdd"
+          type="button" 
+          class="bg-green-600 text-white px-6 py-2 rounded text-sm hover:bg-green-700"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+</style> 

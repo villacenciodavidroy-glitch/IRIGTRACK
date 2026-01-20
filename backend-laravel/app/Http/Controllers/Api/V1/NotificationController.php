@@ -16,8 +16,52 @@ class NotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Notification::with(['item', 'borrowRequest'])
+            $user = $request->user();
+            $role = $user ? strtolower($user->role ?? '') : '';
+            
+            $query = Notification::with([
+                'item.category',
+                'item.location',
+                'item.condition',
+                'borrowRequest'
+            ])
                 ->orderBy('created_at', 'desc');
+
+            // Filter notifications by user role and type
+            // For User Account: show only approval/rejection notifications for their requests
+            if ($role === 'user') {
+                $query->whereIn('type', [
+                    'supply_request_approved',
+                    'supply_request_admin_approved',
+                    'supply_request_rejected',
+                    'supply_request_admin_rejected',
+                    'supply_request_ready_pickup'
+                ]);
+            }
+            // For Supply Account: show new requests and approval/rejection notifications
+            elseif ($role === 'supply') {
+                $query->whereIn('type', [
+                    'supply_request_created',
+                    'supply_request_approved',
+                    'supply_request_admin_approved',
+                    'supply_request_rejected',
+                    'supply_request_admin_rejected',
+                    'supply_request_ready_for_pickup',
+                    'supply_request_ready_pickup'
+                ])->where(function($q) use ($user) {
+                    // Show notifications without user_id (for all supply accounts) OR notifications for this specific supply account user
+                    $q->whereNull('user_id')
+                      ->orWhere('user_id', $user->id);
+                });
+            }
+            // For Admin: show all notifications EXCEPT user-specific ones (unless they're for this admin)
+            elseif (in_array($role, ['admin', 'super_admin'])) {
+                $query->where(function($q) use ($user) {
+                    // Show notifications without user_id (for all admins) OR notifications specifically for this admin
+                    $q->whereNull('user_id')
+                      ->orWhere('user_id', $user->id);
+                });
+            }
 
             // Apply search filter
             if ($request->has('search') && !empty($request->search)) {
@@ -93,10 +137,51 @@ class NotificationController extends Controller
     /**
      * Get unread notification count
      */
-    public function unreadCount(): JsonResponse
+    public function unreadCount(Request $request): JsonResponse
     {
         try {
-            $count = Notification::where('is_read', false)->count();
+            $user = $request->user();
+            $role = $user ? strtolower($user->role ?? '') : '';
+            
+            $query = Notification::where('is_read', false);
+            
+            // Filter notifications by user role and type
+            // For User Account: show only approval/rejection notifications for their requests
+            if ($role === 'user') {
+                $query->whereIn('type', [
+                    'supply_request_approved',
+                    'supply_request_admin_approved',
+                    'supply_request_rejected',
+                    'supply_request_admin_rejected',
+                    'supply_request_ready_pickup'
+                ]);
+            }
+            // For Supply Account: show new requests and approval/rejection notifications
+            elseif ($role === 'supply') {
+                $query->whereIn('type', [
+                    'supply_request_created',
+                    'supply_request_approved',
+                    'supply_request_admin_approved',
+                    'supply_request_rejected',
+                    'supply_request_admin_rejected',
+                    'supply_request_ready_for_pickup',
+                    'supply_request_ready_pickup'
+                ])->where(function($q) use ($user) {
+                    // Show notifications without user_id (for all supply accounts) OR notifications for this specific supply account user
+                    $q->whereNull('user_id')
+                      ->orWhere('user_id', $user->id);
+                });
+            }
+            // For Admin: count unread notifications EXCEPT user-specific ones (unless they're for this admin)
+            elseif (in_array($role, ['admin', 'super_admin'])) {
+                $query->where(function($q) use ($user) {
+                    // Count notifications without user_id (for all admins) OR notifications specifically for this admin
+                    $q->whereNull('user_id')
+                      ->orWhere('user_id', $user->id);
+                });
+            }
+            
+            $count = $query->count();
 
             return response()->json([
                 'success' => true,

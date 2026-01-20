@@ -51,26 +51,96 @@
             <!-- Account Type -->
             <div class="form-group">
               <label class="form-label">Account Type <span class="text-red-500">*</span></label>
-              <div class="relative flex items-center">
-                <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
-                  <span class="material-icons-outlined">badge</span>
-                </span>
-                <select 
-                  v-model="formData.accountType"
-                  class="form-select-enhanced"
-                  required
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                <div
+                  v-for="type in accountTypes"
+                  :key="type.value"
+                  @click="formData.accountType = type.value"
+                  class="account-type-card relative cursor-pointer rounded-xl border-2 transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                  :class="{
+                    'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md ring-2 ring-green-500 ring-opacity-50': formData.accountType === type.value,
+                    'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-green-400 dark:hover:border-green-500': formData.accountType !== type.value
+                  }"
                 >
-                  <option value="" disabled>Select account type</option>
-                  <option 
-                    v-for="type in accountTypes" 
-                    :key="type.value" 
-                    :value="type.value"
+                  <!-- Selected Indicator -->
+                  <div
+                    v-if="formData.accountType === type.value"
+                    class="absolute top-3 right-3 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-md"
                   >
-                    {{ type.label }}
-                  </option>
-                </select>
-                <p v-if="errors.account_type" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors.account_type[0] }}</p>
+                    <span class="material-icons-outlined text-white text-sm">check</span>
+                  </div>
+                  
+                  <!-- Card Content -->
+                  <div class="p-5 flex flex-col items-center text-center space-y-3">
+                    <!-- Icon -->
+                    <div
+                      class="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300"
+                      :class="{
+                        'bg-green-500 text-white shadow-lg': formData.accountType === type.value,
+                        'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300': formData.accountType !== type.value
+                      }"
+                    >
+                      <span class="material-icons-outlined text-3xl">{{ type.icon }}</span>
+                    </div>
+                    
+                    <!-- Title -->
+                    <div>
+                      <h3
+                        class="font-bold text-lg transition-colors duration-300"
+                        :class="{
+                          'text-green-700 dark:text-green-400': formData.accountType === type.value,
+                          'text-gray-800 dark:text-white': formData.accountType !== type.value
+                        }"
+                      >
+                        {{ type.label }}
+                      </h3>
+                    </div>
+                    
+                    <!-- Description -->
+                    <p
+                      class="text-xs leading-relaxed transition-colors duration-300"
+                      :class="{
+                        'text-green-600 dark:text-green-300': formData.accountType === type.value,
+                        'text-gray-500 dark:text-gray-400': formData.accountType !== type.value
+                      }"
+                    >
+                      {{ type.description }}
+                    </p>
+                    
+                    <!-- Features List -->
+                    <ul class="text-left w-full space-y-1.5 mt-2">
+                      <li
+                        v-for="feature in type.features"
+                        :key="feature"
+                        class="flex items-start gap-2 text-xs"
+                        :class="{
+                          'text-green-700 dark:text-green-300': formData.accountType === type.value,
+                          'text-gray-600 dark:text-gray-400': formData.accountType !== type.value
+                        }"
+                      >
+                        <span
+                          class="material-icons-outlined text-sm mt-0.5 flex-shrink-0"
+                          :class="{
+                            'text-green-500': formData.accountType === type.value,
+                            'text-gray-400 dark:text-gray-500': formData.accountType !== type.value
+                          }"
+                        >
+                          {{ formData.accountType === type.value ? 'check_circle' : 'radio_button_unchecked' }}
+                        </span>
+                        <span>{{ feature }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
+              <p v-if="errors.account_type" class="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                <span class="material-icons-outlined text-base">error</span>
+                {{ errors.account_type[0] }}
+              </p>
+              <p v-else class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <span class="material-icons-outlined text-sm">info</span>
+                Select the appropriate account type for this user
+              </p>
             </div>
 
             <!-- Full Name -->
@@ -459,11 +529,44 @@ const formData = ref({
   confirmPassword: ''
 })
 
-// Sample data for dropdowns
+// Enhanced account types with icons, descriptions, and features
 const accountTypes = ref([
-  { value: 'admin', label: 'Admin' },
-  { value: 'user', label: 'User' },
-  { value: 'supply', label: 'Supply' }
+  {
+    value: 'admin',
+    label: 'Administrator',
+    icon: 'admin_panel_settings',
+    description: 'Full system access and management capabilities',
+    features: [
+      'Complete system control',
+      'User management',
+      'All permissions',
+      'System configuration'
+    ]
+  },
+  {
+    value: 'user',
+    label: 'Standard User',
+    icon: 'person',
+    description: 'Regular user with standard access rights',
+    features: [
+      'View inventory',
+      'Borrow items',
+      'Basic reporting',
+      'Profile management'
+    ]
+  },
+  {
+    value: 'supply',
+    label: 'Supply Officer',
+    icon: 'inventory_2',
+    description: 'Inventory and supply management specialist',
+    features: [
+      'Manage inventory',
+      'Track supplies',
+      'Usage reports',
+      'Item management'
+    ]
+  }
 ])
 
 const { locations, fetchLocations, loading: locationsLoading } = useLocations(formData)
@@ -882,5 +985,40 @@ input:disabled {
 
 select:disabled {
   @apply bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed;
+}
+
+/* Account Type Card Styles */
+.account-type-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.account-type-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #059669);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.account-type-card.border-green-500::before {
+  transform: scaleX(1);
+}
+
+.account-type-card:hover::before {
+  transform: scaleX(1);
+}
+
+/* Smooth animations */
+.account-type-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.account-type-card:active {
+  transform: scale(0.98);
 }
 </style>

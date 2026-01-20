@@ -1,0 +1,12 @@
+COPY AND PASTE THIS EXACT COMMAND INTO YOUR POWERSHELL WINDOW:
+
+powershell -ExecutionPolicy Bypass -Command "& { Set-Location 'C:\NIA_SystemProject'; & '.\ml_api_env\Scripts\Activate.ps1' }"
+
+OR USE THIS SIMPLER VERSION:
+
+.\activate_venv_simple.ps1
+
+OR JUST USE THE BATCH FILE (NO POWERSHELL NEEDED):
+
+activate_venv.bat
+

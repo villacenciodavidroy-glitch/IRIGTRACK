@@ -80,20 +80,29 @@ class QrCodeService
     }
 
     /**
-     * Validate and update QR code with incremented version
+     * Validate and update QR code with current year as version
      */
     public function validateAndUpdateQrCode(Item $item, $year = null)
     {
+        // Use current year as version, or provided year
+        $currentYear = $year ?? (int)date('Y');
+        
+        // Check if item already has an active QR code for the current year
+        $existingQrCode = \App\Models\QRCode::where('item_id', $item->id)
+            ->where('version', $currentYear)
+            ->where('is_active', true)
+            ->first();
+        
+        if ($existingQrCode) {
+            throw new \Exception("This item has already been validated for Calendar Year {$currentYear}. Validation will be available again next year.");
+        }
+
         // Deactivate all existing QR codes for this item
         \App\Models\QRCode::where('item_id', $item->id)
             ->update(['is_active' => false]);
 
-        // Get the highest version number for this item
-        $maxVersion = \App\Models\QRCode::where('item_id', $item->id)
-            ->max('version') ?? 0;
-
-        // Increment version (1, 2, 3, etc.)
-        $newVersion = (int)$maxVersion + 1;
+        // Use current year as version (not incrementing)
+        $newVersion = $currentYear;
 
         // Update the item's UUID to a new one
         $newUuid = (string) \Illuminate\Support\Str::uuid();
@@ -118,7 +127,7 @@ class QrCodeService
         $imagePath = "qrcodes/{$item->uuid}.png";
         file_put_contents(storage_path("app/public/{$imagePath}"), $qrCodeImage);
 
-        // Create new QR code record with incremented version
+        // Create new QR code record with current year as version
         $qrCode = QRCode::create([
             'item_id' => $item->id,
             'qr_code_data' => $data,

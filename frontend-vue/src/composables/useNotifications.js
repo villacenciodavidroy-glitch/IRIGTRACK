@@ -30,23 +30,53 @@ export default function useNotifications() {
       const response = await axiosClient.get(`/notifications?per_page=${limit}`)
       
       if (response.data.success) {
-        notifications.value = response.data.data.map(notification => ({
-          id: notification.id,
-          type: notification.type || 'low_stock',
-          title: notification.title || 'Low Stock Alert',
-          message: notification.message,
-          user: notification.item?.unit || 'System',
-          role: 'System',
-          timestamp: notification.timestamp || notification.created_at,
-          date: notification.date,
-          time: notification.time,
-          action: notification.title || (notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert'),
-          isRead: notification.isRead ?? false,
-          priority: notification.priority || 'high',
-          item: notification.item,
-          borrowRequest: notification.borrowRequest || null,
-          selected: false // For bulk delete selection
-        }))
+        notifications.value = response.data.data.map(notification => {
+          // Determine title based on notification type
+          let title = notification.title || 'Low Stock Alert'
+          if (!notification.title) {
+            switch(notification.type) {
+              case 'supply_request_created':
+                title = 'New Supply Request'
+                break
+              case 'supply_request_approved':
+              case 'supply_request_admin_approved':
+                title = 'Receipt Available'
+                break
+              case 'supply_request_rejected':
+              case 'supply_request_admin_rejected':
+                title = 'Request Rejected'
+                break
+              case 'supply_request_ready_pickup':
+              case 'supply_request_ready_for_pickup':
+                title = 'Ready for Pickup'
+                break
+              case 'borrow_request':
+                title = 'Borrow Request'
+                break
+              default:
+                title = 'Low Stock Alert'
+            }
+          }
+          
+          return {
+            id: notification.id,
+            item_id: notification.item_id || null,
+            type: notification.type || 'low_stock',
+            title: title,
+            message: notification.message,
+            user: notification.item?.unit || 'System',
+            role: 'System',
+            timestamp: notification.timestamp || notification.created_at,
+            date: notification.date,
+            time: notification.time,
+            action: title,
+            isRead: notification.isRead ?? false,
+            priority: notification.priority || 'high',
+            item: notification.item,
+            borrowRequest: notification.borrowRequest || null,
+            selected: false // For bulk delete selection
+          }
+        })
         
         // Update unread count from database (more accurate than calculating from fetched items)
         await fetchUnreadCount()

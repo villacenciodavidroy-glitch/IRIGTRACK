@@ -1,0 +1,54 @@
+# Python virtual environments
+ml_api_env/
+venv/
+env/
+ENV/
+.venv/
+
+# Logs
+*.log
+ml_api_server.log
+
+# Database backups
+*.sql
+*.sql.gz
+*.dump
+database_backups/
+backend-laravel/database_backup*.sql
+backend-laravel/database_backup*.dump
+
+# Backup files
+*.backup
+*.bak
+*.save
+*.corrupted
+*.fresh
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+dist_tmp/
+*.tmp
+
+# Environment files (keep .env.example)
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Node modules (if any)
+node_modules/
+
+# Build outputs
+dist/
+build/
+

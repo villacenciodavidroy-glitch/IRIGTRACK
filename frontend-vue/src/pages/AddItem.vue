@@ -88,6 +88,50 @@
                   <input type="text" v-model="formData.description" class="form-input-enhanced !pl-12" placeholder="Enter description" required>
                 </div>
               </div>
+
+              <!-- Serial Number -->
+              <div class="form-group">
+                <label class="form-label">Serial Number <span class="text-red-500">*</span></label>
+                <div class="relative flex items-center">
+                  <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                    <span class="material-icons-outlined">qr_code</span>
+                  </span>
+                  <input
+                    v-model="formData.serial_number"
+                    type="text"
+                    placeholder="Auto-generated serial number"
+                    class="form-input-enhanced !pl-12 !pr-24"
+                    required
+                  />
+                  <button
+                    type="button"
+                    @click="generateSerialNumber"
+                    class="absolute right-2 px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-1"
+                    title="Generate new serial number"
+                  >
+                    <span class="material-icons-outlined text-sm">refresh</span>
+                    <span>Generate</span>
+                  </button>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-generated unique identifier for equipment tracking</p>
+              </div>
+
+              <!-- Model -->
+              <div class="form-group">
+                <label class="form-label">Model <span class="text-red-500">*</span></label>
+                <div class="relative flex items-center">
+                  <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                    <span class="material-icons-outlined">devices</span>
+                  </span>
+                  <input
+                    v-model="formData.model"
+                    type="text"
+                    placeholder="Enter model"
+                    class="form-input-enhanced !pl-12"
+                    required
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -217,7 +261,7 @@
                     <option v-for="location in locationsWithPersonnel" 
                         :key="location.id || location.location_id" 
                         :value="location.id || location.location_id">
-                      {{ location.personnel }}
+                      {{ location.personnel_code || 'N/A' }} - {{ location.location }} (Personnel)
                     </option>
                   </select>
                 </div>
@@ -280,6 +324,65 @@
                   </select>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Maintenance Information Section -->
+        <div v-if="!isSupplyCategory && isOnMaintenance" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4 border-b border-amber-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-xl">build_circle</span>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-white">Maintenance Information</h2>
+                <p class="text-xs text-amber-100">Maintenance reason and technician notes</p>
+              </div>
+            </div>
+          </div>
+          <div class="p-6 space-y-6">
+            <!-- Maintenance Reason -->
+            <div class="form-group">
+              <label class="form-label">Maintenance Reason <span class="text-red-500">*</span></label>
+              <div class="relative flex items-center">
+                <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                  <span class="material-icons-outlined">info</span>
+                </span>
+                <input
+                  v-model="formData.maintenance_reason"
+                  type="text"
+                  class="form-input-enhanced !pl-12"
+                  placeholder="Enter maintenance reason (e.g., Overheat, Wear, Electrical, etc.)"
+                  required
+                />
+              </div>
+              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                Enter the primary reason for this maintenance issue.
+              </p>
+            </div>
+            
+            <!-- Technician Notes -->
+            <div class="form-group">
+              <label class="form-label">
+                Technician Notes <span class="text-red-500">*</span>
+                <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(Saved to technician_notes)</span>
+              </label>
+              <div class="relative flex items-start">
+                <span class="absolute left-4 top-3 text-green-600 dark:text-green-400 z-10">
+                  <span class="material-icons-outlined">notes</span>
+                </span>
+                <textarea
+                  v-model="formData.technician_notes"
+                  rows="4"
+                  class="form-textarea-enhanced !pl-12"
+                  placeholder="Enter detailed technician notes regarding the maintenance (e.g., issue description, repair steps, observations, test results, etc.)"
+                  required
+                ></textarea>
+              </div>
+              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                Detailed notes will be saved as technician_notes in the maintenance record (maintenance_records table).
+              </p>
             </div>
           </div>
         </div>
@@ -438,6 +541,8 @@ const formData = ref({
   unit: '',
   category: '',
   description: '',
+  serial_number: '',
+  model: '',
   propertyAccountCode: '',
   unitValue: '',
   quantity: 1,
@@ -447,7 +552,9 @@ const formData = ref({
   issuedTo: '',
   condition: '',
   conditionNumber: '',
-  image: ''
+  image: '',
+  maintenance_reason: '',
+  technician_notes: ''
 })
 
 const formatFileSize = (bytes) => {
@@ -562,6 +669,20 @@ const handleSubmit = async () => {
       isSubmitting.value = false
       return
     }
+
+    // Validate maintenance fields if On Maintenance is selected
+    if (isOnMaintenance.value) {
+      if (!formData.value.maintenance_reason?.trim()) {
+        errors.value.maintenance_reason = ['Please enter a maintenance reason when condition is set to "On Maintenance"']
+        isSubmitting.value = false
+        return
+      }
+      if (!formData.value.technician_notes?.trim()) {
+        errors.value.technician_notes = ['Please provide technician notes when condition is set to "On Maintenance"']
+        isSubmitting.value = false
+        return
+      }
+    }
   }
 
 
@@ -574,6 +695,8 @@ const handleSubmit = async () => {
     // Append all form fields
     formDataToSend.append('unit', formData.value.unit)
     formDataToSend.append('description', formData.value.description)
+    formDataToSend.append('serial_number', formData.value.serial_number || '')
+    formDataToSend.append('model', formData.value.model || '')
     formDataToSend.append('pac', formData.value.propertyAccountCode)
     formDataToSend.append('unit_value', formData.value.unitValue)
     formDataToSend.append('quantity', formData.value.quantity)
@@ -584,6 +707,16 @@ const handleSubmit = async () => {
     formDataToSend.append('condition_id', formData.value.condition)
     formDataToSend.append('condition_number_id', formData.value.conditionNumber)
     
+    // Append maintenance fields if On Maintenance is selected
+    if (isOnMaintenance.value) {
+      if (formData.value.maintenance_reason?.trim()) {
+        formDataToSend.append('maintenance_reason', formData.value.maintenance_reason.trim())
+      }
+      if (formData.value.technician_notes?.trim()) {
+        formDataToSend.append('technician_notes', formData.value.technician_notes.trim())
+      }
+    }
+    
     // Find the selected location to get personnel info
     // Since backend expects user_id, we'll try to find matching user by personnel name
     const selectedLocation = locations.value.find(loc => 
@@ -591,6 +724,8 @@ const handleSubmit = async () => {
     )
     
     // Try to find a user that matches the personnel name
+    // Only send user_id if there's actually a matching user account
+    // If assigning to personnel (via location), don't send user_id - let backend handle it via location_id
     let userIdToSend = null
     if (selectedLocation && selectedLocation.personnel) {
       const matchingUser = users.value.find(user => {
@@ -603,15 +738,17 @@ const handleSubmit = async () => {
       userIdToSend = matchingUser ? (matchingUser.id || matchingUser.user?.id) : null
     }
     
-    // If no matching user found, use first available user as fallback
-    // Note: In production, ensure personnel names match user fullnames
-    if (!userIdToSend && users.value.length > 0) {
-      userIdToSend = users.value[0].id || users.value[0].user?.id || 1
-    } else if (!userIdToSend) {
-      userIdToSend = 1 // Fallback to user ID 1
+    // Only append user_id if we found a matching user
+    // If no matching user, don't send user_id - the item will be assigned to personnel via location_id
+    if (userIdToSend) {
+      formDataToSend.append('user_id', userIdToSend)
     }
     
-    formDataToSend.append('user_id', userIdToSend)
+    // Send issuedTo location ID so backend knows which location to assign the item to
+    // This is the location where the personnel is assigned (from "Issued To" dropdown)
+    if (formData.value.issuedTo) {
+      formDataToSend.append('issued_to_location_id', formData.value.issuedTo)
+    }
     
     console.log('Form data being sent:', {
       unit: formData.value.unit,
@@ -699,6 +836,15 @@ const isSupplyCategory = computed(() => {
   return selected && selected.category?.toLowerCase() === 'supply';
 });
 
+// Check if "On Maintenance" condition is selected
+const isOnMaintenance = computed(() => {
+  if (!formData.value.condition) return false
+  const selectedCondition = conditions.value.find(c => 
+    (c.id || c.condition_id) == formData.value.condition
+  )
+  return selectedCondition && (selectedCondition.condition === 'On Maintenance' || selectedCondition.condition === 'Under Maintenance')
+})
+
 // Get locations that have personnel assigned
 const locationsWithPersonnel = computed(() => {
   return locations.value.filter(location => 
@@ -765,9 +911,28 @@ watch(() => formData.value.condition, (newConditionId) => {
   }
 })
 
+// Generate serial number
+const generateSerialNumber = async () => {
+  try {
+    const response = await axiosClient.get('/items/generate-serial-number')
+    if (response.data.success) {
+      formData.value.serial_number = response.data.serial_number
+    }
+  } catch (error) {
+    console.error('Error generating serial number:', error)
+    // Fallback: generate a simple one if API fails
+    const year = new Date().getFullYear()
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    formData.value.serial_number = `NIA-EQ-${year}-${random}`
+  }
+}
+
 // Fetch all dropdown data when component mounts
 onMounted(async () => {
   try {
+    // Generate serial number automatically
+    await generateSerialNumber()
+    
     // Fetch categories and locations with high per_page to get all items
     await Promise.all([
       fetchcategories(1, 1000), // Fetch all categories
@@ -820,6 +985,20 @@ onMounted(async () => {
 }
 
 .form-select-enhanced:focus {
+  @apply shadow-md;
+}
+
+.form-textarea-enhanced {
+  @apply block w-full rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 shadow-sm transition-all duration-200;
+  @apply focus:border-green-500 dark:focus:border-green-500 focus:ring-2 focus:ring-green-500 focus:ring-opacity-20;
+  @apply hover:border-gray-400 dark:hover:border-gray-500;
+  padding-left: 3rem;
+  padding-right: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.form-textarea-enhanced:focus {
   @apply shadow-md;
 }
 

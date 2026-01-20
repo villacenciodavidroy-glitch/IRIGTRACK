@@ -25,6 +25,8 @@ class StoreItemRequest extends FormRequest
             'unit' => 'required|string|max:255',
             // 'issued_to' => 'required|string|max:255',
             'description' => 'required|string|max:1000',
+            'serial_number' => 'nullable|string|max:255|unique:items,serial_number',
+            'model' => 'required|string|max:255',
             'pac' => 'required|string|max:50',
             'unit_value' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:1',
@@ -34,7 +36,9 @@ class StoreItemRequest extends FormRequest
             'location_id' => 'required|exists:locations,id',
             'condition_id' => 'nullable',
             'condition_number_id' => 'nullable',
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'nullable|exists:users,id',
+            'maintenance_reason' => 'nullable|string|max:255',
+            'technician_notes' => 'nullable|string|max:1000',
             'image_path' =>'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10240'
         ];
     }

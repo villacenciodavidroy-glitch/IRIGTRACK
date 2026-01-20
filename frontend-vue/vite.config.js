@@ -8,8 +8,14 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    host: true, // Listen on all addresses
     hmr: {
-      port: 24679
+      host: 'localhost',
+      port: 5174,
+      protocol: 'ws'
+    },
+    watch: {
+      usePolling: false
     },
     proxy: {
       '/api': {

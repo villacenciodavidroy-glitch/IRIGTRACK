@@ -96,9 +96,20 @@ const fetchLifespanPredictions = async () => {
         
         let conditionNumber = 0
         if (item.condition_number?.condition_number) {
-          const match = String(item.condition_number.condition_number).match(/\d+/)
-          if (match) conditionNumber = parseInt(match[0])
+          const conditionNumberStr = String(item.condition_number.condition_number).toUpperCase()
+          const match = conditionNumberStr.match(/A(\d+)/)
+          if (match) {
+            conditionNumber = parseInt(match[1])
+          } else if (conditionNumberStr === 'R') {
+            conditionNumber = 'R' // Keep R as string for disposal check
+          }
         }
+        
+        // Get condition_status from condition_number (Good, Less Reliable, Un-operational, Disposal)
+        const conditionStatus = item.condition_number?.condition_status || item.condition_status || ''
+        
+        // Get condition from condition table (Serviceable, Non-Serviceable, On Maintenance)
+        const condition = item.condition?.condition || item.condition || ''
         
         let lastReason = item.maintenance_reason || ''
         if (!lastReason && item.maintenance_records && item.maintenance_records.length > 0) {
@@ -113,7 +124,9 @@ const fetchLifespanPredictions = async () => {
           category: item.category || 'Unknown',
           years_in_use: Math.max(0, yearsInUse),
           maintenance_count: maintenanceCount,
-          condition_number: conditionNumber,
+          condition_number: conditionNumber, // Can be number (1,2,3) or string 'R'
+          condition_status: conditionStatus,
+          condition: condition,
           last_reason: lastReason
         }
       })
@@ -315,8 +328,36 @@ const uniqueCategories = computed(() => {
   return cats.sort()
 })
 
+// Confirmation modal state
+const confirmModal = ref({
+  show: false,
+  message: '',
+  onConfirm: null
+})
+
+const openConfirm = (message, action) => {
+  confirmModal.value = {
+    show: true,
+    message,
+    onConfirm: action
+  }
+}
+
+const confirmCancel = () => {
+  confirmModal.value.show = false
+  confirmModal.value.onConfirm = null
+}
+
+const confirmOk = () => {
+  const action = confirmModal.value.onConfirm
+  confirmCancel()
+  if (typeof action === 'function') {
+    action()
+  }
+}
+
 // Export functions
-const exportToExcel = async () => {
+const performExportToExcel = async () => {
   try {
     // Check if there are items to export
     if (!filteredItems.value || filteredItems.value.length === 0) {
@@ -510,6 +551,10 @@ const exportToExcel = async () => {
   }
 }
 
+const exportToExcel = () => {
+  openConfirm('Do you want to export life cycles data to Excel?', performExportToExcel)
+}
+
 // Open signature edit modal before printing
 const openPrintDialog = () => {
   // Initialize signature data with current user
@@ -522,6 +567,139 @@ const openPrintDialog = () => {
   signatureData.value.notedBy.title = 'Division Manager A'
   
   showSignatureModal.value = true
+}
+
+// Export to PDF using backend DOMPDF
+const exportToPDF = async () => {
+  try {
+    // Ensure modal is closed
+    showSignatureModal.value = false
+    
+    if (!filteredItems.value || filteredItems.value.length === 0) {
+      alert('No items to export')
+      return
+    }
+    
+    // Prepare export data
+    const exportData = filteredItems.value.map(item => ({
+      unit: item.name || '',
+      description: item.description || '',
+      category: item.category || '',
+      pac: item.pac || '',
+      date_acquired: item.acquisitionDate || '',
+      location: item.location || '',
+      condition: item.condition || '',
+      years_in_use: item.yearsInUse || 0,
+      expected_lifespan_years: item.expectedLifespanYears || 0,
+      remaining_years: item.remainingYears || 0,
+      remaining_days: item.remainingLifespan || 0,
+      lifespan_end_date: item.lifespanEndDate || '',
+      status: item.statusText || '',
+      maintenance_count: item.maintenanceCount || 0
+    }))
+    
+    const params = new URLSearchParams()
+    params.append('items', JSON.stringify(exportData))
+    
+    // Use the same pattern as maintenance-records
+    const baseUrl = `/items/export/life-cycles-data-pdf`
+    const fullUrl = `${baseUrl}?${params.toString()}`
+    
+    // Log the full URL being requested (for debugging)
+    const axiosBaseUrl = axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    console.log('Axios baseURL:', axiosBaseUrl)
+    console.log('Request path:', baseUrl)
+    console.log('Full URL will be:', `${axiosBaseUrl}${fullUrl}`)
+    
+    let response
+    try {
+      if (fullUrl.length > 1800) {
+        // If URL is too long, send as POST with data in body
+        console.log('URL too long, using POST method')
+        response = await axiosClient.post(baseUrl, {
+          items: exportData
+        }, {
+          responseType: 'blob',
+          headers: {
+            'Accept': 'application/pdf'
+          },
+          timeout: 60000
+        })
+      } else {
+        console.log('Making request to:', fullUrl)
+        response = await axiosClient.get(fullUrl, {
+          responseType: 'blob',
+          headers: {
+            'Accept': 'application/pdf'
+          },
+          timeout: 60000
+        })
+      }
+    } catch (axiosError) {
+      // Handle error response that might be JSON instead of blob
+      if (axiosError.response && axiosError.response.data) {
+        let errorMessage = 'Failed to export to PDF'
+        try {
+          if (axiosError.response.data instanceof Blob) {
+            const text = await axiosError.response.data.text()
+            const errorData = JSON.parse(text)
+            errorMessage = errorData.message || errorMessage
+          } else if (axiosError.response.data && axiosError.response.data.message) {
+            errorMessage = axiosError.response.data.message
+          }
+        } catch (e) {
+          console.error('Error parsing error response:', e)
+        }
+        alert(errorMessage)
+        return
+      }
+      throw axiosError
+    }
+    
+    // Check if response is actually a PDF or an error JSON
+    const contentType = response.headers['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      // It's an error response
+      const text = await new Blob([response.data]).text()
+      const errorData = JSON.parse(text)
+      alert(errorData.message || 'Failed to export PDF')
+      return
+    }
+    
+    const blob = new Blob([response.data], {
+      type: 'application/pdf'
+    })
+    
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Life_Cycles_Data_Report_${new Date().toISOString().split('T')[0]}.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting to PDF:', error)
+    let errorMessage = 'Failed to export to PDF. Please try again.'
+    
+    if (error.response) {
+      try {
+        if (error.response.data instanceof Blob) {
+          const text = await error.response.data.text()
+          const errorData = JSON.parse(text)
+          errorMessage = errorData.message || errorMessage
+        } else if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message
+        }
+      } catch (e) {
+        // If parsing fails, use default message
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    alert(errorMessage)
+  }
 }
 
 // Print report with edited signature data
@@ -693,6 +871,28 @@ const printReport = () => {
   printWindow.document.open()
   printWindow.document.write(content)
   printWindow.document.close()
+  
+  // Wait for the document to be fully loaded, then trigger print
+  const checkAndPrint = () => {
+    if (printWindow.document.readyState === 'complete') {
+      printWindow.focus()
+      printWindow.print()
+    } else {
+      printWindow.addEventListener('load', () => {
+        printWindow.focus()
+        printWindow.print()
+      }, { once: true })
+      // Fallback timeout
+      setTimeout(() => {
+        if (!printWindow.closed) {
+          printWindow.focus()
+          printWindow.print()
+        }
+      }, 500)
+    }
+  }
+  
+  checkAndPrint()
 }
 
 const changeSorting = (field) => {
@@ -717,32 +917,37 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6">
+  <div class="min-h-screen bg-gray-50 p-4 sm:p-6">
     <div class="max-w-full mx-auto space-y-5">
-      <!-- Enhanced Header Section -->
-      <div class="bg-green-600 rounded-lg shadow-lg overflow-hidden">
-        <div class="px-6 py-5 md:px-8 md:py-6 flex flex-wrap items-center gap-4">
-          <button 
-            @click="goBack" 
-            class="p-2.5 bg-white rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
-            title="Go back"
-          >
-            <span class="material-icons-outlined text-green-600 text-xl md:text-2xl">arrow_back</span>
-          </button>
-          <div class="p-3 bg-white rounded-lg flex-shrink-0 shadow-md">
-            <span class="material-icons-outlined text-green-600 text-2xl md:text-3xl">show_chart</span>
+      <!-- Header Section -->
+      <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-xl rounded-2xl mt-2">
+        <div class="px-6 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex items-start gap-4">
+            <div class="flex items-center gap-3 pt-1">
+              <button 
+                @click="goBack" 
+                class="p-3 bg-white/15 border border-white/20 text-white rounded-full hover:bg-white/25 transition-all shadow-lg backdrop-blur"
+                title="Go back"
+              >
+                <span class="material-icons-outlined text-xl">arrow_back</span>
+              </button>
+            </div>
+            <div class="text-white">
+              <h1 class="text-3xl font-extrabold leading-tight">Life Cycles Data Report</h1>
+              <p class="text-white/90 text-base mt-1">View asset lifecycle information and history</p>
+            </div>
           </div>
-          <div class="flex-1 min-w-0">
-            <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1">Life Cycles Data Report</h1>
-            <p class="text-green-100 text-base md:text-lg">View asset lifecycle information and history</p>
-          </div>
-          <div class="flex items-center gap-2 flex-wrap">
-            <button @click="exportToExcel" class="btn-secondary-enhanced flex items-center gap-2">
-              <span class="material-icons-outlined text-lg">file_download</span>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button @click="exportToExcel" class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60">
+              <span class="material-icons-outlined text-lg text-emerald-700">download</span>
               <span>Export Excel</span>
             </button>
-            <button @click="openPrintDialog" class="btn-primary-enhanced flex items-center gap-2">
-              <span class="material-icons-outlined text-lg">print</span>
+            <button @click.stop.prevent="exportToPDF" class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60">
+              <span class="material-icons-outlined text-lg text-emerald-700">picture_as_pdf</span>
+              <span>Export PDF</span>
+            </button>
+            <button @click="openPrintDialog" class="bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-white transition-all font-semibold shadow-lg border border-white/60">
+              <span class="material-icons-outlined text-lg text-emerald-700">print</span>
               <span>Print Report</span>
             </button>
           </div>
@@ -1163,6 +1368,28 @@ const goBack = () => {
             Print Report
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4">
+      <h3 class="text-lg font-semibold text-gray-900">Confirm Export</h3>
+      <p class="text-sm text-gray-700">{{ confirmModal.message }}</p>
+      <div class="flex justify-end gap-3 pt-2">
+        <button
+          class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+          @click="confirmCancel"
+        >
+          Cancel
+        </button>
+        <button
+          class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition shadow"
+          @click="confirmOk"
+        >
+          Continue
+        </button>
       </div>
     </div>
   </div>

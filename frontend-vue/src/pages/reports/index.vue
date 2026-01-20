@@ -10,7 +10,16 @@ const goBack = () => {
 
 const navigateToReport = (reportType) => {
   // Navigate to specific report pages based on the report type
-  router.push(`/reports/${reportType.toLowerCase().replace(/\s+/g, '-')}`)
+  // Handle special cases for maintenance-records and transactions
+  if (reportType === 'maintenance-records') {
+    router.push('/reports/maintenance-records')
+  } else if (reportType === 'transactions') {
+    router.push('/reports/transactions')
+  } else if (reportType === 'user-supply-usage') {
+    router.push('/reports/user-supply-usage')
+  } else {
+    router.push(`/reports/${reportType.toLowerCase().replace(/\s+/g, '-')}`)
+  }
 }
 
 const reports = ref([
@@ -31,6 +40,24 @@ const reports = ref([
     icon: 'build',
     type: 'serviceable-items',
     description: 'Report on serviceable and non-serviceable equipment status'
+  },
+  {
+    name: 'Maintenance Records',
+    icon: 'build',
+    type: 'maintenance-records',
+    description: 'Generate comprehensive maintenance records report with detailed maintenance history'
+  },
+  {
+    name: 'Transactions',
+    icon: 'swap_horiz',
+    type: 'transactions',
+    description: 'Generate transactions report with borrow requests and approvals'
+  },
+  {
+    name: 'Supply Item Usage',
+    icon: 'inventory_2',
+    type: 'user-supply-usage',
+    description: 'Track overall usage for each supply item (e.g., Ballpens: 490 usage in Q2)'
   }
 ])
 </script>
@@ -88,7 +115,10 @@ const reports = ref([
                   :class="[
                     index === 0 ? 'bg-orange-500' : 
                     index === 1 ? 'bg-blue-500' : 
-                    'bg-purple-500'
+                    index === 2 ? 'bg-purple-500' :
+                    index === 3 ? 'bg-blue-600' :
+                    index === 4 ? 'bg-green-500' :
+                    'bg-indigo-500'
                   ]"
                   class="p-4 rounded-lg flex-shrink-0 shadow-md"
                 >

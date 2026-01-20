@@ -87,6 +87,8 @@ def load_training_data_from_database():
             THEN CAST(SUBSTRING(cn.condition_number FROM 'A([0-9]+)') AS INTEGER)
             ELSE 0
         END as condition_number,
+        COALESCE(cn.condition_status, 'Unknown') as condition_status,
+        COALESCE(cond.condition, 'Unknown') as condition,
         COALESCE((
             SELECT reason 
             FROM maintenance_records 
@@ -95,21 +97,31 @@ def load_training_data_from_database():
             LIMIT 1
         ), '') as last_reason,
         -- Use remaining_years if available, otherwise calculate from lifespan_estimate
-        COALESCE(i.remaining_years, 
-            CASE 
-                WHEN i.lifespan_estimate IS NOT NULL AND i.lifespan_estimate > 0
-                THEN GREATEST(0, i.lifespan_estimate - EXTRACT(YEAR FROM AGE(CURRENT_DATE, i.date_acquired)))
-                ELSE NULL
-            END
-        ) as target
+        -- If condition is R, Disposal, or Non-Serviceable, set target to 0 (dispose immediately)
+        CASE 
+            WHEN cn.condition_status = 'Disposal' 
+                 OR cond.condition LIKE '%Non%Serviceable%' OR cn.condition_number = 'R'
+            THEN 0.0
+            ELSE COALESCE(i.remaining_years, 
+                CASE 
+                    WHEN i.lifespan_estimate IS NOT NULL AND i.lifespan_estimate > 0
+                    THEN GREATEST(0, i.lifespan_estimate - EXTRACT(YEAR FROM AGE(CURRENT_DATE, i.date_acquired)))
+                    ELSE NULL
+                END
+            )
+        END as target
     FROM items i
     LEFT JOIN categories c ON i.category_id = c.id
     LEFT JOIN condition_numbers cn ON i.condition_number_id = cn.id
+    LEFT JOIN conditions cond ON i.condition_id = cond.id
     WHERE i.deleted_at IS NULL
         AND (c.category IS NULL OR (LOWER(c.category) NOT LIKE '%supply%' AND LOWER(c.category) NOT LIKE '%consumable%'))
         AND (
             i.remaining_years IS NOT NULL 
             OR (i.lifespan_estimate IS NOT NULL AND i.lifespan_estimate > 0)
+            OR cn.condition_status = 'Disposal' 
+            OR cn.condition_number = 'R'
+            OR cond.condition LIKE '%Non%Serviceable%'
         )
     ORDER BY i.id
     """
@@ -159,6 +171,20 @@ def prepare_features(df):
         data['last_reason'] = 'other'
         logger.warning("⚠️ last_reason column not found, using 'other'")
     
+    # Normalize condition_status
+    if 'condition_status' in data.columns:
+        data['condition_status'] = data['condition_status'].astype(str).str.strip().fillna('Unknown')
+    else:
+        data['condition_status'] = 'Unknown'
+        logger.warning("⚠️ condition_status column not found, using 'Unknown'")
+    
+    # Normalize condition (Serviceable, Non-Serviceable, etc.)
+    if 'condition' in data.columns:
+        data['condition'] = data['condition'].astype(str).str.strip().fillna('Unknown')
+    else:
+        data['condition'] = 'Unknown'
+        logger.warning("⚠️ condition column not found, using 'Unknown'")
+    
     # One-hot encode category (creates columns like category_Desktop, category_ICT)
     category_dummies = pd.get_dummies(data['category'], prefix='category')
     logger.info(f"   Categories found: {data['category'].unique().tolist()}")
@@ -168,11 +194,21 @@ def prepare_features(df):
     if len(data['last_reason'].unique()) > 1:
         logger.info(f"   Maintenance reasons found: {data['last_reason'].unique().tolist()}")
     
+    # One-hot encode condition_status (creates columns like condition_status_Good, condition_status_Disposal)
+    condition_status_dummies = pd.get_dummies(data['condition_status'], prefix='condition_status')
+    logger.info(f"   Condition statuses found: {data['condition_status'].unique().tolist()}")
+    
+    # One-hot encode condition (creates columns like condition_Serviceable, condition_Non-Serviceable)
+    condition_dummies = pd.get_dummies(data['condition'], prefix='condition')
+    logger.info(f"   Conditions found: {data['condition'].unique().tolist()}")
+    
     # Combine all features
     feature_df = pd.concat([
         data[numeric_cols],
         category_dummies,
-        reason_dummies
+        reason_dummies,
+        condition_status_dummies,
+        condition_dummies
     ], axis=1)
     
     logger.info(f"   Total features: {len(feature_df.columns)}")

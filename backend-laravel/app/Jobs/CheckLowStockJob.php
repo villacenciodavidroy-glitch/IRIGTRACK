@@ -79,6 +79,9 @@ class CheckLowStockJob implements ShouldQueue
                     $notification = Notification::create([
                         'item_id' => $item->id,
                         'message' => $message,
+                        'type' => 'low_stock',
+                        'is_read' => false,
+                        // user_id is null - goes to all admins
                     ]);
 
                     if ($notification && $notification->notification_id) {

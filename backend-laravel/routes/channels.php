@@ -27,3 +27,9 @@ Broadcast::channel('notifications', function ($user = null) {
     return true; // Allow all users to listen to notification updates
 });
 
+// User-specific channel for supply request approvals
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    // Only allow the user to listen to their own channel
+    return (int) $user->id === (int) $userId;
+});
+

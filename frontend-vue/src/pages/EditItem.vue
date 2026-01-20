@@ -25,6 +25,8 @@ const { users, fetchusers } = useUsers()
 const editForm = ref({
   unit: '',
   description: '',
+  serial_number: '',
+  model: '',
   category_id: '',
   quantity: '',
   pac: '',
@@ -204,7 +206,8 @@ const populateForm = (item) => {
   console.log('Final issuedToValue:', issuedToValue)
   console.log('========================')
   
-  // Get technician notes from latest maintenance record if available
+  // Get maintenance_reason and technician notes from latest maintenance record if available
+  let maintenanceReason = ''
   let technicianNotes = ''
   try {
     if (item.maintenance_records && Array.isArray(item.maintenance_records) && item.maintenance_records.length > 0) {
@@ -215,16 +218,25 @@ const populateForm = (item) => {
         return dateB.getTime() - dateA.getTime()
       })
       const latestRecord = sortedRecords[0]
+      maintenanceReason = latestRecord?.reason || '' // Get from maintenance_records.reason
       technicianNotes = latestRecord?.technician_notes || ''
     }
   } catch (e) {
     console.warn('Error accessing maintenance_records:', e)
+    maintenanceReason = ''
     technicianNotes = ''
+  }
+  
+  // Fallback to item.maintenance_reason if no maintenance records (for backward compatibility)
+  if (!maintenanceReason && item.maintenance_reason) {
+    maintenanceReason = item.maintenance_reason
   }
   
   editForm.value = {
     unit: item.unit || '',
     description: item.description || '',
+    serial_number: item.serial_number || '',
+    model: item.model || '',
     category_id: categoryId,
     quantity: toNumber(item.quantity) || 0,
     pac: item.pac || '',
@@ -236,7 +248,7 @@ const populateForm = (item) => {
     condition_number_id: toNumber(item.condition_number_id),
     issuedTo: issuedToValue !== null && issuedToValue !== undefined ? Number(issuedToValue) : null, // Convert to number to match dropdown option values
     user_id: userId, // Keep original user_id for reference
-    maintenance_reason: item.maintenance_reason || '', // From items table
+    maintenance_reason: maintenanceReason, // From latest maintenance record's reason field
     technician_notes: technicianNotes // From latest maintenance record
   }
   
@@ -575,7 +587,16 @@ const formatDateForInput = (dateString) => {
 const isOnMaintenance = computed(() => {
   if (!editForm.value.condition_id) return false
   const selectedCondition = conditions.value.find(c => c.id == editForm.value.condition_id)
-  return selectedCondition && (selectedCondition.condition === 'On Maintenance' || selectedCondition.condition === 'Under Maintenance')
+  if (!selectedCondition) return false
+  
+  // Normalize condition name for flexible matching
+  const conditionName = (selectedCondition.condition || '').toLowerCase().trim()
+  // Check for various forms of "On Maintenance" or "Under Maintenance"
+  return conditionName.includes('maintenance') && (
+    conditionName.includes('on') || 
+    conditionName.includes('under') ||
+    conditionName === 'maintenance'
+  )
 })
 
 // Get locations that have personnel assigned
@@ -907,6 +928,41 @@ const removeImage = () => {
                   ></textarea>
                 </div>
               </div>
+
+              <!-- Serial Number -->
+              <div class="form-group">
+                <label class="form-label">Serial Number <span class="text-red-500">*</span></label>
+                <div class="relative flex items-center">
+                  <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                    <span class="material-icons-outlined">qr_code</span>
+                  </span>
+                  <input
+                    v-model="editForm.serial_number"
+                    type="text"
+                    placeholder="Enter serial number"
+                    class="form-input-enhanced !pl-12"
+                    required
+                  />
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Unique identifier for equipment tracking</p>
+              </div>
+
+              <!-- Model -->
+              <div class="form-group">
+                <label class="form-label">Model <span class="text-red-500">*</span></label>
+                <div class="relative flex items-center">
+                  <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                    <span class="material-icons-outlined">devices</span>
+                  </span>
+                  <input
+                    v-model="editForm.model"
+                    type="text"
+                    placeholder="Enter model"
+                    class="form-input-enhanced !pl-12"
+                    required
+                  />
+                </div>
+              </div>
               
               <!-- Quantity -->
               <div class="form-group">
@@ -1073,7 +1129,7 @@ const removeImage = () => {
                     <option v-for="location in locationsWithPersonnel" 
                         :key="location.id || location.location_id" 
                         :value="Number(location.id || location.location_id)">
-                      {{ location.personnel }}
+                      {{ location.personnel_code || 'N/A' }} - {{ location.location }} (Personnel)
                     </option>
                   </select>
                 </div>
@@ -1138,6 +1194,65 @@ const removeImage = () => {
                   </select>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Maintenance Section -->
+        <div v-if="isOnMaintenance" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4 border-b border-amber-800">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-xl">build_circle</span>
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-white">Maintenance Information</h2>
+                <p class="text-xs text-amber-100">Maintenance reason and technician notes</p>
+              </div>
+            </div>
+          </div>
+          <div class="p-6 space-y-6">
+            <!-- Maintenance Reason Input -->
+            <div class="form-group">
+              <label class="form-label">Maintenance Reason <span class="text-red-500">*</span></label>
+              <div class="relative flex items-center">
+                <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
+                  <span class="material-icons-outlined">info</span>
+                </span>
+                <input
+                  v-model="editForm.maintenance_reason"
+                  type="text"
+                  class="form-input-enhanced !pl-12"
+                  placeholder="Enter maintenance reason (e.g., Overheat, Wear, Electrical, etc.)"
+                  required
+                />
+              </div>
+              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                Enter the primary reason for this maintenance issue.
+              </p>
+            </div>
+            
+            <!-- Technician Notes Textarea -->
+            <div class="form-group">
+              <label class="form-label">
+                Technician Notes <span class="text-red-500">*</span>
+                <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(Saved to technician_notes)</span>
+              </label>
+              <div class="relative flex items-start">
+                <span class="absolute left-4 top-3 text-green-600 dark:text-green-400 z-10">
+                  <span class="material-icons-outlined">notes</span>
+                </span>
+                <textarea
+                  v-model="editForm.technician_notes"
+                  required
+                  rows="4"
+                  class="form-textarea-enhanced !pl-12"
+                  placeholder="Enter detailed technician notes regarding the maintenance (e.g., issue description, repair steps, observations, test results, etc.)"
+                ></textarea>
+              </div>
+              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                Detailed notes will be saved as technician_notes in the maintenance record (maintenance_records table).
+              </p>
             </div>
           </div>
         </div>
@@ -1215,72 +1330,6 @@ const removeImage = () => {
               <p class="mt-3 text-xs text-gray-600 dark:text-gray-400">
                 <span class="material-icons-outlined text-sm align-middle mr-1">info</span>
                 Upload a clear image of the asset for better identification and tracking.
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Maintenance Section -->
-        <div v-if="isOnMaintenance" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div class="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4 border-b border-amber-800">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-                <span class="material-icons-outlined text-white text-xl">build_circle</span>
-              </div>
-              <div>
-                <h2 class="text-lg font-bold text-white">Maintenance Information</h2>
-                <p class="text-xs text-amber-100">Maintenance reason and technician notes</p>
-              </div>
-            </div>
-          </div>
-          <div class="p-6 space-y-6">
-            <!-- Maintenance Reason Dropdown -->
-            <div class="form-group">
-              <label class="form-label">Maintenance Reason <span class="text-red-500">*</span></label>
-              <div class="relative flex items-center">
-                <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
-                  <span class="material-icons-outlined">info</span>
-                </span>
-                <select
-                  v-model="editForm.maintenance_reason"
-                  required
-                  class="form-select-enhanced !pl-12"
-                >
-                  <option value="">Select maintenance reason</option>
-                  <option value="Overheat">Overheat</option>
-                  <option value="Wear">Wear</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="Wet">Wet</option>
-                  <option value="Component Failure">Component Failure</option>
-                  <option value="Physical Damage">Physical Damage</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                Select the primary reason for this maintenance issue.
-              </p>
-            </div>
-            
-            <!-- Technician Notes Textarea -->
-            <div class="form-group">
-              <label class="form-label">
-                Technician Notes <span class="text-red-500">*</span>
-                <span class="text-xs font-normal text-gray-500 dark:text-gray-400">(Saved to technician_notes)</span>
-              </label>
-              <div class="relative flex items-start">
-                <span class="absolute left-4 top-3 text-green-600 dark:text-green-400 z-10">
-                  <span class="material-icons-outlined">notes</span>
-                </span>
-                <textarea
-                  v-model="editForm.technician_notes"
-                  required
-                  rows="4"
-                  class="form-textarea-enhanced !pl-12"
-                  placeholder="Enter detailed technician notes regarding the maintenance (e.g., issue description, repair steps, observations, test results, etc.)"
-                ></textarea>
-              </div>
-              <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                Detailed notes will be saved as technician_notes in the maintenance record (maintenance_records table).
               </p>
             </div>
           </div>

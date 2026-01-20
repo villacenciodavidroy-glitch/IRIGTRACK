@@ -319,13 +319,103 @@
                 <span class="material-icons-outlined text-xl leading-none">person</span>
               </span>
               <input
-                v-model="formData.personnel"
+                v-model="personnelInput"
+                @input="handlePersonnelInput"
+                @focus="showPersonnelDropdown = true"
+                @blur="handlePersonnelBlur"
+                @keydown="handlePersonnelKeydown"
                 type="text"
-                placeholder="Enter personnel name"
-                class="form-input pl-12 pr-4 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500/20 relative z-0"
-                :disabled="isSubmitting"
+                placeholder="Type or select personnel name"
+                class="form-input pl-12 pr-10 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500/20 relative z-0"
+                :disabled="isSubmitting || loadingUsers"
+                autocomplete="off"
               />
+              <span 
+                @mousedown.prevent="togglePersonnelDropdown"
+                class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 cursor-pointer z-10 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                <span class="material-icons-outlined text-xl leading-none">{{ showPersonnelDropdown ? 'arrow_drop_up' : 'arrow_drop_down' }}</span>
+              </span>
+              
+              <!-- Dropdown List -->
+              <div 
+                v-if="showPersonnelDropdown && !loadingUsers && filteredPersonnelOptions.length > 0"
+                ref="personnelDropdown"
+                class="absolute z-50 w-full mt-1 top-full bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-xl max-h-60 overflow-y-auto"
+              >
+                <div
+                  v-for="(user, index) in filteredPersonnelOptions"
+                  :key="user.id || index"
+                  :data-index="index"
+                  @mousedown.prevent="selectPersonnel(user)"
+                  @mouseenter="selectedPersonnelIndex = index"
+                  :class="[
+                    'px-4 py-3 cursor-pointer transition-colors',
+                    selectedPersonnelIndex === index 
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
+                  ]"
+                >
+                  <div class="flex items-start gap-3">
+                    <span class="material-icons-outlined text-lg text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0">person</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-semibold text-gray-900 dark:text-white">
+                        {{ getUserDisplayName(user) }}
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                        <span v-if="user.user_code" class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                          <span class="material-icons-outlined text-sm">badge</span>
+                          {{ user.user_code }}
+                        </span>
+                        <span v-if="user.location" class="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+                          <span class="material-icons-outlined text-sm">location_on</span>
+                          {{ user.location }}
+                        </span>
+                        <span v-if="user.role" class="inline-flex items-center gap-1 px-2 py-0.5 rounded"
+                          :class="{
+                            'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300': user.role?.toLowerCase() === 'admin',
+                            'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300': user.role?.toLowerCase() === 'supply',
+                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': user.role?.toLowerCase() === 'user'
+                          }"
+                        >
+                          <span class="material-icons-outlined text-sm">{{ user.role?.toLowerCase() === 'admin' ? 'admin_panel_settings' : user.role?.toLowerCase() === 'supply' ? 'inventory_2' : 'person' }}</span>
+                          {{ user.role?.toUpperCase() || 'USER' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- No results message -->
+              <div 
+                v-if="showPersonnelDropdown && personnelInput && filteredPersonnelOptions.length === 0 && !loadingUsers"
+                class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-xl p-4"
+              >
+                <p class="text-sm text-gray-500 dark:text-gray-400 text-center">
+                  No matching personnel found. You can type a custom name.
+                </p>
+              </div>
+              
+              <!-- Loading state in dropdown -->
+              <div 
+                v-if="showPersonnelDropdown && loadingUsers"
+                class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-xl p-4"
+              >
+                <p class="text-sm text-gray-500 dark:text-gray-400 text-center flex items-center justify-center gap-2">
+                  <span class="material-icons-outlined text-base animate-spin">refresh</span>
+                  Loading users...
+                </p>
+              </div>
             </div>
+            <p v-if="loadingUsers" class="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <span class="material-icons-outlined text-base animate-spin">refresh</span>
+              Loading users...
+            </p>
+            <p v-else-if="activeUsers.length === 0 && !loadingUsers" class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <span class="material-icons-outlined text-base">info</span>
+              No active users available
+            </p>
             <p v-if="errors.personnel" class="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
               <span class="material-icons-outlined text-base">error_outline</span>
               {{ errors.personnel[0] }}
@@ -429,7 +519,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
 import useLocations from '../composables/useLocations'
@@ -461,25 +551,202 @@ const formData = ref({
   personnel: ''
 })
 
+const users = ref([])
+const loadingUsers = ref(false)
+const personnelInput = ref('')
+const showPersonnelDropdown = ref(false)
+const selectedPersonnelIndex = ref(-1)
+const personnelDropdown = ref(null)
+
 const goBack = () => {
   router.push('/inventory')
 }
 
-const openCreateModal = () => {
+const fetchUsers = async () => {
+  loadingUsers.value = true
+  try {
+    const response = await axiosClient.get('/users')
+    let allUsers = []
+    if (response.data && response.data.data) {
+      allUsers = response.data.data
+    } else if (Array.isArray(response.data)) {
+      allUsers = response.data
+    }
+    // Filter for active users only (status === 'ACTIVE') - include all roles: admin, user, and supply
+    users.value = allUsers.filter(u => {
+      const status = (u.status || '').toUpperCase()
+      const role = (u.role || '').toLowerCase()
+      // Include all active users regardless of role (admin, user, supply)
+      return status === 'ACTIVE' && (role === 'admin' || role === 'user' || role === 'supply')
+    })
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    users.value = []
+  } finally {
+    loadingUsers.value = false
+  }
+}
+
+// Computed property for active users
+const activeUsers = computed(() => {
+  return users.value.filter(u => (u.status || '').toUpperCase() === 'ACTIVE')
+})
+
+// Computed property for filtered personnel options based on input
+const filteredPersonnelOptions = computed(() => {
+  if (!personnelInput.value || personnelInput.value.trim() === '') {
+    return activeUsers.value
+  }
+  
+  const query = personnelInput.value.toLowerCase().trim()
+  return activeUsers.value.filter(user => {
+    const fullname = getUserDisplayName(user).toLowerCase()
+    const userCode = (user.user_code || '').toLowerCase()
+    const location = (user.location || '').toLowerCase()
+    return fullname.includes(query) || userCode.includes(query) || location.includes(query)
+  })
+})
+
+// Get user display name
+const getUserDisplayName = (user) => {
+  return user.fullname || user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim() || 'N/A'
+}
+
+// Handle personnel input
+const handlePersonnelInput = () => {
+  // Clear any pending blur timeout
+  if (blurTimeout) {
+    clearTimeout(blurTimeout)
+    blurTimeout = null
+  }
+  showPersonnelDropdown.value = true
+  selectedPersonnelIndex.value = -1
+  // Update formData.personnel with the input value
+  formData.value.personnel = personnelInput.value
+}
+
+// Handle personnel blur (close dropdown after a short delay to allow click)
+let blurTimeout = null
+const handlePersonnelBlur = (event) => {
+  // Don't close if clicking on dropdown
+  if (event.relatedTarget && event.relatedTarget.closest('.absolute.z-50')) {
+    return
+  }
+  blurTimeout = setTimeout(() => {
+    showPersonnelDropdown.value = false
+    selectedPersonnelIndex.value = -1
+  }, 200)
+}
+
+// Toggle dropdown
+const togglePersonnelDropdown = () => {
+  // Clear any pending blur timeout
+  if (blurTimeout) {
+    clearTimeout(blurTimeout)
+    blurTimeout = null
+  }
+  showPersonnelDropdown.value = !showPersonnelDropdown.value
+  if (showPersonnelDropdown.value) {
+    selectedPersonnelIndex.value = -1
+  }
+}
+
+// Select personnel from dropdown
+const selectPersonnel = (user) => {
+  // Clear any pending blur timeout
+  if (blurTimeout) {
+    clearTimeout(blurTimeout)
+    blurTimeout = null
+  }
+  const displayName = getUserDisplayName(user)
+  personnelInput.value = displayName
+  formData.value.personnel = displayName
+  showPersonnelDropdown.value = false
+  selectedPersonnelIndex.value = -1
+}
+
+// Handle keyboard navigation
+const handlePersonnelKeydown = (event) => {
+  if (!showPersonnelDropdown.value || filteredPersonnelOptions.value.length === 0) {
+    if (event.key === 'ArrowDown' && filteredPersonnelOptions.value.length > 0) {
+      event.preventDefault()
+      showPersonnelDropdown.value = true
+      selectedPersonnelIndex.value = 0
+      scrollToSelected()
+    }
+    return
+  }
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      selectedPersonnelIndex.value = Math.min(
+        selectedPersonnelIndex.value + 1,
+        filteredPersonnelOptions.value.length - 1
+      )
+      scrollToSelected()
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      selectedPersonnelIndex.value = Math.max(selectedPersonnelIndex.value - 1, 0)
+      scrollToSelected()
+      break
+    case 'Enter':
+      event.preventDefault()
+      if (selectedPersonnelIndex.value >= 0 && selectedPersonnelIndex.value < filteredPersonnelOptions.value.length) {
+        selectPersonnel(filteredPersonnelOptions.value[selectedPersonnelIndex.value])
+      }
+      break
+    case 'Escape':
+      event.preventDefault()
+      showPersonnelDropdown.value = false
+      selectedPersonnelIndex.value = -1
+      break
+  }
+}
+
+// Scroll to selected option in dropdown
+const scrollToSelected = async () => {
+  await nextTick()
+  if (selectedPersonnelIndex.value >= 0 && personnelDropdown.value) {
+    const selectedElement = personnelDropdown.value.querySelector(`[data-index="${selectedPersonnelIndex.value}"]`)
+    if (selectedElement) {
+      selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }
+}
+
+// Watch for selected index changes to scroll
+watch(selectedPersonnelIndex, () => {
+  if (showPersonnelDropdown.value) {
+    scrollToSelected()
+  }
+})
+
+const openCreateModal = async () => {
   isEditing.value = false
   formData.value = { id: null, location: '', personnel: '' }
+  personnelInput.value = ''
+  showPersonnelDropdown.value = false
+  selectedPersonnelIndex.value = -1
   errors.value = {}
+  await fetchUsers()
   showModal.value = true
 }
 
-const openEditModal = (location) => {
+const openEditModal = async (location) => {
   actionsMenuOpen.value = null
   isEditing.value = true
+  await fetchUsers()
+  const personnelName = location.personnel || ''
   formData.value = {
     id: location.id || location.location_id,
     location: location.location,
-    personnel: location.personnel || ''
+    personnel: personnelName
   }
+  personnelInput.value = personnelName
+  showPersonnelDropdown.value = false
+  selectedPersonnelIndex.value = -1
   errors.value = {}
   showModal.value = true
 }
@@ -488,6 +755,9 @@ const closeModal = () => {
   if (isSubmitting.value) return
   showModal.value = false
   formData.value = { id: null, location: '', personnel: '' }
+  personnelInput.value = ''
+  showPersonnelDropdown.value = false
+  selectedPersonnelIndex.value = -1
   errors.value = {}
   isEditing.value = false
 }
@@ -519,7 +789,7 @@ const handleSubmit = async () => {
 
     const payload = {
       location: formData.value.location.trim(),
-      personnel: formData.value.personnel?.trim() || null
+      personnel: personnelInput.value?.trim() || formData.value.personnel?.trim() || null
     }
 
     let response
@@ -655,6 +925,15 @@ const visiblePages = computed(() => {
 const handleClickOutside = (event) => {
   if (!event.target.closest('.relative')) {
     actionsMenuOpen.value = null
+  }
+  // Close personnel dropdown if clicking outside the personnel input group
+  const personnelGroup = event.target.closest('.form-group')
+  if (showPersonnelDropdown.value && !personnelGroup) {
+    if (blurTimeout) {
+      clearTimeout(blurTimeout)
+    }
+    showPersonnelDropdown.value = false
+    selectedPersonnelIndex.value = -1
   }
 }
 

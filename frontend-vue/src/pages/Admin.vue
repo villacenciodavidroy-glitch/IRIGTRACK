@@ -531,6 +531,39 @@ const formatActivityTime = (dateString) => {
   })
 }
 
+// Get image URL with proper fallback
+const getImageUrl = (imagePath) => {
+  if (!imagePath || imagePath.trim() === '') {
+    return '/images/default-avatar.png'
+  }
+  
+  // If it's already a full URL, use it directly
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath
+  }
+  
+  // If it's a relative path starting with /, use it as is
+  if (imagePath.startsWith('/')) {
+    return imagePath
+  }
+  
+  // Otherwise, assume it's a storage path
+  return imagePath
+}
+
+// Handle image error - fallback to default avatar
+const handleImageError = (event) => {
+  const defaultAvatar = '/images/default-avatar.png'
+  if (event.target.src !== defaultAvatar && !event.target.src.includes('default-avatar')) {
+    event.target.src = defaultAvatar
+  } else {
+    // If default avatar also fails, hide image and show icon placeholder
+    event.target.onerror = null // Prevent infinite loop
+    event.target.style.display = 'none'
+    // The background gradient will show as fallback
+  }
+}
+
 
 // Fetch users when component is mounted
 onMounted(() => {
@@ -669,6 +702,8 @@ onMounted(() => {
             <thead>
               <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Full Name</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">User Code</th>
+                <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">No.</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Date</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Unit/Sections</th>
@@ -683,19 +718,38 @@ onMounted(() => {
               >
                 <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <div class="flex items-center gap-4">
-                    <div class="relative">
+                    <div class="relative flex-shrink-0">
                       <img 
-                        :src="account.image || '/images/default-avatar.png'"
-                        class="h-12 w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
-                        :alt="account.fullname"
+                        :src="getImageUrl(account.image)"
+                        @error="handleImageError($event)"
+                        class="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover object-center border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
+                        :alt="account.fullname || 'User'"
+                        loading="lazy"
                       >
-                      <div class="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      <div class="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white"></div>
                     </div>
-                    <div>
-                      <div class="font-bold text-gray-900 dark:text-white">{{ account.fullname }}</div>
-                      <div class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">{{ account.fullname }}</div>
+                      <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
                     </div>
                   </div>
+                </td>
+                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
+                  <span class="text-sm font-mono text-gray-900 dark:text-white">
+                    {{ account.user_code || 'N/A' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
+                  <span
+                    :class="{
+                      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': account.status === 'ACTIVE',
+                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': account.status === 'INACTIVE',
+                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': account.status === 'RESIGNED'
+                    }"
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                  >
+                    {{ account.status || 'ACTIVE' }}
+                  </span>
                 </td>
                 <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <span class="inline-flex items-center justify-center px-3 py-1 rounded-lg text-sm font-bold bg-purple-900 dark:bg-purple-900 text-purple-300 dark:text-purple-300">
@@ -871,19 +925,38 @@ onMounted(() => {
               >
                 <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <div class="flex items-center gap-4">
-                    <div class="relative">
+                    <div class="relative flex-shrink-0">
                       <img 
                         :src="account.image || '/images/default-avatar.png'" 
-                        class="h-12 w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
+                        @error="handleImageError($event)"
+                        class="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover object-center border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
                         :alt="account.fullname"
+                        loading="lazy"
                       >
-                      <div class="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      <div class="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white"></div>
                     </div>
-                    <div>
-                      <div class="font-bold text-gray-900 dark:text-white">{{ account.fullname }}</div>
-                      <div class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">{{ account.fullname }}</div>
+                      <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
                     </div>
                   </div>
+                </td>
+                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
+                  <span class="text-sm font-mono text-gray-900 dark:text-white">
+                    {{ account.user_code || 'N/A' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
+                  <span
+                    :class="{
+                      'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': account.status === 'ACTIVE',
+                      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': account.status === 'INACTIVE',
+                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': account.status === 'RESIGNED'
+                    }"
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                  >
+                    {{ account.status || 'ACTIVE' }}
+                  </span>
                 </td>
                 <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <span class="inline-flex items-center justify-center px-3 py-1 rounded-lg text-sm font-bold bg-purple-900 dark:bg-purple-900 text-purple-300 dark:text-purple-300">
@@ -1059,17 +1132,19 @@ onMounted(() => {
               >
                 <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <div class="flex items-center gap-4">
-                    <div class="relative">
+                    <div class="relative flex-shrink-0">
                       <img 
                         :src="account.image || '/images/default-avatar.png'" 
-                        class="h-12 w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
+                        @error="handleImageError($event)"
+                        class="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-green-900 to-green-800 object-cover object-center border-2 border-green-600 shadow-md group-hover:shadow-lg transition-all group-hover:scale-110"
                         :alt="account.fullname"
+                        loading="lazy"
                       >
-                      <div class="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      <div class="absolute -top-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white"></div>
                     </div>
-                    <div>
-                      <div class="font-bold text-gray-900 dark:text-white">{{ account.fullname }}</div>
-                      <div class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-gray-900 dark:text-white text-sm sm:text-base truncate">{{ account.fullname }}</div>
+                      <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">{{ account.email }}</div>
                     </div>
                   </div>
                 </td>
@@ -1463,5 +1538,34 @@ tbody tr:hover {
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
   @apply bg-green-400 rounded-full hover:bg-green-500;
+}
+
+/* Responsive image styles */
+img[class*="rounded-full"] {
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Ensure images don't overflow their containers */
+td img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 640px) {
+  td .flex.items-center.gap-4 {
+    gap: 0.75rem;
+  }
+  
+  td .font-bold {
+    font-size: 0.875rem;
+  }
+  
+  td .text-sm {
+    font-size: 0.75rem;
+  }
 }
 </style>

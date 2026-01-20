@@ -32,6 +32,9 @@ class UserResource extends JsonResource
             'image' => $this->image ? asset('storage/' . $this->image) : null,
             'location_id' => $this->location_id,
             'location' => $locationName,
+            'user_code' => $this->user_code ?? null,
+            'status' => $this->status ?? 'ACTIVE',
+            'pending_items_count' => null, // Will be calculated on frontend if needed
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
             'updated_at' => $this->updated_at ? $this->updated_at->toISOString() : null
         ];

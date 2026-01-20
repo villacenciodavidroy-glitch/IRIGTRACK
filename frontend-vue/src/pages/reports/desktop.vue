@@ -41,92 +41,104 @@ const items = ref([
 ])
 
 const entriesPerPage = ref(10)
+
+const printReport = () => {
+  window.print()
+}
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Back Button -->
-    <button @click="goBack" class="mb-4 flex items-center text-green-600 hover:text-green-700">
-      <span class="material-icons-outlined mr-1">arrow_back</span>
-      Back
-    </button>
-
+  <div class="min-h-screen bg-gray-50 p-6 space-y-6">
     <!-- Header -->
-    <div class="text-center mb-8">
-      <span class="material-icons-outlined text-6xl text-green-600 mb-4">account_balance</span>
-      <h1 class="text-xl font-bold">REPUBLIC OF THE PHILIPPINES</h1>
-      <h2 class="text-lg font-bold">NATIONAL IRRIGATION ADMINISTRATION</h2>
-      <h3>REGION XI</h3>
-      <h4 class="font-bold">{{ equipmentType.toUpperCase() }} MONITORING</h4>
-      <h5>FOR THE YEAR 2022</h5>
+    <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-xl rounded-2xl">
+      <div class="px-6 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-start gap-4">
+          <div class="flex items-center gap-3 pt-1">
+            <button 
+              @click="goBack" 
+              class="p-3 bg-white/15 border border-white/20 text-white rounded-full hover:bg-white/25 transition-all shadow-lg backdrop-blur"
+              title="Go back"
+            >
+              <span class="material-icons-outlined text-xl">arrow_back</span>
+            </button>
+          </div>
+          <div class="text-white">
+            <h1 class="text-3xl font-extrabold leading-tight">{{ equipmentType.toUpperCase() }} Monitoring Report</h1>
+            <p class="text-white/90 text-base mt-1">Track {{ equipmentType.toLowerCase() }} inventory, value, and condition</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60">
+            <span class="material-icons-outlined text-lg text-emerald-700">download</span>
+            <span>Export Excel</span>
+          </button>
+          <button @click="printReport" class="bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-white transition-all font-semibold shadow-lg border border-white/60">
+            <span class="material-icons-outlined text-lg text-emerald-700">print</span>
+            <span>Print Report</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Search and Show entries -->
-    <div class="flex justify-between mb-4">
-      <div class="flex items-center">
-        <label class="mr-2">Search:</label>
-        <input type="text" class="border rounded px-2 py-1">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-xl shadow-md border border-gray-100 p-4">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-700">Search:</label>
+        <input type="text" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
       </div>
-      <div class="flex items-center">
-        <label class="mr-2">Show</label>
-        <select v-model="entriesPerPage" class="border rounded px-2 py-1">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-700">Show</label>
+        <select v-model="entriesPerPage" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <option value="10">10</option>
           <option value="25">25</option>
           <option value="50">50</option>
           <option value="100">100</option>
         </select>
-        <span class="ml-2">entries</span>
+        <span class="text-sm text-gray-700">entries</span>
       </div>
     </div>
 
     <!-- Table -->
-    <div class="overflow-x-auto">
-      <table class="min-w-full bg-gray-800 dark:bg-gray-800 border border-gray-700 dark:border-gray-700">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="border px-4 py-2">NO.</th>
-            <th class="border px-4 py-2">ARTICLE</th>
-            <th class="border px-4 py-2">DESCRIPTION</th>
-            <th class="border px-4 py-2">PROPERTY ACCOUNT CODE</th>
-            <th class="border px-4 py-2">UNIT VALUE</th>
-            <th class="border px-4 py-2">DATE ACQUIRED</th>
-            <th class="border px-4 py-2">P.O. NUMBER</th>
-            <th class="border px-4 py-2">UNIT/SECTIONS</th>
-            <th class="border px-4 py-2">CONDITION</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(item, index) in items" :key="index">
-            <td class="border px-4 py-2">{{ index + 1 }}</td>
-            <td class="border px-4 py-2">{{ item.article }}</td>
-            <td class="border px-4 py-2">{{ item.description }}</td>
-            <td class="border px-4 py-2">{{ item.propertyCode }}</td>
-            <td class="border px-4 py-2">{{ item.unitValue }}</td>
-            <td class="border px-4 py-2">{{ item.dateAcquired }}</td>
-            <td class="border px-4 py-2">{{ item.poNumber }}</td>
-            <td class="border px-4 py-2">{{ item.location }}</td>
-            <td class="border px-4 py-2">{{ item.condition }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination -->
-    <div class="flex justify-between items-center mt-4">
-      <div style="color: #01200E;">Showing <span style="color: #01200E; font-weight: bold;">1</span> to <span style="color: #01200E; font-weight: bold;">{{ items.length }}</span> of <span style="color: #01200E; font-weight: bold;">{{ items.length }}</span> entries</div>
-      <div class="flex gap-2">
-        <button class="px-3 py-1 border rounded" disabled>Previous</button>
-        <button class="px-3 py-1 bg-green-600 text-white rounded">1</button>
-        <button class="px-3 py-1 border rounded">Next</button>
+    <div class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gradient-to-r from-emerald-50 to-emerald-100">
+            <tr>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">NO.</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">ARTICLE</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">DESCRIPTION</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">PROPERTY ACCOUNT CODE</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">UNIT VALUE</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">DATE ACQUIRED</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">P.O. NUMBER</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">UNIT/SECTIONS</th>
+              <th class="border px-4 py-3 text-left text-xs font-semibold text-emerald-900">CONDITION</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            <tr v-for="(item, index) in items" :key="index" class="hover:bg-emerald-50/40">
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ index + 1 }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.article }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.description }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.propertyCode }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.unitValue }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.dateAcquired }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.poNumber }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.location }}</td>
+              <td class="border px-4 py-2 text-sm text-gray-900">{{ item.condition }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
-
-    <!-- Export Button -->
-    <div class="mt-6 flex justify-end">
-      <button class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center">
-        <span class="material-icons-outlined mr-2">download</span>
-        Export to Excel
-      </button>
+      <!-- Pagination -->
+      <div class="bg-emerald-50 border-t border-emerald-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="text-sm text-emerald-900">Showing <span class="font-semibold">{{ items.length }}</span> entries</div>
+        <div class="flex gap-2">
+          <button class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50 disabled:opacity-50">Previous</button>
+          <button class="px-3 py-2 text-sm font-semibold text-white bg-emerald-600 border border-emerald-600 rounded">1</button>
+          <button class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50">Next</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

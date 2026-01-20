@@ -10,7 +10,13 @@
               <span class="material-icons-outlined text-4xl text-white">analytics</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Item Lifespan Analytics</h1>
+              <div class="flex items-center gap-3 mb-1">
+                <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Item Lifespan Analytics</h1>
+                <span class="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full font-semibold border border-white/30 flex items-center gap-1.5">
+                  <span class="material-icons-outlined text-sm">psychology</span>
+                  Powered by CatBoost
+                </span>
+              </div>
               <p class="text-green-100 text-base sm:text-lg">Predictive Analysis for All Items Lifespan & Supply Management</p>
             </div>
           </div>
@@ -165,7 +171,8 @@
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Remaining Years</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">End Date</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Acquired</th>
-                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Status</th>
+                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
+                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">History</th>
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -193,7 +200,7 @@
                 </td>
                 <td class="px-6 py-4 text-base text-gray-900 dark:text-white font-medium border-r border-gray-300 dark:border-gray-600">{{ i.lifespanEndDate }}</td>
                 <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300 border-r border-gray-300 dark:border-gray-600">{{ i.acquisitionDate }}</td>
-                <td class="px-6 py-4">
+                <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
                   <span class="px-4 py-2 rounded-full text-sm sm:text-base font-bold whitespace-nowrap inline-block min-w-[100px] text-center" :class="{
                     'bg-red-600 text-white dark:bg-red-700 dark:text-white shadow-md': i.conditionStatus === 'Disposal',
                     'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': i.remainingLifespan <= 15 && i.conditionStatus !== 'Disposal',
@@ -202,9 +209,19 @@
                     {{ i.conditionStatus === 'Disposal' ? 'DISPOSE' : 'For Checking' }}
                   </span>
                 </td>
+                <td class="px-6 py-4">
+                  <button
+                    @click="openItemHistory(i.itemId)"
+                    class="inline-flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-all duration-200 text-xs font-semibold"
+                    title="View item history and factors"
+                  >
+                    <span class="material-icons-outlined text-sm">history</span>
+                    View History
+                  </button>
+                </td>
               </tr>
               <tr v-if="endingSoonItems.length === 0">
-                <td colspan="7" class="px-6 py-12 text-center">
+                <td colspan="8" class="px-6 py-12 text-center">
                   <div class="flex flex-col items-center">
                     <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
                       <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">check_circle</span>
@@ -240,211 +257,309 @@
       <div class="p-6">
         <div class="space-y-4">
           <div class="p-4 bg-blue-900/20 dark:bg-blue-900/20 rounded-lg border border-blue-700 dark:border-blue-700">
-            <p class="text-gray-900 dark:text-white font-semibold">Current XGBoost accuracy: <span class="text-blue-400 dark:text-blue-400 text-xl font-bold">{{ lifespanAccuracy }}%</span></p>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-gray-900 dark:text-white font-semibold">Current CatBoost accuracy:</p>
+              <span class="px-2 py-1 bg-blue-600 text-white text-xs rounded-full font-semibold flex items-center gap-1">
+                <span class="material-icons-outlined text-xs">psychology</span>
+                CatBoost
+              </span>
+            </div>
+            <p class="text-gray-900 dark:text-white font-semibold"><span class="text-blue-400 dark:text-blue-400 text-xl font-bold">{{ lifespanAccuracy }}%</span></p>
           </div>
           <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-gray-300 dark:border-gray-600">
-            <p class="text-gray-900 dark:text-white font-semibold">Predictions generated: <span class="text-gray-900 dark:text-white text-xl font-bold">{{ xgbLifespanForecast.length }}</span></p>
+            <p class="text-gray-900 dark:text-white font-semibold">Predictions generated: <span class="text-gray-900 dark:text-white text-xl font-bold">{{ lifespanPredictions.length }}</span></p>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Using CatBoost ML Model</p>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Lifespan Analysis Modal -->
+  <!-- Enhanced Lifespan Analysis Modal -->
   <div v-if="showLifespanModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-modalFadeIn" @click.self="showLifespanModal = false">
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-modalSlideIn">
-      <div class="bg-gradient-to-r from-yellow-600 to-yellow-700 px-6 py-5 border-b border-yellow-800">
-        <div class="flex justify-between items-center">
+      <!-- Enhanced Header -->
+      <div class="relative overflow-hidden bg-gradient-to-r from-yellow-600 via-orange-600 to-yellow-700 px-6 py-5 border-b-2 border-yellow-800">
+        <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div class="relative flex justify-between items-center">
           <div class="flex items-center gap-3">
-            <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+            <div class="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
               <span class="material-icons-outlined text-white text-2xl">timeline</span>
             </div>
             <div>
-              <h3 class="text-xl font-bold text-white">Average Lifespan Analysis</h3>
+              <h3 class="text-xl font-bold text-white tracking-tight">Average Lifespan Analysis</h3>
               <p class="text-yellow-100 text-sm mt-1">
                 Comprehensive analysis of all items' expected lifespan
               </p>
             </div>
           </div>
-          <button @click="showLifespanModal = false" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
-            <span class="material-icons-outlined">close</span>
+          <button @click="showLifespanModal = false" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all duration-200 hover:scale-110">
+            <span class="material-icons-outlined text-xl">close</span>
           </button>
         </div>
       </div>
-      <div class="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+      <div class="p-6 overflow-y-auto max-h-[calc(90vh-100px)] custom-scrollbar">
 
-        <!-- Summary Statistics -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border-2 border-gray-300 dark:border-gray-600 p-5 overflow-hidden relative group">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-yellow-500/10 rounded-bl-full"></div>
+        <!-- Enhanced Summary Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <!-- Total Items Card - Minimalist Design -->
+          <div class="group relative bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-all duration-300">
             <div class="relative">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="material-icons-outlined text-yellow-400 dark:text-yellow-400">timeline</span>
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Total Items</h4>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Items analyzed</p>
                 </div>
-                <h4 class="text-base font-semibold text-gray-900 dark:text-white">Average Lifespan</h4>
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-lg">inventory</span>
+                </div>
               </div>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">{{ averageLifespan }} days</p>
-              <p class="text-sm text-gray-700 dark:text-gray-300">{{ Math.round(averageLifespan / 365.25 * 10) / 10 }} years</p>
+              <div class="flex items-baseline gap-2">
+                <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ allItemsLifespan.length }}</p>
+                <span class="text-sm text-gray-500 dark:text-gray-400">items</span>
+              </div>
             </div>
           </div>
 
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border-2 border-gray-300 dark:border-gray-600 p-5 overflow-hidden relative group">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-bl-full"></div>
+          <!-- Prediction Accuracy Card - Minimalist Design -->
+          <div class="group relative bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-all duration-300">
             <div class="relative">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="material-icons-outlined text-blue-400 dark:text-blue-400">inventory</span>
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Prediction Accuracy</h4>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">CatBoost model</p>
                 </div>
-                <h4 class="text-base font-semibold text-gray-900 dark:text-white">Total Items</h4>
-              </div>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">{{ allItemsLifespan.length }}</p>
-              <p class="text-sm text-gray-700 dark:text-gray-300">Items analyzed</p>
-            </div>
-          </div>
-
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border-2 border-gray-300 dark:border-gray-600 p-5 overflow-hidden relative group">
-            <div class="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-bl-full"></div>
-            <div class="relative">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="material-icons-outlined text-green-400 dark:text-green-400">accuracy</span>
+                <div class="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-green-600 dark:text-green-400 text-lg">accuracy</span>
                 </div>
-                <h4 class="text-base font-semibold text-gray-900 dark:text-white">Prediction Accuracy</h4>
               </div>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white mb-1">{{ lifespanAccuracy }}%</p>
-              <p class="text-sm text-gray-700 dark:text-gray-300">CatBoost model</p>
+              <div class="mb-3">
+                <div class="flex items-baseline gap-2">
+                  <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ lifespanAccuracy }}%</p>
+                  <span class="text-sm text-gray-500 dark:text-gray-400">accuracy</span>
+                </div>
+              </div>
+              <!-- Minimalist Progress Bar -->
+              <div class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  class="h-full bg-green-500 dark:bg-green-600 rounded-full transition-all duration-1000 ease-out"
+                  :style="{ width: lifespanAccuracy + '%' }"
+                  :title="`${lifespanAccuracy}% accuracy`"
+                ></div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Charts Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Enhanced Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <!-- Chart 1: Average Lifespan by Category (Bar Chart) -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 p-5">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">bar_chart</span>
-              <h4 class="text-lg font-bold text-gray-900 dark:text-white">Average Lifespan by Category</h4>
-            </div>
-            <div class="h-64">
-              <Bar v-if="categoryLifespanChartData" :data="categoryLifespanChartData" :options="categoryChartOptions" />
+          <div class="group relative bg-gradient-to-br from-white to-green-50/50 dark:from-gray-800 dark:to-green-900/20 rounded-xl shadow-lg dark:shadow-xl border-2 border-green-200 dark:border-green-700 p-6 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-green-400/10 rounded-bl-full"></div>
+            <div class="relative">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">bar_chart</span>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900 dark:text-white">Average Lifespan by Category</h4>
+              </div>
+              <div class="h-64 bg-white/50 dark:bg-gray-900/30 rounded-lg p-2">
+                <Bar v-if="categoryLifespanChartData" :data="categoryLifespanChartData" :options="categoryChartOptions" />
+              </div>
             </div>
           </div>
 
           <!-- Chart 2: Items by Status (Doughnut/Pie-like visualization using Bar) -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 p-5">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="material-icons-outlined text-blue-400 dark:text-blue-400 text-xl">pie_chart</span>
-              <h4 class="text-lg font-bold text-gray-900 dark:text-white">Items by Status</h4>
-            </div>
-            <div class="h-64">
-              <Bar v-if="statusDistributionChartData" :data="statusDistributionChartData" :options="statusChartOptions" />
+          <div class="group relative bg-gradient-to-br from-white to-blue-50/50 dark:from-gray-800 dark:to-blue-900/20 rounded-xl shadow-lg dark:shadow-xl border-2 border-blue-200 dark:border-blue-700 p-6 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-blue-400/10 rounded-bl-full"></div>
+            <div class="relative">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">pie_chart</span>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900 dark:text-white">Items by Status</h4>
+              </div>
+              <div class="h-64 bg-white/50 dark:bg-gray-900/30 rounded-lg p-2">
+                <Bar v-if="statusDistributionChartData" :data="statusDistributionChartData" :options="statusChartOptions" />
+              </div>
             </div>
           </div>
 
           <!-- Chart 3: Lifespan Distribution -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 p-5">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="material-icons-outlined text-purple-400 dark:text-purple-400 text-xl">show_chart</span>
-              <h4 class="text-lg font-bold text-gray-900 dark:text-white">Lifespan Distribution</h4>
-            </div>
-            <div class="h-64">
-              <Bar v-if="lifespanDistributionChartData" :data="lifespanDistributionChartData" :options="distributionChartOptions" />
+          <div class="group relative bg-gradient-to-br from-white to-purple-50/50 dark:from-gray-800 dark:to-purple-900/20 rounded-xl shadow-lg dark:shadow-xl border-2 border-purple-200 dark:border-purple-700 p-6 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-purple-400/10 rounded-bl-full"></div>
+            <div class="relative">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="p-2.5 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">show_chart</span>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900 dark:text-white">Lifespan Distribution</h4>
+              </div>
+              <div class="h-64 bg-white/50 dark:bg-gray-900/30 rounded-lg p-2">
+                <Bar v-if="lifespanDistributionChartData" :data="lifespanDistributionChartData" :options="distributionChartOptions" />
+              </div>
             </div>
           </div>
 
           <!-- Chart 4: Remaining Lifespan Trends -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 p-5">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="material-icons-outlined text-orange-400 dark:text-orange-400 text-xl">trending_down</span>
-              <h4 class="text-lg font-bold text-gray-900 dark:text-white">Remaining Lifespan Overview</h4>
-            </div>
-            <div class="h-64">
-              <Line v-if="remainingLifespanChartData" :data="remainingLifespanChartData" :options="remainingChartOptions" />
+          <div class="group relative bg-gradient-to-br from-white to-orange-50/50 dark:from-gray-800 dark:to-orange-900/20 rounded-xl shadow-lg dark:shadow-xl border-2 border-orange-200 dark:border-orange-700 p-6 hover:shadow-xl transition-all duration-300 overflow-hidden">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-orange-400/10 rounded-bl-full"></div>
+            <div class="relative">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="p-2.5 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">trending_down</span>
+                </div>
+                <h4 class="text-lg font-bold text-gray-900 dark:text-white">Remaining Lifespan Overview</h4>
+              </div>
+              <div class="h-64 bg-white/50 dark:bg-gray-900/30 rounded-lg p-2">
+                <Line v-if="remainingLifespanChartData" :data="remainingLifespanChartData" :options="remainingChartOptions" />
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Category Breakdown (Data Table) -->
-        <div class="mb-6">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">category</span>
+        <!-- Enhanced Category Breakdown (Data Table) -->
+        <div class="mb-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg shadow-md">
+              <span class="material-icons-outlined text-white text-xl">category</span>
+            </div>
             <h4 class="text-lg font-bold text-gray-900 dark:text-white">Lifespan by Category - Detailed</h4>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div v-for="(categoryData, category) in lifespanByCategory" :key="category" 
-                 class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border-2 border-gray-300 dark:border-gray-600 p-5 hover:shadow-lg transition-shadow">
-              <div class="flex items-center justify-between mb-3">
-                <h5 class="font-bold text-gray-900 dark:text-white">{{ category || 'Unknown' }}</h5>
-                <span class="px-3 py-1 bg-green-900 dark:bg-green-900 text-green-300 dark:text-green-300 text-xs rounded-full font-semibold">
-                  {{ categoryData.count }} items
-                </span>
-              </div>
-              <div class="space-y-2">
-                <div class="flex justify-between text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="text-gray-600 dark:text-gray-400 font-medium">Avg. Lifespan:</span>
-                  <span class="font-bold text-gray-900 dark:text-white">{{ categoryData.avgLifespan }} days</span>
+                 class="group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-700/50 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-200 dark:border-gray-600 p-6 hover:shadow-xl hover:border-green-300 dark:hover:border-green-600 transition-all duration-300 overflow-hidden">
+              <div class="absolute top-0 right-0 w-20 h-20 bg-green-400/10 rounded-bl-full"></div>
+              <div class="relative">
+                <div class="flex items-center justify-between mb-4">
+                  <h5 class="text-lg font-bold text-gray-900 dark:text-white">{{ category || 'Unknown' }}</h5>
+                  <span class="px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs rounded-full font-semibold shadow-md">
+                    {{ categoryData.count }} items
+                  </span>
                 </div>
-                <div class="flex justify-between text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="text-gray-600 dark:text-gray-400 font-medium">Shortest:</span>
-                  <span class="font-bold text-gray-900 dark:text-white">{{ categoryData.minLifespan }} days</span>
-                </div>
-                <div class="flex justify-between text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <span class="text-gray-600 dark:text-gray-400 font-medium">Longest:</span>
-                  <span class="font-bold text-gray-900 dark:text-white">{{ categoryData.maxLifespan }} days</span>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-sm">timeline</span>
+                      <span class="text-sm text-gray-700 dark:text-gray-300 font-medium">Avg. Lifespan:</span>
+                    </div>
+                    <span class="font-bold text-blue-700 dark:text-blue-400">{{ categoryData.avgLifespan }} days</span>
+                  </div>
+                  <div class="flex justify-between items-center p-3 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/30 dark:to-red-900/30 rounded-lg border border-orange-200 dark:border-orange-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-orange-600 dark:text-orange-400 text-sm">arrow_downward</span>
+                      <span class="text-sm text-gray-700 dark:text-gray-300 font-medium">Shortest:</span>
+                    </div>
+                    <span class="font-bold text-orange-700 dark:text-orange-400">{{ categoryData.minLifespan }} days</span>
+                  </div>
+                  <div class="flex justify-between items-center p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 rounded-lg border border-green-200 dark:border-green-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-green-600 dark:text-green-400 text-sm">arrow_upward</span>
+                      <span class="text-sm text-gray-700 dark:text-gray-300 font-medium">Longest:</span>
+                    </div>
+                    <span class="font-bold text-green-700 dark:text-green-400">{{ categoryData.maxLifespan }} days</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Items Table -->
-        <div>
-          <div class="flex items-center gap-3 mb-4">
-            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">list</span>
-            <h4 class="text-lg font-bold text-gray-900 dark:text-white">Lifespan Details</h4>
+        <!-- Enhanced Items Table -->
+        <div class="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-700/50 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-200 dark:border-gray-600 overflow-hidden">
+          <div class="p-6 border-b-2 border-gray-200 dark:border-gray-600">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg shadow-md">
+                <span class="material-icons-outlined text-white text-xl">list</span>
+              </div>
+              <h4 class="text-lg font-bold text-gray-900 dark:text-white">Lifespan Details</h4>
+            </div>
           </div>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto max-h-96 custom-scrollbar">
             <table class="w-full text-sm">
-              <thead class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700 sticky top-0 border-b-2 border-gray-300 dark:border-gray-600">
-                <tr>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">PROPERTY CODE</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Category</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Expected Lifespan</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Remaining</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Status</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Acquisition Date</th>
+              <thead class="sticky top-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700 z-10 shadow-md">
+                <tr class="border-b-2 border-gray-300 dark:border-gray-600">
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">tag</span>
+                      Property Code
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">category</span>
+                      Category
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">schedule</span>
+                      Expected Lifespan
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">event</span>
+                      Remaining
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">flag</span>
+                      Status
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">calendar_today</span>
+                      Acquisition Date
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 <tr 
                   v-for="item in allItemsLifespan.slice(0, 50)" 
                   :key="item.name + item.acquisitionDate"
-                  class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-green-500"
+                  class="group hover:bg-gradient-to-r hover:from-yellow-50 hover:to-orange-50 dark:hover:from-yellow-900/20 dark:hover:to-orange-900/20 transition-all duration-200 border-l-4 border-transparent hover:border-yellow-500"
                 >
-                  <td class="px-6 py-4 font-semibold text-base text-gray-900 dark:text-white border-r border-gray-300 dark:border-gray-600">{{ item.pac || 'N/A' }}</td>
-                  <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
-                    <span :class="item.categoryClass" class="px-2 py-1 rounded-full text-sm font-semibold">
+                  <td class="px-6 py-4 font-semibold text-sm text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-600">
+                    <span class="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium">
+                      {{ item.pac || 'N/A' }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 border-r border-gray-200 dark:border-gray-600">
+                    <span :class="item.categoryClass" class="px-3 py-1 rounded-full text-xs font-semibold">
                       {{ item.category }}
                     </span>
                   </td>
-                  <td class="px-6 py-4 text-base text-gray-900 dark:text-white font-medium border-r border-gray-300 dark:border-gray-600">{{ item.expectedLifespan }} days</td>
-                  <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
-                    <span class="text-base font-bold" :class="item.remainingLifespan <= 30 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'">
+                  <td class="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium border-r border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-indigo-500 dark:text-indigo-400 text-base">timeline</span>
+                      <span>{{ item.expectedLifespan }} days</span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 border-r border-gray-200 dark:border-gray-600">
+                    <span class="text-sm font-bold" :class="item.remainingLifespan <= 30 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'">
                       {{ item.remainingLifespan }} days
                     </span>
                   </td>
-                  <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
-                    <span :class="item.statusClass" class="px-3 py-1.5 rounded-full text-sm font-bold">
+                  <td class="px-6 py-4 border-r border-gray-200 dark:border-gray-600">
+                    <span :class="item.statusClass" class="px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
                       {{ item.remainingLifespan <= 30 ? 'URGENT' : item.remainingLifespan <= 90 ? 'MONITOR' : 'GOOD' }}
                     </span>
                   </td>
-                  <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300 font-medium">{{ item.acquisitionDate }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-base">event</span>
+                      <span>{{ item.acquisitionDate }}</span>
+                    </div>
+                  </td>
                 </tr>
                 <tr v-if="allItemsLifespan.length === 0">
                   <td colspan="6" class="px-6 py-12 text-center">
                     <div class="flex flex-col items-center">
-                      <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
+                      <div class="inline-block p-6 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-full mb-4">
                         <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">inventory_2</span>
                       </div>
                       <p class="text-base text-gray-900 dark:text-white font-semibold">No items with lifespan predictions available</p>
@@ -453,16 +568,20 @@
                 </tr>
               </tbody>
             </table>
-            <div v-if="allItemsLifespan.length > 50" class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400 font-semibold p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+          </div>
+          <div v-if="allItemsLifespan.length > 50" class="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 border-t-2 border-gray-200 dark:border-gray-600">
+            <div class="text-center text-sm text-gray-600 dark:text-gray-400 font-semibold">
               Showing 50 of {{ allItemsLifespan.length }} items
             </div>
           </div>
         </div>
 
-        <!-- Update Schedule Info -->
-        <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-          <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 font-semibold">
-            <span class="material-icons-outlined text-green-400 dark:text-green-400 text-base">update</span>
+        <!-- Enhanced Update Schedule Info -->
+        <div class="mt-6 pt-4 border-t-2 border-gray-200 dark:border-gray-700 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-5 border-2 border-yellow-200 dark:border-yellow-700 shadow-md">
+          <div class="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300 font-semibold">
+            <div class="p-2 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-lg shadow-md">
+              <span class="material-icons-outlined text-white text-base">update</span>
+            </div>
             <span>{{ lifespanScheduleInfo }} • Next update: {{ nextLifespanCalculation }}</span>
           </div>
         </div>
@@ -519,7 +638,13 @@
         <div class="absolute top-0 right-0 w-24 h-24 bg-yellow-500/10 rounded-bl-full"></div>
         <div class="relative flex items-center justify-between">
           <div class="flex-1">
-            <p class="text-base font-medium text-gray-700 dark:text-gray-300 mb-2">Avg. Lifespan</p>
+            <div class="flex items-center gap-2 mb-2">
+              <p class="text-base font-medium text-gray-700 dark:text-gray-300">Avg. Lifespan</p>
+              <span class="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 text-xs rounded-full font-semibold flex items-center gap-1">
+                <span class="material-icons-outlined text-xs">psychology</span>
+                CatBoost
+              </span>
+            </div>
             <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-1">{{ averageLifespan }} days</h3>
             <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">All item types</p>
             <button @click="showLifespanModal = true" class="px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-lg text-base w-36 hover:from-yellow-700 hover:to-yellow-800 transition-all shadow-md hover:shadow-lg font-semibold flex items-center gap-2">
@@ -591,130 +716,267 @@
 
     <!-- All Items Lifespan Management Table -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 overflow-hidden mb-8">
-      <div class="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 border-b border-purple-800">
-        <div class="flex flex-wrap items-center gap-3">
+      <div class="relative overflow-hidden bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 px-6 py-5 border-b border-purple-800">
+        <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div class="relative flex flex-wrap items-center gap-3">
           <div class="flex items-center gap-3">
-            <span class="material-icons-outlined text-white text-2xl">science</span>
-            <h2 class="text-xl font-bold text-white">All Items Lifespan Management</h2>
+            <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg shadow-lg">
+              <span class="material-icons-outlined text-white text-2xl">science</span>
+            </div>
+            <h2 class="text-xl font-bold text-white tracking-tight">All Items Lifespan Management</h2>
+            <span class="px-3 py-1.5 bg-white/20 backdrop-blur-sm text-white text-xs rounded-full font-semibold border border-white/30 flex items-center gap-1.5 shadow-md">
+              <span class="material-icons-outlined text-xs">psychology</span>
+              CatBoost ML
+            </span>
           </div>
         </div>
       </div>
       <div class="p-6">
       
-        <!-- Predictions Summary Card -->
-        <div v-if="lifespanPredictions.length > 0" class="mb-6 p-6 bg-blue-900/20 dark:bg-blue-900/20 rounded-xl border-2 border-blue-700 dark:border-blue-700 shadow-md">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div class="text-center">
-            <div class="text-2xl font-bold text-blue-400 dark:text-blue-400">{{ lifespanPredictions.length }}</div>
-            <div class="text-base text-gray-700 dark:text-gray-300">Total Predictions</div>
-          </div>
-          <div class="text-center">
-            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ allItemsLifespan.length }}</div>
-            <div class="text-base text-gray-700 dark:text-gray-300">Items Displayed</div>
-          </div>
-          <div class="text-center">
-            <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {{ lifespanPredictions.filter(p => p.remaining_years != null && p.remaining_years <= 0.082).length }}
+        <!-- Enhanced Predictions Summary Card -->
+        <div v-if="lifespanPredictions.length > 0" class="mb-6 relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/30 dark:via-indigo-900/30 dark:to-purple-900/30 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-xl">
+          <!-- Decorative background elements -->
+          <div class="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl"></div>
+          <div class="absolute bottom-0 left-0 w-48 h-48 bg-purple-400/10 rounded-full blur-3xl"></div>
+          
+          <div class="relative p-6 sm:p-8">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                  <span class="material-icons-outlined text-white text-xl">psychology</span>
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">CatBoost Predictions</h3>
+                  <p class="text-xs text-gray-600 dark:text-gray-400">Machine Learning Model Analysis</p>
+                </div>
+              </div>
+              <span class="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs rounded-full font-semibold shadow-md flex items-center gap-1.5">
+                <span class="material-icons-outlined text-xs">auto_awesome</span>
+                ML Model
+              </span>
             </div>
-            <div class="text-base text-gray-700 dark:text-gray-300">Ending Soon (≤30 days)</div>
-          </div>
-          <div class="text-center">
-            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {{ Math.round(lifespanPredictions.reduce((sum, p) => sum + (p.remaining_years || 0), 0) / lifespanPredictions.length * 365) }}
+            
+            <!-- Enhanced Metrics Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <!-- Total Predictions -->
+              <div class="group relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-5 border-2 border-blue-200 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300 hover:shadow-lg overflow-hidden">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-bl-full"></div>
+                <div class="relative">
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                      <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-lg">analytics</span>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Predictions</span>
+                  </div>
+                  <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{{ lifespanPredictions.length }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Active predictions</div>
+                </div>
+              </div>
+              
+              <!-- Items Displayed -->
+              <div class="group relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-5 border-2 border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 transition-all duration-300 hover:shadow-lg overflow-hidden">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-bl-full"></div>
+                <div class="relative">
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="p-1.5 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                      <span class="material-icons-outlined text-green-600 dark:text-green-400 text-lg">inventory_2</span>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Items Displayed</span>
+                  </div>
+                  <div class="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">{{ allItemsLifespan.length }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">Currently visible</div>
+                </div>
+              </div>
+              
+              <!-- Ending Soon -->
+              <div class="group relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-5 border-2 border-orange-200 dark:border-orange-700 hover:border-orange-400 dark:hover:border-orange-500 transition-all duration-300 hover:shadow-lg overflow-hidden">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-bl-full"></div>
+                <div class="relative">
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="p-1.5 bg-orange-100 dark:bg-orange-900/50 rounded-lg">
+                      <span class="material-icons-outlined text-orange-600 dark:text-orange-400 text-lg">schedule</span>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Ending Soon</span>
+                  </div>
+                  <div class="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
+                    {{ lifespanPredictions.filter(p => p.remaining_years != null && p.remaining_years <= 0.082).length }}
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">≤30 days remaining</div>
+                </div>
+              </div>
             </div>
-            <div class="text-base text-gray-700 dark:text-gray-300">Avg. Remaining Days</div>
-          </div>
-        </div>
-        
-          <!-- View All Predictions Button -->
-          <div class="mt-4 pt-4 border-t border-blue-700 dark:border-blue-700">
-            <button 
-              @click="showAllPredictions = !showAllPredictions"
-              class="w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg font-semibold flex items-center justify-center gap-2"
-            >
-              <span class="material-icons-outlined text-base">{{ showAllPredictions ? 'expand_less' : 'expand_more' }}</span>
-              {{ showAllPredictions ? 'Hide' : 'Show' }} All {{ lifespanPredictions.length }} Predictions
-            </button>
+            
+            <!-- Enhanced Toggle Button -->
+            <div class="pt-4 border-t-2 border-blue-200 dark:border-blue-700">
+              <button 
+                @click="showAllPredictions = !showAllPredictions"
+                class="w-full px-6 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl font-semibold flex items-center justify-center gap-2.5 transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span class="material-icons-outlined text-lg transition-transform duration-300" :class="{ 'rotate-180': showAllPredictions }">{{ showAllPredictions ? 'expand_less' : 'expand_more' }}</span>
+                <span>{{ showAllPredictions ? 'Hide' : 'Show' }} All {{ lifespanPredictions.length }} Predictions</span>
+                <span class="material-icons-outlined text-lg">{{ showAllPredictions ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
           </div>
         </div>
       
-        <!-- All Predictions Detail View -->
-        <div v-if="showAllPredictions && lifespanPredictions.length > 0" class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 overflow-hidden">
-          <div class="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4 border-b border-purple-800">
-            <h3 class="text-lg font-bold text-white flex items-center gap-2">
-              <span class="material-icons-outlined text-xl">list</span>
-              All Predictions Details
-            </h3>
+        <!-- Enhanced All Predictions Detail View -->
+        <div v-if="showAllPredictions && lifespanPredictions.length > 0" class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-xl dark:shadow-2xl border-2 border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
+          <div class="relative overflow-hidden bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 px-6 py-4 border-b-2 border-purple-800">
+            <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+            <div class="relative flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                  <span class="material-icons-outlined text-white text-xl">list</span>
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-white tracking-tight">All Predictions Details</h3>
+                  <p class="text-xs text-purple-100 mt-0.5">{{ sortedLifespanPredictions.length }} items displayed</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-sm">filter_list</span>
+                <span class="text-xs text-white font-medium">Sorted by Priority</span>
+              </div>
+            </div>
           </div>
-          <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <div class="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
             <table class="w-full text-sm">
-              <thead class="sticky top-0 bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700 z-10">
+              <thead class="sticky top-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800 z-20 shadow-md">
                 <tr class="border-b-2 border-gray-300 dark:border-gray-600">
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Item ID</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Item Name</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Description</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Remaining Years</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Remaining Days</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Lifespan Estimate</th>
-                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">tag</span>
+                      Item ID
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">inventory_2</span>
+                      Item Name
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">description</span>
+                      Description
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">calendar_today</span>
+                      Remaining Years
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">event</span>
+                      Remaining Days
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">timeline</span>
+                      Lifespan Estimate
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">flag</span>
+                      Status
+                    </div>
+                  </th>
+                  <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-sm">history</span>
+                      History
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 <tr 
                   v-for="(pred, index) in sortedLifespanPredictions" 
                   :key="pred.item_id || index"
-                  class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-purple-500"
+                  class="group hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 dark:hover:from-purple-900/20 dark:hover:to-indigo-900/20 transition-all duration-200 border-l-4 border-transparent hover:border-purple-500 hover:shadow-sm"
                 >
-                  <td class="px-6 py-4 font-semibold text-base text-gray-900 dark:text-white border-r border-gray-300 dark:border-gray-600">{{ pred.item_id }}</td>
-                  <td class="px-6 py-4 font-medium text-base text-gray-900 dark:text-white border-r border-gray-300 dark:border-gray-600">
-                    {{ items.find(i => i.id === pred.item_id)?.unit || 'Unknown' }}
+                  <td class="px-6 py-4 font-semibold text-sm text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs font-bold">
+                        {{ pred.item_id }}
+                      </span>
+                    </div>
                   </td>
-                  <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300 border-r border-gray-300 dark:border-gray-600 max-w-xs truncate" :title="items.find(i => i.id === pred.item_id)?.description || 'N/A'">
-                    {{ items.find(i => i.id === pred.item_id)?.description || 'N/A' }}
+                  <td class="px-6 py-4 font-medium text-sm text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-base">category</span>
+                      <span>{{ items.find(i => i.id === pred.item_id)?.unit || 'Unknown' }}</span>
+                    </div>
                   </td>
-                  <td class="px-6 py-4 border-r border-gray-300 dark:border-gray-600">
-                    <span class="font-bold text-base" :class="{
-                      'text-red-600 dark:text-red-400': pred.remaining_years <= 0.082,
-                      'text-orange-600 dark:text-orange-400': pred.remaining_years > 0.082 && pred.remaining_years <= 0.164,
-                      'text-yellow-600 dark:text-yellow-400': pred.remaining_years > 0.164 && pred.remaining_years <= 0.5,
-                      'text-green-600 dark:text-green-400': pred.remaining_years > 0.5
-                    }">
-                      {{ pred.remaining_years != null ? pred.remaining_years.toFixed(2) : 'N/A' }}
-                    </span>
+                  <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 max-w-xs">
+                    <div class="truncate" :title="items.find(i => i.id === pred.item_id)?.description || 'N/A'">
+                      {{ items.find(i => i.id === pred.item_id)?.description || 'N/A' }}
+                    </div>
                   </td>
-                  <td class="px-6 py-4 text-base text-gray-900 dark:text-white font-medium border-r border-gray-300 dark:border-gray-600">
-                    {{ pred.remaining_years != null ? Math.round(pred.remaining_years * 365) : 'N/A' }}
+                  <td class="px-6 py-4 border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-base" :class="{
+                        'text-red-600 dark:text-red-400': pred.remaining_years <= 0.082,
+                        'text-orange-600 dark:text-orange-400': pred.remaining_years > 0.082 && pred.remaining_years <= 0.164,
+                        'text-yellow-600 dark:text-yellow-400': pred.remaining_years > 0.164 && pred.remaining_years <= 0.5,
+                        'text-green-600 dark:text-green-400': pred.remaining_years > 0.5
+                      }">
+                        {{ pred.remaining_years != null ? pred.remaining_years.toFixed(2) : 'N/A' }}
+                      </span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">yrs</span>
+                    </div>
                   </td>
-                  <td class="px-6 py-4 text-base text-gray-900 dark:text-white font-medium border-r border-gray-300 dark:border-gray-600">
-                    {{ pred.lifespan_estimate != null ? pred.lifespan_estimate.toFixed(2) : 'N/A' }}
+                  <td class="px-6 py-4 text-sm text-gray-900 dark:text-white font-semibold border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium">
+                        {{ pred.remaining_years != null ? Math.round(pred.remaining_years * 365) : 'N/A' }}
+                      </span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">days</span>
+                    </div>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-indigo-500 dark:text-indigo-400 text-base">trending_up</span>
+                      <span>{{ pred.lifespan_estimate != null ? pred.lifespan_estimate.toFixed(2) : 'N/A' }}</span>
+                    </div>
                   </td>
                   <td class="px-6 py-4">
                     <span 
                       v-if="pred.remaining_years != null || (() => { const item = items.find(i => i.id === pred.item_id); return item?.condition_status === 'Disposal'; })()" 
-                      class="px-4 py-2 rounded-full text-sm sm:text-base font-bold whitespace-nowrap inline-block min-w-[100px] text-center" 
+                      class="inline-flex items-center px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shadow-sm" 
                       :class="{
-                        'bg-red-600 text-white dark:bg-red-700 dark:text-white shadow-md': (() => {
+                        'bg-red-600 text-white dark:bg-red-700 dark:text-white shadow-red-200 dark:shadow-red-900': (() => {
                           const item = items.find(i => i.id === pred.item_id);
                           return item?.condition_status === 'Disposal';
                         })(),
-                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': pred.remaining_years != null && pred.remaining_years <= 0.082 && (() => {
+                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-2 border-red-300 dark:border-red-700': pred.remaining_years != null && pred.remaining_years <= 0.082 && (() => {
                           const item = items.find(i => i.id === pred.item_id);
                           return item?.condition_status !== 'Disposal';
                         })(),
-                        'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200': pred.remaining_years != null && pred.remaining_years > 0.082 && pred.remaining_years <= 0.164 && (() => {
+                        'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-2 border-orange-300 dark:border-orange-700': pred.remaining_years != null && pred.remaining_years > 0.082 && pred.remaining_years <= 0.164 && (() => {
                           const item = items.find(i => i.id === pred.item_id);
                           return item?.condition_status !== 'Disposal';
                         })(),
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': pred.remaining_years != null && pred.remaining_years > 0.164 && pred.remaining_years <= 0.5 && (() => {
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-2 border-yellow-300 dark:border-yellow-700': pred.remaining_years != null && pred.remaining_years > 0.164 && pred.remaining_years <= 0.5 && (() => {
                           const item = items.find(i => i.id === pred.item_id);
                           return item?.condition_status !== 'Disposal';
                         })(),
-                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': pred.remaining_years != null && pred.remaining_years > 0.5 && (() => {
+                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-2 border-green-300 dark:border-green-700': pred.remaining_years != null && pred.remaining_years > 0.5 && (() => {
                           const item = items.find(i => i.id === pred.item_id);
                           return item?.condition_status !== 'Disposal';
                         })()
                       }"
                     >
+                      <span class="material-icons-outlined text-xs mr-1" v-if="pred.remaining_years != null && pred.remaining_years <= 0.082">warning</span>
+                      <span class="material-icons-outlined text-xs mr-1" v-else-if="pred.remaining_years != null && pred.remaining_years <= 0.164">schedule</span>
+                      <span class="material-icons-outlined text-xs mr-1" v-else-if="pred.remaining_years != null && pred.remaining_years <= 0.5">visibility</span>
+                      <span class="material-icons-outlined text-xs mr-1" v-else-if="pred.remaining_years != null && pred.remaining_years > 0.5">check_circle</span>
                       {{
                         (() => {
                           const item = items.find(i => i.id === pred.item_id);
@@ -731,6 +993,16 @@
                         })()
                       }}
                     </span>
+                  </td>
+                  <td class="px-6 py-4">
+                    <button
+                      @click="openItemHistory(pred.item_id)"
+                      class="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-all duration-200 text-xs font-semibold"
+                      title="View item history and factors"
+                    >
+                      <span class="material-icons-outlined text-sm">history</span>
+                      View History
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -768,6 +1040,301 @@
           <div class="flex items-center gap-3">
             <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-3xl animate-spin">sync</span>
             <p class="text-base font-semibold text-blue-700 dark:text-blue-400">Loading predictions from Python API...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item History Modal -->
+    <div v-if="showItemHistoryModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-modalFadeIn" @click.self="showItemHistoryModal = false">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-5xl w-full max-h-[90vh] overflow-hidden animate-modalSlideIn">
+        <!-- Header -->
+        <div class="relative overflow-hidden bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 px-6 py-5 border-b-2 border-purple-800">
+          <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
+          <div class="relative flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+                <span class="material-icons-outlined text-white text-2xl">history</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-white tracking-tight">Item History & Factors</h3>
+                <p class="text-purple-100 text-sm mt-1" v-if="selectedItem">
+                  {{ items.find(i => i.id === selectedItemId)?.unit || 'Item' }} - ID: {{ selectedItemId }}
+                </p>
+              </div>
+            </div>
+            <button @click="showItemHistoryModal = false" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all duration-200 hover:scale-110">
+              <span class="material-icons-outlined text-xl">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)] custom-scrollbar">
+          <!-- Loading State -->
+          <div v-if="itemHistoryLoading" class="flex flex-col items-center justify-center py-12">
+            <span class="material-icons-outlined text-purple-600 dark:text-purple-400 text-5xl animate-spin mb-4">sync</span>
+            <p class="text-gray-700 dark:text-gray-300 font-semibold">Loading item history...</p>
+          </div>
+
+          <!-- History Content -->
+          <div v-else class="space-y-6">
+            <!-- Prediction Summary -->
+            <div class="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30 rounded-xl p-6 border-2 border-purple-200 dark:border-purple-700">
+              <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-icons-outlined text-purple-600 dark:text-purple-400">psychology</span>
+                Current Prediction
+              </h4>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Remaining Years</p>
+                  <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {{ (() => {
+                      if (currentPrediction?.remaining_years != null) return currentPrediction.remaining_years.toFixed(2);
+                      const lifespanItem = allItemsLifespan.value.find(i => i.itemId === selectedItemId);
+                      if (lifespanItem?.remainingYears != null) return (lifespanItem.remainingYears / 365).toFixed(2);
+                      return 'N/A';
+                    })() }}
+                  </p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Remaining Days</p>
+                  <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {{ (() => {
+                      if (currentPrediction?.remaining_years != null) return Math.round(currentPrediction.remaining_years * 365);
+                      const lifespanItem = allItemsLifespan.value.find(i => i.itemId === selectedItemId);
+                      if (lifespanItem?.remainingLifespan != null) return lifespanItem.remainingLifespan;
+                      return 'N/A';
+                    })() }}
+                  </p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Lifespan Estimate</p>
+                  <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {{ (() => {
+                      if (currentPrediction?.lifespan_estimate != null) return currentPrediction.lifespan_estimate.toFixed(2);
+                      const lifespanItem = allItemsLifespan.value.find(i => i.itemId === selectedItemId);
+                      if (lifespanItem?.expectedLifespan != null) return (lifespanItem.expectedLifespan / 365).toFixed(2);
+                      return 'N/A';
+                    })() }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Prediction Factors Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-indigo-200 dark:border-indigo-700 overflow-hidden">
+              <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 border-b-2 border-indigo-800">
+                <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span class="material-icons-outlined text-xl">insights</span>
+                  Prediction Factors (How the Model Predicted This)
+                </h4>
+                <p class="text-indigo-100 text-xs mt-1">These are the factors the CatBoost ML model used to make this prediction</p>
+              </div>
+              <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Years in Use -->
+                  <div class="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-lg">schedule</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Years in Use</span>
+                    </div>
+                    <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {{ predictionFactors.yearsInUse?.toFixed(2) || '0.00' }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {{ predictionFactors.yearsInUse >= 5 ? 'High usage - may reduce lifespan' : predictionFactors.yearsInUse >= 2 ? 'Moderate usage' : 'Low usage - good condition' }}
+                    </p>
+                  </div>
+
+                  <!-- Maintenance Count -->
+                  <div class="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-green-600 dark:text-green-400 text-lg">build</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Maintenance Count</span>
+                    </div>
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {{ predictionFactors.maintenanceCount || 0 }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {{ predictionFactors.maintenanceCount === 0 ? 'No maintenance records - may need attention' : predictionFactors.maintenanceCount <= 2 ? 'Well maintained' : 'Frequent maintenance - may indicate issues' }}
+                    </p>
+                  </div>
+
+                  <!-- Condition Number -->
+                  <div class="p-4 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-orange-600 dark:text-orange-400 text-lg">assessment</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Condition Number</span>
+                    </div>
+                    <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                      {{ predictionFactors.conditionNumber || 'N/A' }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {{ predictionFactors.conditionNumber === 'R' ? '⚠️ Requires disposal' : predictionFactors.conditionNumber === 'A1' ? 'Excellent condition' : predictionFactors.conditionNumber === 'A2' ? 'Good condition' : predictionFactors.conditionNumber === 'A3' ? 'Fair condition - monitor closely' : 'Condition status' }}
+                    </p>
+                  </div>
+
+                  <!-- Category -->
+                  <div class="p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg border border-purple-200 dark:border-purple-700">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-purple-600 dark:text-purple-400 text-lg">category</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Category</span>
+                    </div>
+                    <p class="text-lg font-bold text-purple-600 dark:text-purple-400">
+                      {{ predictionFactors.category || 'Unknown' }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      Category affects expected lifespan patterns
+                    </p>
+                  </div>
+
+                  <!-- Condition Status -->
+                  <div class="p-4 bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-700 dark:to-slate-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-gray-600 dark:text-gray-400 text-lg">flag</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Condition Status</span>
+                    </div>
+                    <p class="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {{ predictionFactors.conditionStatus || 'Unknown' }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {{ predictionFactors.conditionStatus === 'Disposal' ? '⚠️ Item marked for disposal' : 'Current operational status' }}
+                    </p>
+                  </div>
+
+                  <!-- Last Maintenance Reason -->
+                  <div class="p-4 bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg border border-cyan-200 dark:border-cyan-700">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="material-icons-outlined text-cyan-600 dark:text-cyan-400 text-lg">description</span>
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Last Maintenance Reason</span>
+                    </div>
+                    <p class="text-sm font-bold text-cyan-700 dark:text-cyan-400 break-words">
+                      {{ predictionFactors.lastReason || 'No maintenance records' }}
+                    </p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      Recent maintenance issues affect prediction
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Explanation -->
+                <div class="mt-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
+                  <div class="flex items-start gap-3">
+                    <span class="material-icons-outlined text-indigo-600 dark:text-indigo-400 text-xl">lightbulb</span>
+                    <div>
+                      <p class="text-sm font-semibold text-gray-900 dark:text-white mb-1">How These Factors Influence the Prediction:</p>
+                      <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1 list-disc list-inside">
+                        <li><strong>Years in Use:</strong> Older items typically have less remaining lifespan</li>
+                        <li><strong>Maintenance Count:</strong> Regular maintenance can extend lifespan, but frequent repairs may indicate problems</li>
+                        <li><strong>Condition Number:</strong> Lower numbers (A1) indicate better condition and longer remaining lifespan</li>
+                        <li><strong>Category:</strong> Different item types have different expected lifespans</li>
+                        <li><strong>Condition Status:</strong> Items marked for disposal have 0 remaining lifespan</li>
+                        <li><strong>Last Maintenance Reason:</strong> Recent issues (wear, damage) may reduce predicted lifespan</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Maintenance Records -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 border-b-2 border-blue-800">
+                <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span class="material-icons-outlined text-xl">build</span>
+                  Maintenance Records ({{ itemMaintenanceRecords.length }})
+                </h4>
+              </div>
+              <div class="p-4">
+                <div v-if="itemMaintenanceRecords.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <span class="material-icons-outlined text-4xl mb-2 block">build_circle</span>
+                  <p>No maintenance records found</p>
+                </div>
+                <div v-else class="space-y-3 max-h-64 overflow-y-auto">
+                  <div 
+                    v-for="(record, idx) in itemMaintenanceRecords" 
+                    :key="idx"
+                    class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                  >
+                    <div class="flex items-start justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-sm">event</span>
+                        <span class="font-semibold text-gray-900 dark:text-white">{{ record.date || record.maintenance_date }}</span>
+                      </div>
+                      <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                        {{ record.type || 'Maintenance' }}
+                      </span>
+                    </div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      <span class="font-medium">Reason:</span> {{ record.reason || record.description || 'N/A' }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400" v-if="record.cost">
+                      Cost: ₱{{ record.cost }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+            <!-- Item Details -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div class="bg-gradient-to-r from-gray-600 to-gray-700 px-6 py-4 border-b-2 border-gray-800">
+                <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span class="material-icons-outlined text-xl">info</span>
+                  Item Details
+                </h4>
+              </div>
+              <div class="p-4">
+                <div v-if="selectedItem" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Name</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">{{ selectedItem.unit || selectedItem.name || 'N/A' }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Category</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">{{ selectedItem.category || 'N/A' }}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Acquisition Date</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">
+                      {{ selectedItem.date_acquired || selectedItem.acquisition_date || 'N/A' }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Condition Status</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">
+                      {{ selectedItem.condition_number?.condition_status || selectedItem.condition_status || (selectedItem.condition?.condition ? (selectedItem.condition.condition.includes('Serviceable') ? 'Good' : selectedItem.condition.condition.includes('Non-Serviceable') ? 'Disposal' : 'N/A') : 'N/A') }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Condition Number</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">
+                      {{ (() => {
+                        const cn = selectedItem.condition_number?.condition_number || selectedItem.condition_number_id;
+                        if (cn) return cn;
+                        if (selectedItem.condition?.condition) {
+                          const match = selectedItem.condition.condition.match(/\(A\d+\)|\(R\)/i);
+                          return match ? match[0].replace(/[()]/g, '') : 'N/A';
+                        }
+                        return 'N/A';
+                      })() }}
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Condition</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">
+                      {{ selectedItem.condition?.condition || selectedItem.condition || 'N/A' }}
+                    </p>
+                  </div>
+                  <div class="md:col-span-2">
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Description</p>
+                    <p class="font-semibold text-gray-900 dark:text-white">{{ selectedItem.description || 'N/A' }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -987,6 +1554,23 @@ const usageForecastData = ref([])    // Usage-based forecast data from /usage/fo
 const apiLoading = ref(false)
 const apiError = ref(null)
 
+// Item History state
+const showItemHistoryModal = ref(false)
+const selectedItemId = ref(null)
+const selectedItem = ref(null)
+const currentPrediction = ref(null)
+const itemMaintenanceRecords = ref([])
+const itemHistoryLoading = ref(false)
+const predictionFactors = ref({
+  yearsInUse: 0,
+  maintenanceCount: 0,
+  conditionNumber: 'N/A',
+  category: 'Unknown',
+  conditionStatus: 'Unknown',
+  condition: 'Unknown',
+  lastReason: 'No maintenance records'
+})
+
 // Sorted predictions: newest first, items without remaining days/years at the end
 const sortedLifespanPredictions = computed(() => {
   if (!lifespanPredictions.value || lifespanPredictions.value.length === 0) return []
@@ -1077,6 +1661,162 @@ const selectedRestockItemName = ref('')
 const restockAmount = ref(0)
 const dismissLowStockAlert = ref(false)
 
+// Function to open item history modal and fetch data
+const openItemHistory = async (itemId) => {
+  selectedItemId.value = itemId
+  selectedItem.value = items.value.find(i => i.id === itemId)
+  
+  // Try to find prediction from lifespanPredictions first
+  let prediction = lifespanPredictions.value.find(p => p.item_id === itemId)
+  
+  // If not found, try to get from allItemsLifespan (for items ending soon)
+  if (!prediction) {
+    const lifespanItem = allItemsLifespan.value.find(i => i.itemId === itemId)
+    if (lifespanItem) {
+      // Convert allItemsLifespan format to prediction format
+      prediction = {
+        item_id: itemId,
+        remaining_years: lifespanItem.remainingYears / 365.0, // Convert days to years
+        lifespan_estimate: lifespanItem.expectedLifespan / 365.0 // Convert days to years
+      }
+    }
+  }
+  
+  currentPrediction.value = prediction
+  
+  // Reset history data
+  itemMaintenanceRecords.value = []
+  itemHistoryLoading.value = true
+  showItemHistoryModal.value = true
+  
+  try {
+    // Fetch maintenance records for this item FIRST (needed for prediction factors)
+    try {
+      const maintenanceRes = await axiosClient.get('/maintenance-records', {
+        params: { item_id: itemId }
+      })
+      if (maintenanceRes.data?.data) {
+        itemMaintenanceRecords.value = Array.isArray(maintenanceRes.data.data) 
+          ? maintenanceRes.data.data.filter(r => r.item_id === itemId)
+          : []
+      }
+    } catch (error) {
+      console.warn('Error fetching maintenance records:', error)
+      itemMaintenanceRecords.value = []
+    }
+    
+    // Calculate prediction factors based on ACTUAL item data (same logic as buildLifespanPayload)
+    if (selectedItem.value) {
+      const item = selectedItem.value
+      
+      // Debug: Log item structure to help identify available fields
+      console.log('🔍 Item data structure:', {
+        id: item.id,
+        condition_number: item.condition_number,
+        condition_status: item.condition_status,
+        condition: item.condition,
+        condition_number_id: item.condition_number_id,
+        condition_id: item.condition_id
+      })
+      
+      // Calculate years in use from ACTUAL acquisition date
+      const acquisitionDate = item.date_acquired ? new Date(item.date_acquired) : null
+      let yearsInUse = 0
+      if (acquisitionDate && !isNaN(acquisitionDate.getTime())) {
+        const today = new Date()
+        yearsInUse = (today - acquisitionDate) / (1000 * 60 * 60 * 24 * 365.25)
+      }
+      
+      // Get maintenance count from ACTUAL data (prefer item.maintenance_count, fallback to records count)
+      const maintenanceCount = item.maintenance_count !== undefined && item.maintenance_count !== null 
+        ? item.maintenance_count 
+        : itemMaintenanceRecords.value.length
+      
+      // Extract condition number from ACTUAL item data (with multiple fallbacks)
+      let conditionNumber = 'N/A'
+      let conditionNumberStr = ''
+      
+      // Try multiple paths to get condition number
+      if (item.condition_number?.condition_number) {
+        conditionNumberStr = String(item.condition_number.condition_number).toUpperCase()
+      } else if (item.condition_number_id && typeof item.condition_number_id === 'string') {
+        conditionNumberStr = String(item.condition_number_id).toUpperCase()
+      } else if (item.condition && typeof item.condition === 'string') {
+        // Extract from condition string like "Serviceable (A1)" or "Non-Serviceable (A4)"
+        const match = item.condition.match(/\(A(\d+)\)|\(R\)/i)
+        if (match) {
+          conditionNumberStr = match[0].replace(/[()]/g, '').toUpperCase()
+        }
+      }
+      
+      // Process condition number string
+      if (conditionNumberStr) {
+        const match = conditionNumberStr.match(/A(\d+)/)
+        if (match) {
+          conditionNumber = `A${match[1]}`
+        } else if (conditionNumberStr === 'R') {
+          conditionNumber = 'R'
+        } else {
+          // Try to extract any number
+          const numMatch = conditionNumberStr.match(/\d+/)
+          if (numMatch) {
+            conditionNumber = `A${numMatch[0]}`
+          }
+        }
+      }
+      
+      // Get condition status from ACTUAL item data (with multiple fallbacks)
+      let conditionStatus = 'Unknown'
+      if (item.condition_number?.condition_status) {
+        conditionStatus = item.condition_number.condition_status
+      } else if (item.condition_status) {
+        conditionStatus = item.condition_status
+      } else if (item.condition?.condition && typeof item.condition.condition === 'string') {
+        // Try to infer from condition string
+        const condStr = item.condition.condition.toLowerCase()
+        if (condStr.includes('serviceable')) {
+          conditionStatus = 'Good'
+        } else if (condStr.includes('non-serviceable') || condStr.includes('disposal')) {
+          conditionStatus = 'Disposal'
+        }
+      }
+      
+      // Get condition from ACTUAL item data
+      const condition = item.condition?.condition || item.condition || 'Unknown'
+      
+      // Get last maintenance reason from ACTUAL records or item data
+      let lastReason = 'No maintenance records'
+      if (itemMaintenanceRecords.value.length > 0) {
+        // Sort by date descending to get the most recent
+        const sortedRecords = [...itemMaintenanceRecords.value].sort((a, b) => {
+          const dateA = new Date(a.date || a.maintenance_date || 0)
+          const dateB = new Date(b.date || b.maintenance_date || 0)
+          return dateB - dateA
+        })
+        const latestRecord = sortedRecords[0]
+        lastReason = latestRecord.reason || latestRecord.description || 'Maintenance performed'
+      } else if (item.maintenance_reason) {
+        lastReason = item.maintenance_reason
+      }
+      
+      // Update prediction factors with ACTUAL data
+      predictionFactors.value = {
+        yearsInUse: Math.max(0, yearsInUse),
+        maintenanceCount: maintenanceCount,
+        conditionNumber: conditionNumber,
+        category: item.category || 'Unknown',
+        conditionStatus: conditionStatus,
+        condition: condition,
+        lastReason: lastReason
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching item history:', error)
+  } finally {
+    itemHistoryLoading.value = false
+  }
+}
+
 // Equipment-only Lifespan Data (exclude supply)
 // NOTE: this is the ONLY declaration of allItemsLifespan
 const allItemsLifespan = computed(() => {
@@ -1101,8 +1841,8 @@ const allItemsLifespan = computed(() => {
       const yearsInUse = daysSinceAcquisition / 365.25
       
       // ONLY use CatBoost prediction from Python API (ml_api_server.py)
-      const remainingYears = parseFloat(catboostPred.remaining_years)
-      const remainingLifespanDays = Math.round(remainingYears * 365)
+      let remainingYears = parseFloat(catboostPred.remaining_years)
+      let remainingLifespanDays = Math.round(remainingYears * 365)
       
       // Calculate expected lifespan from CatBoost prediction
       let expectedLifespan
@@ -1119,20 +1859,44 @@ const allItemsLifespan = computed(() => {
       
       // Get condition_status from item (comes from condition_number->condition_status)
       const conditionStatus = item.condition_status || null
+      const condition = item.condition?.condition || item.condition || ''
+      
+      // Extract condition number (A1=1, A2=2, A3=3) or check for R
+      let conditionNumber = 0
+      let conditionNumberStr = ''
+      if (item.condition_number?.condition_number) {
+        conditionNumberStr = String(item.condition_number.condition_number).toUpperCase()
+        const match = conditionNumberStr.match(/A(\d+)/)
+        if (match) {
+          conditionNumber = parseInt(match[1])
+        }
+      }
+      
+      // Check if item should be disposed (R condition number, Disposal status, or Non-Serviceable)
+      const shouldDispose = (
+        conditionNumberStr === 'R' ||  // R = Disposal
+        conditionStatus === 'Disposal' ||
+        String(condition).includes('Non-Serviceable') ||
+        String(condition).includes('Non - Serviceable') ||
+        catboostPred.disposal_flag === true
+      )
       
       // Status classes and recommendations based on remaining years
-      // If condition_status is "Disposal", override with disposal status
+      // If item should be disposed, override with disposal status
       let statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
       let lifespanClass = 'text-green-600 dark:text-green-400'
       let recommendation = 'Good condition'
       let recommendationClass = 'text-green-600 dark:text-green-400'
       
       // Check if item is marked for disposal first
-      if (conditionStatus === 'Disposal') {
+      if (shouldDispose) {
         statusClass = 'bg-red-600 text-white dark:bg-red-700 dark:text-white'
         lifespanClass = 'text-red-600 dark:text-red-400'
         recommendation = 'URGENT: Item marked for disposal - Dispose immediately'
         recommendationClass = 'text-red-600 dark:text-red-400'
+        // Override remaining years to 0 for disposal items
+        remainingYears = 0.0
+        remainingLifespanDays = 0
       } else if (remainingYears <= 0.082) { // <= 30 days
         statusClass = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
         lifespanClass = 'text-red-600 dark:text-red-400'
@@ -1154,6 +1918,7 @@ const allItemsLifespan = computed(() => {
       const confidence = 94
       
       return {
+        itemId: item.id, // Include item ID for history lookup
         name: item.unit || 'Unknown Item',
         description: item.description || '',
         category: item.category || 'Unknown',
@@ -2486,8 +3251,8 @@ const inventoryItems = ref([
 // Fetch forecast data and build payload for Python API consumables prediction
 const fetchConsumablesForecast = async () => {
   try {
-    // Step 1: Fetch forecast-ready data from Laravel API
-    const forecastDataResponse = await axiosClient.get('/usage/forecast-data?years_back=2&forecast_months=3')
+    // Step 1: Fetch forecast-ready data from Laravel API (including 2024 and more historical data)
+    const forecastDataResponse = await axiosClient.get('/usage/forecast-data?years_back=3&forecast_months=3')
     
     if (!forecastDataResponse.data.success || !forecastDataResponse.data.data) {
       console.warn('⚠️ Failed to fetch forecast data for consumables')
@@ -2560,14 +3325,27 @@ const buildLifespanPayload = () => {
       // Note: maintenance_records might not be loaded, so we use maintenance_count if available
       const maintenanceCount = i.maintenance_count ?? 0
       
-      // Extract condition number numeric value
-      // Try to get from condition string (format: "Condition (A1)" or similar)
-      // Or use condition_number_id to lookup, but for now we'll parse from condition string
+      // Extract condition number numeric value (A1=1, A2=2, A3=3) or keep R as string
       let conditionNumber = 0
-      if (i.condition && typeof i.condition === 'string') {
-        // Extract numeric value from condition string like "Serviceable (A1)" -> 1
+      let conditionNumberStr = ''
+      if (i.condition_number?.condition_number) {
+        conditionNumberStr = String(i.condition_number.condition_number).toUpperCase()
+        const match = conditionNumberStr.match(/A(\d+)/)
+        if (match) {
+          conditionNumber = parseInt(match[1])
+        } else if (conditionNumberStr === 'R') {
+          conditionNumber = 'R' // Keep R as string for disposal check
+        }
+      } else if (i.condition && typeof i.condition === 'string') {
+        // Fallback: Extract numeric value from condition string like "Serviceable (A1)" -> 1
         conditionNumber = extractConditionNumber(i.condition)
       }
+      
+      // Get condition_status from condition_number (Good, Less Reliable, Un-operational, Disposal)
+      const conditionStatus = i.condition_number?.condition_status || i.condition_status || ''
+      
+      // Get condition from condition table (Serviceable, Non-Serviceable, On Maintenance)
+      const condition = i.condition?.condition || i.condition || ''
       
       // Get last maintenance reason from item or maintenance_reason field
       const lastReason = i.maintenance_reason || ''
@@ -2577,7 +3355,9 @@ const buildLifespanPayload = () => {
         category: i.category || 'Unknown',
         years_in_use: Math.max(0, yearsInUse),
         maintenance_count: maintenanceCount,
-        condition_number: conditionNumber,
+        condition_number: conditionNumber, // Can be number (1,2,3) or string 'R'
+        condition_status: conditionStatus,
+        condition: condition,
         last_reason: lastReason
       }
     })
@@ -2603,6 +3383,8 @@ const fetchPredictions = async () => {
   apiLoading.value = true
   apiError.value = null
   
+  console.log('%c🚀 Starting CatBoost Lifespan Prediction Process...', 'color: #10b981; font-weight: bold; font-size: 14px;')
+  
   try {
     // PRIORITY: Only CatBoost lifespan prediction API call (Python API) - REQUIRED
     const lifespanPayload = buildLifespanPayload()
@@ -2615,6 +3397,9 @@ const fetchPredictions = async () => {
     }
     
     // Make CatBoost API call with better error handling
+    console.log(`%c🔗 Calling Laravel backend proxy: /predict/items/lifespan`, 'color: #3b82f6; font-weight: bold;')
+    console.log(`%c🐱 Using CatBoost ML Model for predictions`, 'color: #10b981; font-weight: bold;')
+    
     let lifespanRes = null
     try {
       lifespanRes = await axios.post(
@@ -2643,10 +3428,61 @@ const fetchPredictions = async () => {
       lifespanPredictions.value = lifespanRes.data.predictions
       apiError.value = null // Clear any previous errors
       
-      // Log predictions summary for visibility
-      console.log(`✅ Received ${lifespanRes.data.predictions.length} predictions from Python API`)
-      console.log(`📊 Prediction method: ${lifespanRes.data.method || 'catboost_model'}`)
-      console.log(`📋 Sample predictions:`, lifespanRes.data.predictions.slice(0, 5))
+      // Check if using CatBoost or manual fallback
+      const predictionMethod = lifespanRes.data.method || 'catboost_model'
+      const isCatBoost = predictionMethod === 'catboost_model' || predictionMethod === 'catboost'
+      
+      if (isCatBoost) {
+        // ========== CATBOOST MODEL STATUS ==========
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #10b981; font-weight: bold; font-size: 14px;')
+        console.log('%c🐱 CATBOOST MODEL STATUS', 'color: #10b981; font-weight: bold; font-size: 16px;')
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #10b981; font-weight: bold; font-size: 14px;')
+        console.log(`%c✔ Method: ${predictionMethod}`, 'color: #10b981; font-weight: bold;')
+        console.log('%c✔ CatBoost IS RUNNING', 'color: #10b981; font-weight: bold;')
+      } else {
+        // ========== MANUAL FALLBACK WARNING ==========
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #ef4444; font-weight: bold; font-size: 14px;')
+        console.log('%c⚠️ MANUAL CALCULATION FALLBACK', 'color: #ef4444; font-weight: bold; font-size: 16px;')
+        console.log('%c═══════════════════════════════════════════════════════════', 'color: #ef4444; font-weight: bold; font-size: 14px;')
+        console.log(`%c⚠️ Method: ${predictionMethod}`, 'color: #ef4444; font-weight: bold;')
+        console.log('%c⚠️ CatBoost model not available - using manual calculations', 'color: #ef4444; font-weight: bold;')
+        console.log('%c💡 To enable CatBoost: Ensure the model file exists and the Python API can load it', 'color: #f59e0b; font-weight: bold;')
+      }
+      console.log(`%c📊 Predictions received: ${lifespanRes.data.predictions.length}`, 'color: #3b82f6; font-weight: bold;')
+      
+      // Log model accuracy if available
+      if (lifespanRes.data.accuracy != null) {
+        console.log(`%c📊 CatBoost Model Accuracy: ${lifespanRes.data.accuracy}%`, 'color: #3b82f6; font-weight: bold;')
+      }
+      
+      console.log(`%c✔ Successfully received predictions: ${lifespanRes.data.predictions.length}`, 'color: #10b981; font-weight: bold;')
+      console.log(`%c📊 Prediction method: ${lifespanRes.data.method || 'catboost_model'}`, 'color: #3b82f6;')
+      
+      // Log model metrics
+      const modelMetrics = {
+        accuracy: lifespanRes.data.accuracy || null,
+        confidence: lifespanRes.data.confidence || null,
+        r_squared: lifespanRes.data.r_squared || null,
+        method: lifespanRes.data.method || 'catboost_model',
+        model_version: lifespanRes.data.model_version || 'unknown'
+      }
+      console.log('%c📊 Model Metrics:', 'color: #3b82f6; font-weight: bold;', modelMetrics)
+      
+      // Log sample predictions
+      console.log('%c📋 Sample predictions:', 'color: #3b82f6; font-weight: bold;', lifespanRes.data.predictions.slice(0, 5))
+      
+      // Log prediction item IDs
+      const predictionItemIds = lifespanRes.data.predictions.map(p => p.item_id).filter(id => id != null)
+      console.log(`%c🔍 Prediction item_ids:`, 'color: #3b82f6; font-weight: bold;', predictionItemIds)
+      
+      // Log current items count
+      console.log(`%c📦 Current items count: ${items.value.length}`, 'color: #8b5cf6;')
+      if (items.value.length > 0) {
+        const currentItemIds = items.value.slice(0, 10).map(i => i.id).filter(id => id != null)
+        console.log(`%c📦 Current item IDs:`, 'color: #8b5cf6;', currentItemIds)
+      }
+      
+      console.log('%c═══════════════════════════════════════════════════════════', 'color: #10b981; font-weight: bold; font-size: 14px;')
       
       // Prepare predictions for batch update - map item_id to uuid
       const predictionsToUpdate = lifespanRes.data.predictions
@@ -2680,21 +3516,23 @@ const fetchPredictions = async () => {
           ? '/items/update-lifespan-predictions'
           : '/v1/items/update-lifespan-predictions'
         
-        console.log('🔧 Updating lifespan predictions - baseURL:', baseUrl, 'updateUrl:', updateUrl)
+        console.log('%c🔧 Updating lifespan predictions - baseURL:', 'color: #8b5cf6; font-weight: bold;', baseUrl, 'updateUrl:', updateUrl)
         
-        console.log(`📤 Sending ${predictionsToUpdate.length} predictions to Laravel backend for database update`)
+        console.log(`%c📤 Sending ${predictionsToUpdate.length} CatBoost predictions to Laravel backend for database update`, 'color: #3b82f6; font-weight: bold;')
         
         axiosClient.post(updateUrl, {
           predictions: predictionsToUpdate
         }).then((updateResponse) => {
-          console.log('✅ Database update response:', updateResponse.data)
+          console.log('%c✅ Database update response:', 'color: #10b981; font-weight: bold;', updateResponse.data)
           if (updateResponse.data) {
-            console.log(`📊 Update Summary:`)
-            console.log(`   - Total predictions sent: ${predictionsToUpdate.length}`)
-            console.log(`   - Successfully updated: ${updateResponse.data.updated_count || 0}`)
+            console.log(`%c📊 Update Summary:`, 'color: #3b82f6; font-weight: bold;')
+            console.log(`%c   - Total predictions sent: ${predictionsToUpdate.length}`, 'color: #3b82f6;')
+            console.log(`%c   - Successfully updated: ${updateResponse.data.updated_count || 0}`, 'color: #10b981; font-weight: bold;')
+            console.log(`%c✔ Predictions saved to database: ${updateResponse.data.updated_count || 0} items updated out of ${predictionsToUpdate.length} predictions`, 'color: #10b981; font-weight: bold;')
+            console.log(`%c✔ Successfully saved ${updateResponse.data.updated_count || 0} lifespan predictions to database`, 'color: #10b981; font-weight: bold;')
             if (updateResponse.data.errors && updateResponse.data.errors.length > 0) {
-              console.warn(`   - Errors: ${updateResponse.data.errors.length}`)
-              console.warn(`   - First few errors:`, updateResponse.data.errors.slice(0, 3))
+              console.warn(`%c   - Errors: ${updateResponse.data.errors.length}`, 'color: #ef4444;')
+              console.warn(`%c   - First few errors:`, 'color: #ef4444;', updateResponse.data.errors.slice(0, 3))
             }
           }
           fetchitems() // Refresh items in background
@@ -2719,6 +3557,7 @@ const fetchPredictions = async () => {
       }
     } else {
       // API call failed or returned invalid data
+      console.log('%c❌ CatBoost API call failed or returned invalid data', 'color: #ef4444; font-weight: bold;')
       lifespanPredictions.value = []
       apiError.value = 'Python API server is not available. Please ensure the server is running at ' + PY_API_BASE
     }
@@ -2827,6 +3666,50 @@ onBeforeUnmount(() => {
     linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+
+/* Custom scrollbar for enhanced table */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #8b5cf6, #6366f1);
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #7c3aed, #4f46e5);
+  border: 2px solid #1e293b;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #7c3aed, #4f46e5);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #6d28d9, #4338ca);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #8b5cf6 #f1f5f9;
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: #7c3aed #1e293b;
 }
 
 /* Modal animations */

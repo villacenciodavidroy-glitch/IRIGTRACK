@@ -28,6 +28,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Events\ItemBorrowed;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use App\Events\BorrowRequestCreated;
 use App\Events\ItemUpdated;
 use App\Models\Notification;
@@ -36,6 +38,25 @@ class ItemController extends Controller
 {
     use LogsActivity;
     
+    /**
+     * Generate a new serial number
+     */
+    public function generateSerialNumber()
+    {
+        try {
+            $serialNumber = Item::generateSerialNumber();
+            return response()->json([
+                'success' => true,
+                'serial_number' => $serialNumber
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate serial number: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -49,7 +70,9 @@ class ItemController extends Controller
                 'location',
                 'condition',
                 'condition_number',
-                'user'
+                'user',
+                'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
+                'latestMemorandumReceipt.issuedToLocation'
             ])->get();
             return new ItemCollection($items);
         } catch (\Exception $e) {
@@ -74,7 +97,9 @@ class ItemController extends Controller
                 'location',
                 'condition',
                 'condition_number',
-                'user'
+                'user',
+                'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
+                'latestMemorandumReceipt.issuedToLocation'
             ])->get();
             
             return response()->json([
@@ -113,6 +138,95 @@ class ItemController extends Controller
         // Refresh item to get latest data with relationships
         $newItem->refresh();
         $newItem->load(['category', 'location', 'condition']);
+        
+        // Create MR record if item is assigned to a user or location with personnel during creation
+        // Check the actual item assignment (after creation) to determine if MR should be created
+        $issuedByUser = $request->user();
+        
+        // If issued_to_location_id was sent (from "Issued To" dropdown), use that for assignment
+        // This is the location where the personnel is assigned, not the item's unit/section location
+        if ($request->has('issued_to_location_id') && $request->input('issued_to_location_id')) {
+            $assignmentLocationId = $request->input('issued_to_location_id');
+            \Log::info("Using issued_to_location_id: {$assignmentLocationId} for item assignment");
+            
+            // Update the item's location_id to the personnel's location
+            $newItem->location_id = $assignmentLocationId;
+            $newItem->user_id = null; // Clear user_id since we're assigning to location
+            $newItem->save();
+        }
+        
+        // Refresh item to get the actual assignment
+        $newItem->refresh();
+        
+        \Log::info("=== Creating MR for new item {$newItem->id} ===");
+        \Log::info("Item user_id: " . ($newItem->user_id ?? 'NULL'));
+        \Log::info("Item location_id: " . ($newItem->location_id ?? 'NULL'));
+        
+        // Check if item is assigned to a user
+        if ($newItem->user_id) {
+            try {
+                $issuedToUser = \App\Models\User::find($newItem->user_id);
+                
+                if ($issuedToUser) {
+                    $mr = \App\Models\MemorandumReceipt::create([
+                        'item_id' => $newItem->id,
+                        'issued_to_user_id' => $issuedToUser->id,
+                        'issued_to_location_id' => null,
+                        'issued_to_code' => $issuedToUser->user_code ?? 'N/A',
+                        'issued_to_type' => 'USER',
+                        'issued_by_user_code' => $issuedByUser ? ($issuedByUser->user_code ?? 'N/A') : 'SYSTEM',
+                        'issued_at' => now(),
+                        'status' => 'ISSUED'
+                    ]);
+                    
+                    \Log::info("✓ MR record #{$mr->id} created for new item {$newItem->id} issued to user {$issuedToUser->id} ({$issuedToUser->user_code})");
+                } else {
+                    \Log::warning("User ID {$newItem->user_id} not found, cannot create MR for item {$newItem->id}");
+                }
+            } catch (\Exception $e) {
+                \Log::error("✗ Failed to create MR record for new item: " . $e->getMessage());
+                \Log::error("Stack trace: " . $e->getTraceAsString());
+            }
+        }
+        // Check if item is assigned to location with personnel (personnel without account)
+        elseif ($newItem->location_id) {
+            try {
+                $location = \App\Models\Location::find($newItem->location_id);
+                
+                \Log::info("Location found: " . ($location ? "YES (ID: {$location->id}, Location: {$location->location})" : "NO"));
+                \Log::info("Location has personnel: " . ($location && $location->personnel ? "YES ({$location->personnel})" : "NO"));
+                
+                if ($location && $location->personnel) {
+                    // Generate personnel_code if not exists
+                    if (!$location->personnel_code) {
+                        $location->personnel_code = \App\Models\Location::generatePersonnelCode($location->location);
+                        $location->save();
+                        \Log::info("Generated personnel_code: {$location->personnel_code}");
+                    }
+                    
+                    $mr = \App\Models\MemorandumReceipt::create([
+                        'item_id' => $newItem->id,
+                        'issued_to_user_id' => null,
+                        'issued_to_location_id' => $location->id,
+                        'issued_to_code' => $location->personnel_code ?? 'N/A',
+                        'issued_to_type' => 'PERSONNEL',
+                        'issued_by_user_code' => $issuedByUser ? ($issuedByUser->user_code ?? 'N/A') : 'SYSTEM',
+                        'issued_at' => now(),
+                        'status' => 'ISSUED'
+                    ]);
+                    
+                    \Log::info("✓ MR record #{$mr->id} created for new item {$newItem->id} issued to personnel {$location->personnel} ({$location->personnel_code})");
+                } else {
+                    \Log::warning("Location {$newItem->location_id} has no personnel assigned, skipping MR creation for new item {$newItem->id}");
+                }
+            } catch (\Exception $e) {
+                \Log::error("✗ Failed to create MR record for new item personnel: " . $e->getMessage());
+                \Log::error("Stack trace: " . $e->getTraceAsString());
+            }
+        } else {
+            \Log::warning("New item {$newItem->id} created without assignment (no user_id or location_id), no MR record created");
+        }
+        \Log::info("=== End MR creation for item {$newItem->id} ===");
         
         // Log item creation with detailed information
         $itemName = $newItem->unit ?? $newItem->description;
@@ -156,7 +270,9 @@ class ItemController extends Controller
             'location',
             'condition',
             'condition_number',
-            'user'
+            'user',
+            'latestMemorandumReceipt.issuedToUser', // Load latest MR with relationships to show status (ISSUED, LOST, DAMAGED, etc.)
+            'latestMemorandumReceipt.issuedToLocation'
         ]);
         return new ItemResource($item);
     }
@@ -173,17 +289,215 @@ class ItemController extends Controller
         
         // Store old condition BEFORE updating (for maintenance record)
         $oldConditionId = $item->condition_id;
-        $maintenanceReason = $request->input('maintenance_reason'); // Enum value (Overheat, Wear, etc.)
+        
+        // Store old user_id BEFORE updating (for MR record creation)
+        $oldUserId = $item->user_id;
+        
+        $maintenanceReason = $request->input('maintenance_reason'); // Free text for items.maintenance_reason
         $technicianNotes = $request->input('technician_notes'); // Detailed notes
         
-        // Get validated data and remove maintenance_reason before updating items table
-        // (maintenance_reason will be saved to maintenance_records.reason instead)
-        $validatedData = $request->validated();
-        unset($validatedData['maintenance_reason']); // Remove from items update
-        unset($validatedData['technician_notes']); // Remove from items update (not in items table)
+        // Check if mobile app is trying to return a lost item
+        // Mobile app sends is_lost: false, isLost: false, or lost_status: null
+        $isReturningLostItem = (
+            $request->has('is_lost') && $request->input('is_lost') === false
+        ) || (
+            $request->has('isLost') && $request->input('isLost') === false
+        ) || (
+            $request->has('lost_status') && $request->input('lost_status') === null
+        ) || (
+            $request->has('lostStatus') && $request->input('lostStatus') === null
+        );
         
-        // Update the item with validated data (without maintenance_reason)
+        // If trying to return lost item, handle it first
+        if ($isReturningLostItem) {
+            // Load the latest MR to check if item is actually lost
+            $item->load('latestMemorandumReceipt');
+            $latestMR = $item->latestMemorandumReceipt;
+            
+            if ($latestMR && $latestMR->status === 'LOST') {
+                try {
+                    DB::beginTransaction();
+                    $user = $request->user();
+                    
+                    // Parse existing remarks to preserve original LOST information
+                    $originalRemarks = [];
+                    if ($latestMR->remarks) {
+                        try {
+                            $originalRemarks = is_string($latestMR->remarks) ? json_decode($latestMR->remarks, true) : $latestMR->remarks;
+                        } catch (\Exception $e) {
+                            $originalRemarks = ['description' => $latestMR->remarks];
+                        }
+                    }
+                    
+                    // Mark the old LOST MR as RETURNED (close it)
+                    $latestMR->status = 'RETURNED';
+                    $latestMR->returned_at = now();
+                    $latestMR->processed_by_user_id = $user->id;
+                    $latestMR->save();
+                    
+                    // Create recovery information for the new MR
+                    $recoveryData = [
+                        'original_status' => 'LOST',
+                        'original_remarks' => $originalRemarks,
+                        'recovered' => true,
+                        'recovery_notes' => $request->input('return_notes', 'Item found and returned to owner via mobile app'),
+                        'recovered_by' => $request->input('found_by', $user->user_code ?? $user->fullname ?? 'Unknown'),
+                        'recovery_date' => now()->toDateString(),
+                        'recovered_at' => now()->toDateTimeString(),
+                        'processed_by' => $user->user_code ?? 'SYSTEM',
+                        'processed_by_user_id' => $user->id
+                    ];
+                    
+                    // Restore item assignment back to original owner
+                    if ($latestMR->issued_to_type === 'USER' && $latestMR->issued_to_user_id) {
+                        $item->user_id = $latestMR->issued_to_user_id;
+                        $item->location_id = null;
+                    } elseif ($latestMR->issued_to_type === 'PERSONNEL' && $latestMR->issued_to_location_id) {
+                        $item->location_id = $latestMR->issued_to_location_id;
+                        $item->user_id = null;
+                    }
+                    $item->save();
+                    
+                    // Create NEW MR with ISSUED status for the original owner (reissuing the item)
+                    // Use a slightly later timestamp to ensure it's the latest
+                    $newIssuedAt = now()->addSecond(); // Add 1 second to ensure it's newer than the RETURNED MR
+                    $newMR = \App\Models\MemorandumReceipt::create([
+                        'item_id' => $item->id,
+                        'issued_to_user_id' => $latestMR->issued_to_type === 'USER' ? $latestMR->issued_to_user_id : null,
+                        'issued_to_location_id' => $latestMR->issued_to_type === 'PERSONNEL' ? $latestMR->issued_to_location_id : null,
+                        'issued_to_code' => $latestMR->issued_to_code,
+                        'issued_to_type' => $latestMR->issued_to_type,
+                        'issued_by_user_code' => $user->user_code ?? 'N/A',
+                        'issued_at' => $newIssuedAt,
+                        'status' => 'ISSUED',
+                        'remarks' => json_encode($recoveryData)
+                    ]);
+                    
+                    DB::commit();
+                    
+                    // Refresh item and reload relationships to get the NEW MR
+                    $item->refresh();
+                    $item->load([
+                        'latestMemorandumReceipt.issuedToUser',
+                        'latestMemorandumReceipt.issuedToLocation'
+                    ]);
+                    
+                    // Create notification
+                    $itemName = $item->unit ?? $item->description ?? 'Unknown Item';
+                    $foundByName = $request->input('found_by', $user->fullname ?? $user->user_code ?? 'Unknown');
+                    $originalOwnerName = 'Unknown';
+                    if ($latestMR->issued_to_type === 'USER' && $latestMR->issued_to_user_id) {
+                        $issuedToUser = \App\Models\User::find($latestMR->issued_to_user_id);
+                        $originalOwnerName = $issuedToUser ? ($issuedToUser->fullname ?? $issuedToUser->user_code ?? 'Unknown') : 'Unknown';
+                    } elseif ($latestMR->issued_to_type === 'PERSONNEL' && $latestMR->issued_to_location_id) {
+                        $location = \App\Models\Location::find($latestMR->issued_to_location_id);
+                        $originalOwnerName = $location ? ($location->personnel ?? $location->location ?? 'Unknown') : 'Unknown';
+                    }
+                    
+                    try {
+                        $notificationMessage = "✅ Lost item '{$itemName}' has been found and reissued to {$originalOwnerName}. Recovered by: {$foundByName}. Recovery notes: {$request->input('return_notes', 'Item found and returned to owner via mobile app')}";
+                        
+                        $notification = \App\Models\Notification::create([
+                            'item_id' => $item->id,
+                            'message' => $notificationMessage,
+                            'type' => 'item_lost_returned',
+                            'is_read' => false,
+                        ]);
+                        
+                        if ($notification && $notification->notification_id) {
+                            $notification->refresh();
+                            $notification->load(['item']);
+                            event(new \App\Events\NotificationCreated($notification));
+                        }
+                    } catch (\Exception $e) {
+                        \Log::error("Failed to create lost item return notification: " . $e->getMessage());
+                    }
+                    
+                    \Log::info("Lost item {$item->id} recovered and reissued via mobile app update by user {$user->id}. New MR #{$newMR->id}. Latest MR status: " . ($item->latestMemorandumReceipt ? $item->latestMemorandumReceipt->status : 'N/A'));
+                } catch (\Exception $e) {
+                    DB::rollBack();
+                    \Log::error("Failed to return lost item via update: " . $e->getMessage());
+                    // Continue with normal update even if lost item return fails
+                }
+            }
+        }
+        
+        // Get validated data - maintenance_reason will be saved to maintenance_records.reason, not items table
+        $validatedData = $request->validated();
+        unset($validatedData['maintenance_reason']); // Remove from items update (saved to maintenance_records instead)
+        unset($validatedData['technician_notes']); // Remove from items update (saved to maintenance_records instead)
+        
+        // Remove computed fields that cannot be updated directly
+        unset($validatedData['is_lost']);
+        unset($validatedData['isLost']);
+        unset($validatedData['is_damaged']);
+        unset($validatedData['isDamaged']);
+        unset($validatedData['is_lost_or_damaged']);
+        unset($validatedData['lost_status']);
+        unset($validatedData['lostStatus']);
+        unset($validatedData['mr_status']);
+        
+        // Update the item with validated data (without maintenance_reason and technician_notes)
         $item->update($validatedData);
+        
+        // Create MR record if item is assigned to a user or location with personnel
+        $oldLocationId = $item->getOriginal('location_id') ?? $item->location_id;
+        $newLocationId = $validatedData['location_id'] ?? $item->location_id;
+        
+        // Check if assigned to user
+        if ($request->has('user_id') && $validatedData['user_id'] != $oldUserId && $validatedData['user_id'] != null) {
+            try {
+                $issuedToUser = \App\Models\User::find($validatedData['user_id']);
+                $issuedByUser = $request->user();
+                
+                if ($issuedToUser) {
+                    \App\Models\MemorandumReceipt::create([
+                        'item_id' => $item->id,
+                        'issued_to_user_id' => $issuedToUser->id,
+                        'issued_to_location_id' => null,
+                        'issued_to_code' => $issuedToUser->user_code ?? 'N/A',
+                        'issued_to_type' => 'USER',
+                        'issued_by_user_code' => $issuedByUser ? ($issuedByUser->user_code ?? 'N/A') : 'SYSTEM',
+                        'issued_at' => now(),
+                        'status' => 'ISSUED'
+                    ]);
+                    
+                    \Log::info("MR record created for item {$item->id} issued to user {$issuedToUser->id} ({$issuedToUser->user_code})");
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to create MR record: " . $e->getMessage());
+            }
+        }
+        // Check if assigned to location with personnel (personnel without account)
+        elseif ($request->has('location_id') && $newLocationId != $oldLocationId && $newLocationId != null) {
+            try {
+                $location = \App\Models\Location::find($newLocationId);
+                $issuedByUser = $request->user();
+                
+                if ($location && $location->personnel) {
+                    // Generate personnel_code if not exists
+                    if (!$location->personnel_code) {
+                        $location->personnel_code = \App\Models\Location::generatePersonnelCode($location->location);
+                        $location->save();
+                    }
+                    
+                    \App\Models\MemorandumReceipt::create([
+                        'item_id' => $item->id,
+                        'issued_to_user_id' => null,
+                        'issued_to_location_id' => $location->id,
+                        'issued_to_code' => $location->personnel_code ?? 'N/A',
+                        'issued_to_type' => 'PERSONNEL',
+                        'issued_by_user_code' => $issuedByUser ? ($issuedByUser->user_code ?? 'N/A') : 'SYSTEM',
+                        'issued_at' => now(),
+                        'status' => 'ISSUED'
+                    ]);
+                    
+                    \Log::info("MR record created for item {$item->id} issued to personnel {$location->personnel} ({$location->personnel_code})");
+                }
+            } catch (\Exception $e) {
+                \Log::error("Failed to create MR record for personnel: " . $e->getMessage());
+            }
+        }
         
         // Handle image upload if present
         $image = $request->file('image_path');
@@ -195,9 +509,8 @@ class ItemController extends Controller
         $item->refresh();
         
         // Handle maintenance records for "On Maintenance" condition
-        // maintenance_reason -> items.maintenance_reason (already saved via validated data)
+        // maintenance_reason -> maintenance_records.reason (free text, saved directly)
         // technician_notes -> maintenance_records.technician_notes
-        // maintenance_reason enum -> maintenance_records.reason
         $onMaintenanceCondition = Condition::where('condition', 'On Maintenance')
             ->orWhere('condition', 'Under Maintenance')
             ->first();
@@ -207,8 +520,8 @@ class ItemController extends Controller
         
         if ($isOnMaintenance && $maintenanceReason && $technicianNotes) {
             try {
-                // Use maintenance_reason as the enum value directly (already validated)
-                $reasonEnum = $maintenanceReason ?: 'Other';
+                // Save free text maintenance_reason directly to maintenance_records.reason
+                $reasonText = trim($maintenanceReason);
                 
                 // Check if condition changed to "On Maintenance" (new maintenance record)
                 if ($request->has('condition_id') && $oldConditionId != $item->condition_id) {
@@ -216,13 +529,13 @@ class ItemController extends Controller
                     MaintenanceRecord::create([
                         'item_id' => $item->id,
                         'maintenance_date' => now()->toDateString(),
-                        'reason' => $reasonEnum,
+                        'reason' => $reasonText, // Save free text directly
                         'condition_before_id' => $oldConditionId,
                         'condition_after_id' => $item->condition_id,
                         'technician_notes' => $technicianNotes
                     ]);
                     
-                    \Log::info("Maintenance record created for item {$item->id} with reason: {$reasonEnum} and technician notes");
+                    \Log::info("Maintenance record created for item {$item->id} with reason: {$reasonText} and technician notes");
                 } elseif ($request->has('maintenance_reason') || $request->has('technician_notes')) {
                     // Update the latest maintenance record if item is already on maintenance
                     $latestMaintenanceRecord = MaintenanceRecord::where('item_id', $item->id)
@@ -232,22 +545,22 @@ class ItemController extends Controller
                     if ($latestMaintenanceRecord) {
                         $latestMaintenanceRecord->update([
                             'technician_notes' => $technicianNotes,
-                            'reason' => $reasonEnum
+                            'reason' => $reasonText // Save free text directly
                         ]);
                         
-                        \Log::info("Updated maintenance record {$latestMaintenanceRecord->id} for item {$item->id} with reason: {$reasonEnum}");
+                        \Log::info("Updated maintenance record {$latestMaintenanceRecord->id} for item {$item->id} with reason: {$reasonText}");
                     } else {
                         // No existing record, create one
                         MaintenanceRecord::create([
                             'item_id' => $item->id,
                             'maintenance_date' => now()->toDateString(),
-                            'reason' => $reasonEnum,
+                            'reason' => $reasonText, // Save free text directly
                             'condition_before_id' => $item->condition_id,
                             'condition_after_id' => $item->condition_id,
                             'technician_notes' => $technicianNotes
                         ]);
                         
-                        \Log::info("Created new maintenance record for item {$item->id} (already on maintenance) with reason: {$reasonEnum}");
+                        \Log::info("Created new maintenance record for item {$item->id} (already on maintenance) with reason: {$reasonText}");
                     }
                 }
             } catch (\Exception $e) {
@@ -315,14 +628,19 @@ class ItemController extends Controller
         }
         
         // Reload item with all relationships before returning
+        // Important: Refresh to clear any cached relationships, especially latestMemorandumReceipt
         $item->refresh();
+        // Unset the relationship to force reload (in case a new MR was created)
+        unset($item->latestMemorandumReceipt);
         $item->load([
             'qrCode',
             'category',
             'location',
             'condition',
             'condition_number',
-            'user'
+            'user',
+            'latestMemorandumReceipt.issuedToUser', // Load latest MR to show updated status (ISSUED, RETURNED, LOST, DAMAGED, etc.)
+            'latestMemorandumReceipt.issuedToLocation'
         ]);
         
         // Return the updated item
@@ -582,7 +900,8 @@ class ItemController extends Controller
                 'location',
                 'condition',
                 'condition_number',
-                'user'
+                'user',
+                'latestMemorandumReceipt' // Load latest MR to show status (ISSUED, LOST, DAMAGED, etc.)
             ])->where('uuid', $uuid)->firstOrFail();
             
             // Load maintenance_records for technician notes
@@ -1049,6 +1368,142 @@ class ItemController extends Controller
     }
 
     /**
+     * Export monitoring assets to PDF
+     */
+    public function exportMonitoringAssetsPdf(Request $request)
+    {
+        try {
+            $itemsParam = $request->input('items');
+            $category = $request->input('category');
+            
+            // Get items
+            $items = [];
+            if ($itemsParam) {
+                $decodedItems = is_string($itemsParam) ? json_decode($itemsParam, true) : $itemsParam;
+                if (is_array($decodedItems) && count($decodedItems) > 0) {
+                    $items = $decodedItems;
+                }
+            }
+            
+            if (empty($items)) {
+                return response()->json([
+                    'message' => 'No items found to export',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Generate HTML for PDF
+            $html = $this->generateMonitoringAssetsPdfHtml($items, $category);
+            
+            // Check if DOMPDF classes exist
+            $dompdfExists = class_exists('Dompdf\Dompdf') || class_exists('\Dompdf\Dompdf');
+            $optionsExists = class_exists('Dompdf\Options') || class_exists('\Dompdf\Options');
+            
+            if (!$dompdfExists || !$optionsExists) {
+                return response()->json([
+                    'message' => 'DOMPDF library not installed',
+                    'status' => 'error'
+                ], 500);
+            }
+            
+            // Configure DOMPDF
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', false);
+            $options->set('defaultFont', 'Arial');
+            $options->set('chroot', base_path());
+            
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'landscape');
+            $dompdf->render();
+            
+            $categoryName = $category ? strtoupper($category) : 'DESKTOP';
+            $fileName = 'Monitoring_Assets_' . $categoryName . '_' . date('Y-m-d_His') . '.pdf';
+            
+            return response()->streamDownload(function () use ($dompdf) {
+                echo $dompdf->output();
+            }, $fileName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error exporting monitoring assets to PDF: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to export monitoring assets to PDF: ' . $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Export serviceable items to PDF
+     */
+    public function exportServiceableItemsPdf(Request $request)
+    {
+        try {
+            $itemsParam = $request->input('items');
+            
+            // Get items
+            $items = [];
+            if ($itemsParam) {
+                $decodedItems = is_string($itemsParam) ? json_decode($itemsParam, true) : $itemsParam;
+                if (is_array($decodedItems) && count($decodedItems) > 0) {
+                    $items = $decodedItems;
+                }
+            }
+            
+            if (empty($items)) {
+                return response()->json([
+                    'message' => 'No items found to export',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Generate HTML for PDF
+            $html = $this->generateServiceableItemsPdfHtml($items);
+            
+            // Check if DOMPDF classes exist
+            $dompdfExists = class_exists('Dompdf\Dompdf') || class_exists('\Dompdf\Dompdf');
+            $optionsExists = class_exists('Dompdf\Options') || class_exists('\Dompdf\Options');
+            
+            if (!$dompdfExists || !$optionsExists) {
+                return response()->json([
+                    'message' => 'DOMPDF library not installed',
+                    'status' => 'error'
+                ], 500);
+            }
+            
+            // Configure DOMPDF
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', false);
+            $options->set('defaultFont', 'Arial');
+            $options->set('chroot', base_path());
+            
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'landscape');
+            $dompdf->render();
+            
+            $fileName = 'Serviceable_Items_' . date('Y-m-d_His') . '.pdf';
+            
+            return response()->streamDownload(function () use ($dompdf) {
+                echo $dompdf->output();
+            }, $fileName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error exporting serviceable items to PDF: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to export serviceable items to PDF: ' . $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
+
+    /**
      * Export lifecycle data to Excel
      */
     public function exportLifeCyclesData(Request $request)
@@ -1084,6 +1539,490 @@ class ItemController extends Controller
     }
 
     /**
+     * Export lifecycle data to PDF
+     */
+    public function exportLifeCyclesDataPdf(Request $request)
+    {
+        try {
+            $itemsParam = $request->input('items');
+            
+            // Get items
+            $items = [];
+            if ($itemsParam) {
+                $decodedItems = is_string($itemsParam) ? json_decode($itemsParam, true) : $itemsParam;
+                if (is_array($decodedItems) && count($decodedItems) > 0) {
+                    $items = $decodedItems;
+                }
+            }
+            
+            if (empty($items)) {
+                return response()->json([
+                    'message' => 'No items found to export',
+                    'status' => 'error'
+                ], 404);
+            }
+            
+            // Generate HTML for PDF
+            $html = $this->generateLifeCyclesPdfHtml($items);
+            
+            // Check if DOMPDF classes exist
+            $dompdfExists = class_exists('Dompdf\Dompdf') || class_exists('\Dompdf\Dompdf');
+            $optionsExists = class_exists('Dompdf\Options') || class_exists('\Dompdf\Options');
+            
+            if (!$dompdfExists || !$optionsExists) {
+                return response()->json([
+                    'message' => 'DOMPDF library not installed',
+                    'status' => 'error'
+                ], 500);
+            }
+            
+            // Configure DOMPDF
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isRemoteEnabled', false);
+            $options->set('defaultFont', 'Arial');
+            $options->set('chroot', base_path());
+            
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'landscape');
+            $dompdf->render();
+            
+            $fileName = 'Life_Cycles_Data_' . date('Y-m-d_His') . '.pdf';
+            
+            return response()->streamDownload(function () use ($dompdf) {
+                echo $dompdf->output();
+            }, $fileName, [
+                'Content-Type' => 'application/pdf',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error exporting lifecycle data to PDF: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to export lifecycle data to PDF: ' . $e->getMessage(),
+                'status' => 'error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate HTML content for Life Cycles Data PDF
+     */
+    private function generateLifeCyclesPdfHtml($items)
+    {
+        $currentYear = date('Y');
+        
+        // Calculate summary stats
+        $total = count($items);
+        $avgRemainingYears = $total > 0 
+            ? array_sum(array_column($items, 'remaining_years')) / $total 
+            : 0;
+        $avgExpectedLifespan = $total > 0
+            ? array_sum(array_column($items, 'expected_lifespan_years')) / $total
+            : 0;
+        
+        $urgent = count(array_filter($items, fn($item) => ($item['status'] ?? '') === 'FOR CHECKING'));
+        $soon = count(array_filter($items, fn($item) => ($item['status'] ?? '') === 'SOON'));
+        $monitor = count(array_filter($items, fn($item) => ($item['status'] ?? '') === 'MONITOR'));
+        $good = count(array_filter($items, fn($item) => ($item['status'] ?? '') === 'GOOD'));
+        
+        // Get logo as base64
+        $logoBase64 = null;
+        $logoPath = public_path('logo.png');
+        if (file_exists($logoPath)) {
+            $logoContent = file_get_contents($logoPath);
+            $logoBase64 = base64_encode($logoContent);
+        }
+        
+        $tableRows = '';
+        foreach ($items as $item) {
+            $tableRows .= '<tr>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['unit'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['category'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['pac'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['date_acquired'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['years_in_use'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['expected_lifespan_years'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['remaining_years'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['remaining_days'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['lifespan_end_date'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['status'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['maintenance_count'] ?? 0) . '</td>';
+            $tableRows .= '</tr>';
+        }
+        
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {
+                    font-family: "Times New Roman", serif;
+                    font-size: 10px;
+                    margin: 0;
+                    padding: 20px;
+                    color: #000;
+                }
+                .header {
+                    text-align: center;
+                    margin-bottom: 25px;
+                }
+                .org-info {
+                    margin-bottom: 15px;
+                }
+                .org-info div {
+                    margin-bottom: 2px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                .logo {
+                    width: 50px;
+                    height: 50px;
+                    margin: 8px auto;
+                    display: block;
+                }
+                .report-title {
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin: 12px 0 3px 0;
+                    text-transform: uppercase;
+                }
+                .report-year {
+                    font-size: 13px;
+                    font-weight: bold;
+                    margin-bottom: 15px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                    font-size: 9px;
+                }
+                table th {
+                    font-weight: bold;
+                    text-align: left;
+                    padding: 6px 3px;
+                    border: 1px solid #000;
+                    font-size: 8px;
+                    background-color: #f8f8f8;
+                }
+                table td {
+                    padding: 4px 3px;
+                    border: 1px solid #000;
+                    vertical-align: top;
+                    font-size: 8px;
+                }
+                .summary {
+                    margin-top: 20px;
+                    font-size: 11px;
+                }
+                .signature-section {
+                    margin-top: 40px;
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 20px 0;
+                }
+                .signature-item {
+                    text-align: left;
+                    width: 30%;
+                }
+                .signature-label {
+                    font-size: 10px;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                }
+                .signature-name {
+                    font-size: 10px;
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                    text-transform: uppercase;
+                }
+                .signature-title {
+                    font-size: 9px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="org-info">
+                    <div>Republic of the Philippines</div>
+                    <div>National Irrigation Administration</div>
+                    <div>Region XI</div>
+                </div>';
+        
+        if ($logoBase64) {
+            $html .= '<img src="data:image/png;base64,' . $logoBase64 . '" alt="NIA Logo" class="logo" />';
+        }
+        
+        $html .= '
+                <div class="report-title">LIFE CYCLES DATA REPORT</div>
+                <div class="report-year">For the Year ' . $currentYear . '</div>
+            </div>
+            
+            <div class="summary">
+                <p><strong>Total Items:</strong> ' . $total . '</p>
+                <p><strong>Average Remaining Lifespan:</strong> ' . number_format($avgRemainingYears, 2) . ' years</p>
+                <p><strong>Average Expected Lifespan:</strong> ' . number_format($avgExpectedLifespan, 2) . ' years</p>
+                <p><strong>Status Breakdown:</strong> FOR CHECKING: ' . $urgent . ', SOON: ' . $soon . ', MONITOR: ' . $monitor . ', GOOD: ' . $good . '</p>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Category</th>
+                        <th>PAC</th>
+                        <th>Date Acquired</th>
+                        <th>Years In Use</th>
+                        <th>Expected Lifespan (Years)</th>
+                        <th>Remaining (Years)</th>
+                        <th>Remaining (Days)</th>
+                        <th>End Date</th>
+                        <th>Status</th>
+                        <th>Maintenance Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ' . $tableRows . '
+                </tbody>
+            </table>
+            
+            <div class="signature-section">
+                <div class="signature-item">
+                    <div class="signature-label">Prepared by:</div>
+                    <div class="signature-name">Property Officer B</div>
+                    <div class="signature-title">Property Officer B</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Reviewed by:</div>
+                    <div class="signature-name">ANA LIZA C. DINOPOL</div>
+                    <div class="signature-title">Administrative Services Officer A</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Noted by:</div>
+                    <div class="signature-name">LARRY C. FRANADA</div>
+                    <div class="signature-title">Division Manager A</div>
+                </div>
+            </div>
+        </body>
+        </html>';
+        
+        return $html;
+    }
+
+    /**
+     * Generate HTML content for Monitoring Assets PDF
+     */
+    private function generateMonitoringAssetsPdfHtml($items, $category = null)
+    {
+        $currentYear = date('Y');
+        $categoryName = $category ? strtoupper($category) : 'DESKTOP';
+        
+        // Get logo as base64
+        $logoBase64 = null;
+        $logoPath = public_path('logo.png');
+        if (file_exists($logoPath)) {
+            $logoContent = file_get_contents($logoPath);
+            $logoBase64 = base64_encode($logoContent);
+        }
+        
+        $tableRows = '';
+        foreach ($items as $item) {
+            $tableRows .= '<tr>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['article'] ?? $item['unit'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['description'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['propertyAccountCode'] ?? $item['pac'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: right; padding: 4px;">' . htmlspecialchars($item['unitValue'] ?? $item['unit_value'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['dateAcquired'] ?? $item['date_acquired'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['poNumber'] ?? $item['po_number'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['location'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['condition'] ?? 'N/A') . '</td>';
+            $tableRows .= '</tr>';
+        }
+        
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: "Times New Roman", serif; font-size: 10px; margin: 0; padding: 20px; color: #000; }
+                .header { text-align: center; margin-bottom: 25px; }
+                .org-info div { margin-bottom: 2px; font-weight: bold; font-size: 14px; }
+                .logo { width: 50px; height: 50px; margin: 8px auto; display: block; }
+                .report-title { font-size: 16px; font-weight: bold; margin: 12px 0 3px 0; text-transform: uppercase; letter-spacing: 1px; }
+                .report-year { font-size: 13px; font-weight: bold; margin-bottom: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 9px; }
+                table th, table td { border: 1px solid #000; padding: 4px 3px; vertical-align: top; }
+                table th { background-color: #f8f8f8; font-weight: bold; text-align: left; font-size: 9px; }
+                .signature-section { margin-top: 40px; display: flex; justify-content: space-between; padding: 20px 0; }
+                .signature-item { text-align: left; width: 30%; }
+                .signature-label { font-size: 10px; font-weight: bold; margin-bottom: 20px; color: #000; }
+                .signature-name { font-size: 10px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; color: #000; }
+                .signature-title { font-size: 9px; font-weight: normal; color: #000; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="org-info">
+                    <div>Republic of the Philippines</div>
+                    <div>National Irrigation Administration</div>
+                    <div>Region XI</div>
+                </div>
+                <img src="data:image/png;base64,' . $logoBase64 . '" alt="NIA Logo" class="logo" />
+                <div class="report-title">' . $categoryName . ' MONITORING</div>
+                <div class="report-year">For the Year ' . $currentYear . '</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ARTICLE</th>
+                        <th>DESCRIPTION</th>
+                        <th>PROPERTY ACCOUNT CODE</th>
+                        <th>UNIT VALUE</th>
+                        <th>DATE ACQUIRED</th>
+                        <th>P.O. NUMBER</th>
+                        <th>UNIT/SECTIONS</th>
+                        <th>CONDITION</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ' . $tableRows . '
+                </tbody>
+            </table>
+            <div class="signature-section">
+                <div class="signature-item">
+                    <div class="signature-label">Prepared by:</div>
+                    <div class="signature-name">JASPER KIM SALES</div>
+                    <div class="signature-title">Property Officer B</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Reviewed by:</div>
+                    <div class="signature-name">ANA LIZA C. DINOPOL</div>
+                    <div class="signature-title">Administrative Services Officer A</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Noted by:</div>
+                    <div class="signature-name">LARRY C. FRANADA</div>
+                    <div class="signature-title">Division Manager A</div>
+                </div>
+            </div>
+        </body>
+        </html>';
+        
+        return $html;
+    }
+
+    /**
+     * Generate HTML content for Serviceable Items PDF
+     */
+    private function generateServiceableItemsPdfHtml($items)
+    {
+        $currentYear = date('Y');
+        
+        // Get logo as base64
+        $logoBase64 = null;
+        $logoPath = public_path('logo.png');
+        if (file_exists($logoPath)) {
+            $logoContent = file_get_contents($logoPath);
+            $logoBase64 = base64_encode($logoContent);
+        }
+        
+        $tableRows = '';
+        foreach ($items as $item) {
+            $tableRows .= '<tr>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['article'] ?? $item['unit'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['category'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['description'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['propertyAccountCode'] ?? $item['pac'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: right; padding: 4px;">' . htmlspecialchars($item['unitValue'] ?? $item['unit_value'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['dateAcquired'] ?? $item['date_acquired'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['location'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['condition'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars($item['issuedTo'] ?? $item['issued_to'] ?? 'Not Assigned') . '</td>';
+            $tableRows .= '<td style="text-align: center; padding: 4px;">' . htmlspecialchars($item['quantity'] ?? 'N/A') . '</td>';
+            $tableRows .= '<td style="text-align: left; padding: 4px;">' . htmlspecialchars(str_replace('-', ' ', $item['serviceableStatus'] ?? 'N/A')) . '</td>';
+            $tableRows .= '</tr>';
+        }
+        
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: "Times New Roman", serif; font-size: 10px; margin: 0; padding: 20px; color: #000; }
+                .header { text-align: center; margin-bottom: 25px; }
+                .org-info div { margin-bottom: 2px; font-weight: bold; font-size: 14px; }
+                .logo { width: 50px; height: 50px; margin: 8px auto; display: block; }
+                .report-title { font-size: 16px; font-weight: bold; margin: 12px 0 3px 0; text-transform: uppercase; letter-spacing: 1px; }
+                .report-year { font-size: 13px; font-weight: bold; margin-bottom: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 9px; }
+                table th, table td { border: 1px solid #000; padding: 4px 3px; vertical-align: top; }
+                table th { background-color: #f8f8f8; font-weight: bold; text-align: left; font-size: 9px; }
+                .signature-section { margin-top: 40px; display: flex; justify-content: space-between; padding: 20px 0; }
+                .signature-item { text-align: left; width: 30%; }
+                .signature-label { font-size: 10px; font-weight: bold; margin-bottom: 20px; color: #000; }
+                .signature-name { font-size: 10px; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; color: #000; }
+                .signature-title { font-size: 9px; font-weight: normal; color: #000; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="org-info">
+                    <div>Republic of the Philippines</div>
+                    <div>National Irrigation Administration</div>
+                    <div>Region XI</div>
+                </div>
+                <img src="data:image/png;base64,' . $logoBase64 . '" alt="NIA Logo" class="logo" />
+                <div class="report-title">SERVICEABLE ITEMS REPORT</div>
+                <div class="report-year">For the Year ' . $currentYear . '</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ARTICLE</th>
+                        <th>CATEGORY</th>
+                        <th>DESCRIPTION</th>
+                        <th>PROPERTY ACCOUNT CODE</th>
+                        <th>UNIT VALUE</th>
+                        <th>DATE ACQUIRED</th>
+                        <th>UNIT/SECTORS</th>
+                        <th>CONDITION</th>
+                        <th>ISSUED TO</th>
+                        <th>QUANTITY</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ' . $tableRows . '
+                </tbody>
+            </table>
+            <div class="signature-section">
+                <div class="signature-item">
+                    <div class="signature-label">Prepared by:</div>
+                    <div class="signature-name">JASPER KIM SALES</div>
+                    <div class="signature-title">Property Officer B</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Reviewed by:</div>
+                    <div class="signature-name">ANA LIZA C. DINOPOL</div>
+                    <div class="signature-title">Administrative Services Officer A</div>
+                </div>
+                <div class="signature-item">
+                    <div class="signature-label">Noted by:</div>
+                    <div class="signature-name">LARRY C. FRANADA</div>
+                    <div class="signature-title">Division Manager A</div>
+                </div>
+            </div>
+        </body>
+        </html>';
+        
+        return $html;
+    }
+
+    /**
      * Validate and update QR code for an item
      */
     public function validateQRCode(Request $request, $uuid)
@@ -1099,7 +2038,7 @@ class ItemController extends Controller
                 ], 404);
             }
             
-            // Generate and save new QR code (version will auto-increment)
+            // Generate and save new QR code (version will be current year)
             $qrCodeService = new QrCodeService();
             $newQrCode = $qrCodeService->validateAndUpdateQrCode($item);
             

@@ -79,11 +79,26 @@ class CalculateLifespanJob implements ShouldQueue
                 // Get maintenance count
                 $maintenanceCount = $item->maintenance_count ?? $item->maintenance_records->count();
                 
-                // Get condition number
+                // Get condition number (A1=1, A2=2, A3=3) or R
                 $conditionNumber = 0;
+                $conditionNumberStr = '';
                 if ($item->condition_number && $item->condition_number->condition_number) {
-                    $conditionNumber = $extractConditionNumber($item->condition_number->condition_number);
+                    $conditionNumberStr = strtoupper(trim($item->condition_number->condition_number));
+                    // Extract A1 -> 1, A2 -> 2, A3 -> 3, or keep R as string
+                    if (preg_match('/A(\d+)/', $conditionNumberStr, $matches)) {
+                        $conditionNumber = (int) $matches[1];
+                    } elseif ($conditionNumberStr === 'R') {
+                        $conditionNumber = 'R'; // Keep R as string for disposal check
+                    } else {
+                        $conditionNumber = $extractConditionNumber($conditionNumberStr);
+                    }
                 }
+                
+                // Get condition_status from condition_number (Good, Less Reliable, Un-operational, Disposal)
+                $conditionStatus = $item->condition_number->condition_status ?? '';
+                
+                // Get condition from condition table (Serviceable, Non-Serviceable, On Maintenance)
+                $condition = $item->condition ? $item->condition->condition : '';
                 
                 // Get last maintenance reason
                 $lastReason = $item->maintenance_reason ?? '';
@@ -100,6 +115,8 @@ class CalculateLifespanJob implements ShouldQueue
                     'years_in_use' => max(0, $yearsInUse),
                     'maintenance_count' => $maintenanceCount,
                     'condition_number' => $conditionNumber,
+                    'condition_status' => $conditionStatus,
+                    'condition' => $condition,
                     'last_reason' => $lastReason
                 ];
             }

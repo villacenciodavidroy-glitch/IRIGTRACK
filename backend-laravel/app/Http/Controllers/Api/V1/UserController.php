@@ -262,4 +262,74 @@ class UserController extends Controller
             'status' => 'success'
         ], 200);
     }
+
+    /**
+     * Mark user as resigned
+     */
+    public function markAsResigned(Request $request, string $id)
+    {
+        $user = User::findOrFail($id);
+        
+        // Check if user has pending items
+        $pendingCount = $user->pendingMemorandumReceipts()->count();
+        
+        if ($pendingCount > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Personnel has {$pendingCount} pending accountable items. Clearance required.",
+                'error' => 'PENDING_ITEMS',
+                'pending_count' => $pendingCount,
+                'pending_items' => $user->pendingMemorandumReceipts()
+                    ->with(['item.category', 'item.location'])
+                    ->get()
+            ], 422);
+        }
+
+        // Update user status to RESIGNED
+        $user->status = 'RESIGNED';
+        $user->save();
+
+        // Log activity
+        $this->logUserActivity($request, 'Marked as Resigned', $user->fullname, $user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User marked as resigned successfully.',
+            'data' => new UserResource($user)
+        ]);
+    }
+
+    /**
+     * Get users with pending items (for clearance alerts)
+     */
+    public function getUsersWithPendingItems()
+    {
+        $users = User::where('status', '!=', 'RESIGNED')
+            ->withCount('pendingMemorandumReceipts')
+            ->having('pending_memorandum_receipts_count', '>', 0)
+            ->with(['location', 'pendingMemorandumReceipts.item'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $users
+        ]);
+    }
+
+    /**
+     * Get resigned users with pending items (alert list)
+     */
+    public function getResignedUsersWithPendingItems()
+    {
+        $users = User::where('status', 'RESIGNED')
+            ->withCount('pendingMemorandumReceipts')
+            ->having('pending_memorandum_receipts_count', '>', 0)
+            ->with(['location', 'pendingMemorandumReceipts.item'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $users
+        ]);
+    }
 }

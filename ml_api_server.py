@@ -44,49 +44,79 @@ def load_lifespan_model():
     """
     Load the CatBoost lifespan prediction model.
     Checks multiple locations for the model file.
-    
-    DISABLED: Using manual calculation method only (previous prediction method)
     """
     global lifespan_model
     
-    # DISABLED: Force manual calculation method (previous prediction method)
-    logger.info("⚠️ CatBoost model disabled - using manual calculation method (previous prediction method)")
-    return None
+    if lifespan_model is not None:
+        return lifespan_model
     
-    # Commented out - model loading disabled to use previous prediction method
-    # if lifespan_model is not None:
-    #     return lifespan_model
-    # 
-    # # Possible model file locations
-    # possible_paths = [
-    #     MODEL_PATH,  # Environment variable path
-    #     'catboost_lifespan_model.cbm',
-    #     'models/catboost_lifespan_model.cbm',
-    #     'fastapi_lifespan_api/ml/models/catboost_lifespan_model.cbm',
-    #     os.path.join(os.path.dirname(__file__), 'catboost_lifespan_model.cbm'),
-    #     os.path.join(os.path.dirname(__file__), 'models', 'catboost_lifespan_model.cbm'),
-    # ]
-    # 
-    # model_path = None
-    # for path in possible_paths:
-    #     if path and os.path.exists(path):
-    #         model_path = path
-    #         break
-    # 
-    # if model_path is None:
-    #     logger.warning("CatBoost model file not found. Model-based predictions will not be available.")
-    #     logger.info(f"Checked paths: {possible_paths}")
-    #     return None
-    # 
-    # try:
-    #     logger.info(f"Loading CatBoost model from: {model_path}")
-    #     lifespan_model = CatBoostRegressor()
-    #     lifespan_model.load_model(model_path)
-    #     logger.info("✅ CatBoost model loaded successfully")
-    #     return lifespan_model
-    # except Exception as e:
-    #     logger.error(f"Failed to load CatBoost model: {str(e)}")
-    #     return None
+    # Get current working directory and script directory
+    current_dir = os.getcwd()
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    
+    # Possible model file locations (check multiple locations)
+    # Priority: Same directory as script (most likely location)
+    possible_paths = [
+        os.path.join(script_dir, 'catboost_lifespan_model.cbm'),  # Same dir as script (HIGHEST PRIORITY)
+        MODEL_PATH,  # Environment variable path
+        os.path.join(current_dir, 'catboost_lifespan_model.cbm'),  # Current working directory
+        'catboost_lifespan_model.cbm',  # Relative to current dir
+        os.path.join(parent_dir, 'catboost_lifespan_model.cbm'),  # Parent directory
+        os.path.join(script_dir, 'models', 'catboost_lifespan_model.cbm'),
+        os.path.join(current_dir, 'models', 'catboost_lifespan_model.cbm'),
+        'models/catboost_lifespan_model.cbm',
+        'fastapi_lifespan_api/ml/models/catboost_lifespan_model.cbm',
+    ]
+    
+    # Remove None values and duplicates
+    possible_paths = [p for p in possible_paths if p]
+    possible_paths = list(dict.fromkeys(possible_paths))  # Remove duplicates
+    
+    logger.info(f"🔍 Searching for CatBoost model file...")
+    logger.info(f"   Current directory: {current_dir}")
+    logger.info(f"   Script directory: {script_dir}")
+    logger.info(f"   Parent directory: {parent_dir}")
+    
+    model_path = None
+    checked_paths = []
+    for path in possible_paths:
+        checked_paths.append(path)
+        if os.path.exists(path):
+            model_path = os.path.abspath(path)  # Use absolute path
+            logger.info(f"✅ Found model file at: {model_path}")
+            break
+    
+    if model_path is None:
+        logger.warning("⚠️ CatBoost model file not found. Falling back to manual calculation method.")
+        logger.info(f"   Checked {len(checked_paths)} paths:")
+        for i, path in enumerate(checked_paths, 1):
+            exists = "✅" if os.path.exists(path) else "❌"
+            logger.info(f"   {i}. {exists} {path}")
+        return None
+    
+    try:
+        logger.info(f"🐱 Loading CatBoost model from: {model_path}")
+        logger.info(f"   File exists: {os.path.exists(model_path)}")
+        logger.info(f"   File size: {os.path.getsize(model_path) / (1024*1024):.2f} MB")
+        
+        lifespan_model = CatBoostRegressor()
+        lifespan_model.load_model(model_path)
+        logger.info("✅ CatBoost model loaded successfully!")
+        logger.info("✅ CatBoost IS RUNNING - Using ML predictions")
+        return lifespan_model
+    except ImportError as e:
+        logger.error(f"❌ CatBoost library not installed: {str(e)}")
+        logger.error("   Install with: pip install catboost")
+        logger.warning("⚠️ Falling back to manual calculation method")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Failed to load CatBoost model: {str(e)}")
+        logger.error(f"   Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"   Traceback: {traceback.format_exc()}")
+        logger.warning("⚠️ Falling back to manual calculation method")
+        return None
 
 # Load model on module import (lazy loading - will load on first prediction request)
 # Model will be loaded when first prediction is requested
@@ -103,6 +133,8 @@ def prepare_features_for_prediction(items):
             - years_in_use
             - maintenance_count
             - condition_number
+            - condition_status (optional): Good, Less Reliable, Un-operational, Disposal
+            - condition (optional): Serviceable, Non-Serviceable, On Maintenance
             - last_reason
     
     Returns:
@@ -151,6 +183,28 @@ def prepare_features_for_prediction(items):
         df['last_reason'] = 'other'
         reason_dummies = pd.get_dummies(df['last_reason'], prefix='last_reason')
         df = pd.concat([df.drop('last_reason', axis=1), reason_dummies], axis=1)
+    
+    # Handle condition_status one-hot encoding
+    if 'condition_status' in df.columns:
+        df['condition_status'] = df['condition_status'].astype(str).str.strip()
+        df['condition_status'] = df['condition_status'].fillna('Unknown')
+        condition_status_dummies = pd.get_dummies(df['condition_status'], prefix='condition_status')
+        df = pd.concat([df.drop('condition_status', axis=1), condition_status_dummies], axis=1)
+    else:
+        df['condition_status'] = 'Unknown'
+        condition_status_dummies = pd.get_dummies(df['condition_status'], prefix='condition_status')
+        df = pd.concat([df.drop('condition_status', axis=1), condition_status_dummies], axis=1)
+    
+    # Handle condition one-hot encoding (Serviceable, Non-Serviceable, etc.)
+    if 'condition' in df.columns:
+        df['condition'] = df['condition'].astype(str).str.strip()
+        df['condition'] = df['condition'].fillna('Unknown')
+        condition_dummies = pd.get_dummies(df['condition'], prefix='condition')
+        df = pd.concat([df.drop('condition', axis=1), condition_dummies], axis=1)
+    else:
+        df['condition'] = 'Unknown'
+        condition_dummies = pd.get_dummies(df['condition'], prefix='condition')
+        df = pd.concat([df.drop('condition', axis=1), condition_dummies], axis=1)
     
     # Remove item_id if present (not a feature)
     if 'item_id' in df.columns:
@@ -399,6 +453,8 @@ def predict_items_lifespan():
                 "years_in_use": 2.5,
                 "maintenance_count": 1,
                 "condition_number": 3,
+                "condition_status": "Un-operational",
+                "condition": "Non-Serviceable",
                 "last_reason": "Wear"
             }
         ]
@@ -428,14 +484,16 @@ def predict_items_lifespan():
         logger.info(f"📊 Received lifespan prediction request for {len(items)} items")
         
         # Load model if not already loaded
+        logger.info("=" * 60)
+        logger.info("🐱 ATTEMPTING TO LOAD CATBOOST MODEL")
+        logger.info("=" * 60)
         model = load_lifespan_model()
-        # Always use manual calculation method (previous prediction method)
-        model = None  # Force manual calculation
-        logger.info("📊 Using manual calculation method (previous prediction method)")
         
-        # CatBoost model disabled - skip model prediction
         # Try to use CatBoost model if available
-        if False:  # Changed from "if model is not None:" to disable model
+        if model is not None:
+            logger.info("=" * 60)
+            logger.info("✅ CATBOOST MODEL LOADED - USING ML PREDICTIONS")
+            logger.info("=" * 60)
             try:
                 # Prepare features from items
                 df, item_ids = prepare_features_for_prediction(items)
@@ -461,7 +519,26 @@ def predict_items_lifespan():
                 for idx, item in enumerate(items):
                     item_id = item.get('item_id')
                     years_in_use = float(item.get('years_in_use', 0))
-                    remaining_years = float(remaining_years_predictions[idx])
+                    condition_number = item.get('condition_number', 0)
+                    condition_number_str = str(condition_number).upper() if condition_number else ''
+                    condition_status = item.get('condition_status', '')
+                    condition = item.get('condition', '')
+                    
+                    # Check if item should be disposed (R condition number, Disposal status, or Non-Serviceable)
+                    should_dispose = (
+                        condition_number_str == 'R' or  # R = Disposal
+                        condition_status == 'Disposal' or
+                        'Non-Serviceable' in str(condition) or
+                        'Non - Serviceable' in str(condition)
+                    )
+                    
+                    if should_dispose:
+                        # Item should be disposed - set remaining_years to 0
+                        remaining_years = 0.0
+                        logger.info(f"🗑️ Item {item_id} marked for DISPOSAL (R/Disposal/Non-Serviceable) - setting remaining_years to 0")
+                    else:
+                        remaining_years = float(remaining_years_predictions[idx])
+                    
                     remaining_years = round(remaining_years, 1)
                     lifespan_estimate = round(years_in_use + remaining_years, 1)
                     
@@ -470,7 +547,8 @@ def predict_items_lifespan():
                         'remaining_years': remaining_years,
                         'lifespan_estimate': lifespan_estimate,
                         'years_in_use': round(years_in_use, 1),
-                        'method': 'catboost_model'
+                        'method': 'catboost_model',
+                        'disposal_flag': should_dispose
                     })
                 
                 logger.info(f"✅ Successfully generated {len(predictions)} predictions using CatBoost model")
@@ -497,8 +575,35 @@ def predict_items_lifespan():
             category = item.get('category', 'Unknown')
             years_in_use = float(item.get('years_in_use', 0))
             maintenance_count = int(item.get('maintenance_count', 0))
-            condition_number = int(item.get('condition_number', 0))
+            condition_number = item.get('condition_number', 0)
+            condition_number_str = str(condition_number).upper() if condition_number else ''
+            condition_status = item.get('condition_status', '')
+            condition = item.get('condition', '')
             last_reason = item.get('last_reason', '').lower()
+            
+            # Check if item should be disposed (R condition number, Disposal status, or Non-Serviceable)
+            should_dispose = (
+                condition_number_str == 'R' or  # R = Disposal
+                condition_status == 'Disposal' or
+                'Non-Serviceable' in str(condition) or
+                'Non - Serviceable' in str(condition)
+            )
+            
+            if should_dispose:
+                # Item should be disposed - set remaining_years to 0
+                remaining_years = 0.0
+                lifespan_estimate = round(years_in_use, 1)
+                logger.info(f"🗑️ Item {item_id} marked for DISPOSAL (R/Disposal/Non-Serviceable) - setting remaining_years to 0")
+                
+                predictions.append({
+                    'item_id': item_id,
+                    'remaining_years': remaining_years,
+                    'lifespan_estimate': lifespan_estimate,
+                    'years_in_use': round(years_in_use, 1),
+                    'method': 'manual_calculation_fallback',
+                    'disposal_flag': True
+                })
+                continue
             
             # Calculate base remaining lifespan: 8 years max minus years in use
             base_lifespan = max(0.0, 8.0 - years_in_use)
@@ -557,7 +662,8 @@ def predict_items_lifespan():
                 'remaining_years': remaining_years,
                 'lifespan_estimate': lifespan_estimate,
                 'years_in_use': round(years_in_use, 1),
-                'method': 'manual_calculation_fallback'
+                'method': 'manual_calculation_fallback',
+                'disposal_flag': False
             })
             
             # Enhanced logging with prediction details
@@ -589,6 +695,22 @@ def predict_items_lifespan():
         }), 500
 
 if __name__ == '__main__':
+    # Pre-check CatBoost model availability on startup
+    print("=" * 60)
+    print("🚀 Starting ML Forecast API Server")
+    print("=" * 60)
+    print("🔍 Checking CatBoost model availability...")
+    
+    test_model = load_lifespan_model()
+    if test_model is not None:
+        print("✅ CatBoost model is READY - ML predictions will be used")
+    else:
+        print("⚠️ CatBoost model not found - Manual calculations will be used")
+        print("   To enable CatBoost: Ensure catboost_lifespan_model.cbm exists")
+        print("   in the same directory as ml_api_server.py")
+    
+    print("=" * 60)
+    
     host = '0.0.0.0'
     port = 5000
     

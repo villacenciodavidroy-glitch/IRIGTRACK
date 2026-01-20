@@ -171,6 +171,27 @@ const showAllCategories = () => {
   currentPage.value = 1
 }
 
+const confirmModal = ref({
+  show: false,
+  message: '',
+  onConfirm: null
+})
+
+const openConfirm = (message, action) => {
+  confirmModal.value = { show: true, message, onConfirm: action }
+}
+
+const confirmCancel = () => {
+  confirmModal.value.show = false
+  confirmModal.value.onConfirm = null
+}
+
+const confirmOk = () => {
+  const action = confirmModal.value.onConfirm
+  confirmCancel()
+  if (typeof action === 'function') action()
+}
+
 // Open signature edit modal before printing
 const openPrintDialog = () => {
   // Initialize signature data with current user
@@ -183,6 +204,140 @@ const openPrintDialog = () => {
   signatureData.value.notedBy.title = 'Division Manager A'
   
   showSignatureModal.value = true
+}
+
+// Export to PDF using backend DOMPDF
+const exportToPDF = async () => {
+  try {
+    // Ensure modal is closed
+    showSignatureModal.value = false
+    
+    if (!filteredItems.value || filteredItems.value.length === 0) {
+      alert('No items to export')
+      return
+    }
+    
+    // Prepare export data
+    const exportData = filteredItems.value.map(item => ({
+      article: item.article || '',
+      description: item.description || '',
+      propertyAccountCode: item.propertyAccountCode || '',
+      unitValue: item.unitValue || '',
+      dateAcquired: item.dateAcquired || '',
+      poNumber: item.poNumber || '',
+      location: item.location || '',
+      condition: item.condition || ''
+    }))
+    
+    const params = new URLSearchParams()
+    params.append('items', JSON.stringify(exportData))
+    if (selectedCategory.value) {
+      params.append('category', selectedCategory.value)
+    }
+    
+    // Use the same pattern as life-cycles-data
+    const baseUrl = `/items/export/monitoring-assets-pdf`
+    const fullUrl = `${baseUrl}?${params.toString()}`
+    
+    // Log the full URL being requested (for debugging)
+    const axiosBaseUrl = axiosClient.defaults.baseURL || import.meta.env.VITE_API_BASE_URL || '/api'
+    console.log('Axios baseURL:', axiosBaseUrl)
+    console.log('Request path:', baseUrl)
+    console.log('Full URL will be:', `${axiosBaseUrl}${fullUrl}`)
+    
+    let response
+    try {
+      if (fullUrl.length > 1800) {
+        // If URL is too long, send as POST with data in body
+        console.log('URL too long, using POST method')
+        response = await axiosClient.post(baseUrl, {
+          items: exportData,
+          category: selectedCategory.value || null
+        }, {
+          responseType: 'blob',
+          headers: {
+            'Accept': 'application/pdf'
+          },
+          timeout: 60000
+        })
+      } else {
+        console.log('Making request to:', fullUrl)
+        response = await axiosClient.get(fullUrl, {
+          responseType: 'blob',
+          headers: {
+            'Accept': 'application/pdf'
+          },
+          timeout: 60000
+        })
+      }
+    } catch (axiosError) {
+      // Handle error response that might be JSON instead of blob
+      if (axiosError.response && axiosError.response.data) {
+        let errorMessage = 'Failed to export to PDF'
+        try {
+          if (axiosError.response.data instanceof Blob) {
+            const text = await axiosError.response.data.text()
+            const errorData = JSON.parse(text)
+            errorMessage = errorData.message || errorMessage
+          } else if (axiosError.response.data && axiosError.response.data.message) {
+            errorMessage = axiosError.response.data.message
+          }
+        } catch (e) {
+          console.error('Error parsing error response:', e)
+        }
+        alert(errorMessage)
+        return
+      }
+      throw axiosError
+    }
+    
+    // Check if response is actually a PDF or an error JSON
+    const contentType = response.headers['content-type'] || ''
+    if (contentType.includes('application/json')) {
+      // It's an error response
+      const text = await new Blob([response.data]).text()
+      const errorData = JSON.parse(text)
+      alert(errorData.message || 'Failed to export PDF')
+      return
+    }
+    
+    const blob = new Blob([response.data], {
+      type: 'application/pdf'
+    })
+    
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const categoryName = selectedCategory.value || 'DESKTOP'
+    link.setAttribute('download', `Monitoring_Assets_${categoryName}_${new Date().toISOString().split('T')[0]}.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting to PDF:', error)
+    let errorMessage = 'Failed to export to PDF. Please try again.'
+    
+    if (error.response) {
+      try {
+        if (error.response.data instanceof Blob) {
+          const text = await error.response.data.text()
+          const errorData = JSON.parse(text)
+          errorMessage = errorData.message || errorMessage
+        } else if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message
+        }
+      } catch (e) {
+        // If parsing fails, use default message
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    alert(errorMessage)
+  } finally {
+    showSignatureModal.value = false
+  }
 }
 
 // Print report with edited signature data
@@ -426,6 +581,28 @@ const printReport = () => {
   printWindow.document.open()
   printWindow.document.write(content)
   printWindow.document.close()
+  
+  // Wait for the document to be fully loaded, then trigger print
+  const checkAndPrint = () => {
+    if (printWindow.document.readyState === 'complete') {
+      printWindow.focus()
+      printWindow.print()
+    } else {
+      printWindow.addEventListener('load', () => {
+        printWindow.focus()
+        printWindow.print()
+      }, { once: true })
+      // Fallback timeout
+      setTimeout(() => {
+        if (!printWindow.closed) {
+          printWindow.focus()
+          printWindow.print()
+        }
+      }, 500)
+    }
+  }
+  
+  checkAndPrint()
 }
 
 const goBack = () => {
@@ -433,9 +610,8 @@ const goBack = () => {
 }
 
 // Export to Excel
-const exportToExcel = async () => {
+const performExportToExcel = async () => {
   try {
-    // Prepare export parameters
     const params = new URLSearchParams()
     
     if (selectedCategory.value) {
@@ -446,17 +622,12 @@ const exportToExcel = async () => {
       params.append('location', selectedLocation.value)
     }
     
-    // If we have filtered items (from search/filters), send them for export
-    // Otherwise, backend will fetch all items based on filters
     if (filteredItems.value.length > 0 && filteredItems.value.length !== inventoryItems.value.length) {
-      // Send filtered items
       params.append('items', JSON.stringify(filteredItems.value))
     }
     
-    // Build the export URL
     const exportUrl = `/items/export/monitoring-assets?${params.toString()}`
     
-    // Use axios with blob response type for Excel downloads
     const response = await axiosClient.get(exportUrl, {
       responseType: 'blob',
       headers: {
@@ -464,7 +635,6 @@ const exportToExcel = async () => {
       }
     })
     
-    // Create blob URL and trigger download
     const blob = new Blob([response.data], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     })
@@ -483,47 +653,54 @@ const exportToExcel = async () => {
     alert('Failed to export to Excel. Please try again.')
   }
 }
+
+const exportToExcel = () => {
+  openConfirm('Do you want to export asset monitoring data to Excel?', performExportToExcel)
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8 space-y-6">
-    <!-- Enhanced Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-green-600 via-green-700 to-green-600 rounded-xl shadow-xl">
-      <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
-      <div class="relative px-6 py-8 sm:px-8 sm:py-10">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div class="flex items-center gap-4">
+  <div class="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8 space-y-6">
+    <!-- Header Section -->
+    <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-xl rounded-2xl mt-2">
+      <div class="px-6 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-start gap-4">
+          <div class="flex items-center gap-3 pt-1">
             <button 
               @click="goBack" 
-              class="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+              class="p-3 bg-white/15 border border-white/20 text-white rounded-full hover:bg-white/25 transition-all shadow-lg backdrop-blur"
               title="Go back"
             >
-              <span class="material-icons-outlined text-white text-xl">arrow_back</span>
-            </button>
-            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
-              <span class="material-icons-outlined text-4xl text-white">desktop_windows</span>
-            </div>
-            <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Asset Monitoring Report</h1>
-              <p class="text-green-100 text-sm sm:text-base">Track and monitor asset status and performance</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <button 
-              @click="exportToExcel" 
-              class="btn-secondary-enhanced flex items-center gap-2"
-            >
-              <span class="material-icons-outlined text-lg">file_download</span>
-              <span>Export Excel</span>
-            </button>
-            <button 
-              @click="openPrintDialog" 
-              class="btn-primary-enhanced flex items-center gap-2 shadow-lg"
-            >
-              <span class="material-icons-outlined text-lg">print</span>
-              <span>Print Report</span>
+              <span class="material-icons-outlined text-xl">arrow_back</span>
             </button>
           </div>
+          <div class="text-white">
+            <h1 class="text-3xl font-extrabold leading-tight">Asset Monitoring Report</h1>
+            <p class="text-white/90 text-base mt-1">Track and monitor asset status and performance</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button 
+            @click="exportToExcel" 
+            class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60"
+          >
+            <span class="material-icons-outlined text-lg text-emerald-700">download</span>
+            <span>Export Excel</span>
+          </button>
+          <button 
+            @click.stop.prevent="exportToPDF" 
+            class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60"
+          >
+            <span class="material-icons-outlined text-lg text-emerald-700">picture_as_pdf</span>
+            <span>Export PDF</span>
+          </button>
+          <button 
+            @click="openPrintDialog" 
+            class="bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-white transition-all font-semibold shadow-lg border border-white/60"
+          >
+            <span class="material-icons-outlined text-lg text-emerald-700">print</span>
+            <span>Print Report</span>
+          </button>
         </div>
       </div>
     </div>
@@ -957,6 +1134,28 @@ const exportToExcel = async () => {
             Print Report
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4">
+      <h3 class="text-lg font-semibold text-gray-900">Confirm Export</h3>
+      <p class="text-sm text-gray-700">{{ confirmModal.message }}</p>
+      <div class="flex justify-end gap-3 pt-2">
+        <button
+          class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+          @click="confirmCancel"
+        >
+          Cancel
+        </button>
+        <button
+          class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition shadow"
+          @click="confirmOk"
+        >
+          Continue
+        </button>
       </div>
     </div>
   </div>

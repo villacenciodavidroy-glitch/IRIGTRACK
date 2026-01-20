@@ -97,6 +97,15 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
+        // Check for error responses (resigned/inactive users)
+        if (isset($result['error'])) {
+            $this->logAuthActivity($request, 'Login Attempt', $request->email, false);
+            return response()->json([
+                'message' => $result['message'],
+                'error' => $result['error']
+            ], 403);
+        }
+
         // Log successful login
         $this->logAuthActivity($request, 'Logged In', $request->email, true);
 

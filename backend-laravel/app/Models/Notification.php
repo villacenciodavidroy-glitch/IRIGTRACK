@@ -31,6 +31,7 @@ class Notification extends Model
     protected $fillable = [
         'item_id',
         'borrow_request_id',
+        'user_id',
         'message',
         'is_read',
         'type',
@@ -59,5 +60,13 @@ class Notification extends Model
     public function borrowRequest()
     {
         return $this->belongsTo(BorrowRequest::class, 'borrow_request_id');
+    }
+
+    /**
+     * Get the user that this notification belongs to (if user-specific).
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

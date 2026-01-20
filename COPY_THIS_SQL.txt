@@ -1,0 +1,78 @@
+===========================================
+COPY AND PASTE THIS INTO YOUR DATABASE TOOL
+===========================================
+
+-- Item 69: Add Q1-Q4 2024
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 69, 'Q1 2024', 9, 120, 111, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 69 AND period = 'Q1 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 69, 'Q2 2024', 11, 111, 100, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 69 AND period = 'Q2 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 69, 'Q3 2024', 10, 100, 90, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 69 AND period = 'Q3 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 69, 'Q4 2024', 150, 90, 240, true, 300, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 69 AND period = 'Q4 2024');
+
+-- Item 71: Add Q1-Q4 2024 + Q1-Q3 2025
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q1 2024', 75, 150, 75, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q1 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q2 2024', 80, 75, 95, true, 100, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q2 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q3 2024', 85, 95, 10, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q3 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q4 2024', 90, 10, 100, true, 180, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q4 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q1 2025', 88, 100, 12, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q1 2025');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q2 2025', 90, 12, 102, true, 180, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q2 2025');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 71, 'Q3 2025', 92, 102, 10, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 71 AND period = 'Q3 2025');
+
+-- Item 72: Add Q1-Q4 2024 + Q1-Q3 2025
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q1 2024', 200, 300, 100, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q1 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q2 2024', 210, 100, 190, true, 300, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q2 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q3 2024', 220, 190, 70, false, 0, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q3 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q4 2024', 230, 70, 140, true, 300, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q4 2024');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q1 2025', 240, 140, 100, true, 200, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q1 2025');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q2 2025', 245, 100, 155, true, 300, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q2 2025');
+
+INSERT INTO supply_usages (item_id, period, usage, stock_start, stock_end, restocked, restock_qty, created_at, updated_at)
+SELECT 72, 'Q3 2025', 250, 155, 105, true, 200, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM supply_usages WHERE item_id = 72 AND period = 'Q3 2025');

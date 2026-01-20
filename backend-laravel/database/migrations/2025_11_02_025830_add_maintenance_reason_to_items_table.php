@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            $table->text('maintenance_reason')->nullable()->after('condition_number_id');
+            $table->text('maintenance_reason')->nullable();
         });
     }
 

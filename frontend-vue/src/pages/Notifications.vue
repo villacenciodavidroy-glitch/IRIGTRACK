@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import useNotifications from '../composables/useNotifications'
 import useAuth from '../composables/useAuth'
+import axiosClient from '../axios'
+import DeleteConfirmationDialog from '../components/DeleteConfirmationDialog.vue'
 const router = useRouter()
 const route = useRoute()
 const { user } = useAuth()
@@ -55,32 +57,104 @@ const notificationStats = computed(() => {
   return { total, unread, today }
 })
 
-// Handle notification click - scroll to notification and mark as read
+// Handle notification click - show details modal for all notifications
 const handleNotificationClick = async (notification) => {
+  console.log('Notification clicked:', notification)
+  
   // Mark as read
   if (!notification.isRead) {
     await markAsRead(notification.id)
   }
   
-  // For borrow requests, scroll to the notification and highlight it
-  if (notification.type === 'borrow_request') {
-    // Scroll to the notification element
-    setTimeout(() => {
-      const notificationElement = document.querySelector(`[data-notification-id="${notification.id}"]`)
-      if (notificationElement) {
-        notificationElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        // Add highlight effect
-        notificationElement.classList.add('highlight-notification')
-        setTimeout(() => {
-          notificationElement.classList.remove('highlight-notification')
-        }, 2000)
+  // For lost/damaged item reports, show specialized item details modal
+  if (notification.type === 'item_lost_damaged_report') {
+    console.log('Lost/damaged notification detected, item:', notification.item, 'item_id:', notification.item_id)
+    
+    if (notification.item && notification.item.id) {
+      // Item data is already available
+      selectedLostItem.value = notification.item
+      selectedNotification.value = notification
+      lostItemStatus.value = extractLostDamagedStatus(notification)
+      showLostItemModal.value = true
+      console.log('Modal should be showing now, showLostItemModal:', showLostItemModal.value, 'selectedLostItem:', selectedLostItem.value, 'status:', lostItemStatus.value)
+      return // Always return early to prevent redirect
+    } else {
+      console.warn('Lost/damaged notification has no item data, attempting to fetch:', notification)
+      // Try to fetch item if we have item_id or UUID
+      const itemIdentifier = notification.item?.uuid || notification.item_id
+      if (itemIdentifier) {
+        try {
+          // Try with UUID first (if available), otherwise try with ID
+          const endpoint = notification.item?.uuid 
+            ? `/items/check/${notification.item.uuid}`
+            : `/items/${notification.item_id}`
+          
+          const response = await axiosClient.get(endpoint)
+          const itemData = response.data?.data || response.data?.item || response.data
+          
+          if (itemData) {
+            selectedLostItem.value = itemData
+            showLostItemModal.value = true
+            console.log('Item fetched and modal opened')
+            return // Always return early to prevent redirect
+          } else {
+            console.error('Item data not found in response:', response.data)
+            alert('Failed to load item details. Item data not found.')
+            return // Return early even on error to prevent redirect
+          }
+        } catch (error) {
+          console.error('Error fetching item details:', error)
+          alert('Failed to load item details. Please try again.')
+          return // Return early even on error to prevent redirect
+        }
+      } else {
+        console.error('No item identifier available:', notification)
+        alert('Unable to load item details. Item information is missing.')
+        return // Return early even on error to prevent redirect
       }
-    }, 100)
-    return
+    }
   }
   
-  // For other notifications, navigate to Analytics page
-  router.push({ name: 'Analytics' })
+  // For all other notifications, show generic details modal
+  selectedNotificationForDetails.value = notification
+  showNotificationDetailsModal.value = true
+}
+
+// Close notification details modal
+const closeNotificationDetailsModal = () => {
+  showNotificationDetailsModal.value = false
+  selectedNotificationForDetails.value = null
+}
+
+// Get notification type color
+const getNotificationTypeColor = (type) => {
+  switch(type) {
+    case 'item_lost_damaged_report':
+      return 'from-red-600 to-red-700 border-red-800'
+    case 'item_recovered':
+      return 'from-green-600 to-green-700 border-green-800'
+    case 'borrow_request':
+      return 'from-blue-600 to-blue-700 border-blue-800'
+    case 'supply_request_created':
+    case 'supply_request_approved':
+    case 'supply_request_admin_approved':
+      return 'from-purple-600 to-purple-700 border-purple-800'
+    case 'supply_request_rejected':
+    case 'supply_request_admin_rejected':
+      return 'from-red-600 to-red-700 border-red-800'
+    case 'supply_request_ready_pickup':
+    case 'supply_request_ready_for_pickup':
+      return 'from-green-600 to-green-700 border-green-800'
+    case 'low_stock':
+      return 'from-yellow-600 to-yellow-700 border-yellow-800'
+    default:
+      return 'from-gray-600 to-gray-700 border-gray-800'
+  }
+}
+
+// Get notification type icon
+const getNotificationTypeIcon = (type) => {
+  return getTypeIcon(type)
 }
 
 // Show success banner
@@ -104,13 +178,32 @@ const closeSuccessBanner = () => {
   showSuccessBanner.value = false
 }
 
+// Delete confirmation dialog state
+const showDeleteDialog = ref(false)
+const deleteDialogMessage = ref('')
+const deleteDialogLoading = ref(false)
+const pendingDeleteAction = ref(null) // { type: 'single' | 'multiple', data: {...} }
+
 // Handle delete notification
-const handleDelete = async (notification) => {
-  if (!confirm(`Are you sure you want to delete this notification?\n\n"${notification.message.substring(0, 50)}${notification.message.length > 50 ? '...' : ''}"`)) {
-    return
-  }
+const handleDelete = (notification) => {
+  const message = `Are you sure you want to delete this notification?\n\n"${notification.message.substring(0, 50)}${notification.message.length > 50 ? '...' : ''}"`
+  deleteDialogMessage.value = message
+  pendingDeleteAction.value = { type: 'single', notification }
+  showDeleteDialog.value = true
+}
+
+// Execute single notification delete
+const executeDelete = async () => {
+  if (!pendingDeleteAction.value || pendingDeleteAction.value.type !== 'single') return
+  
+  deleteDialogLoading.value = true
+  const notification = pendingDeleteAction.value.notification
   
   const result = await deleteNotification(notification.id)
+  
+  deleteDialogLoading.value = false
+  showDeleteDialog.value = false
+  pendingDeleteAction.value = null
   
   if (result.success) {
     showSuccessMessage('Notification deleted successfully', 'success')
@@ -120,7 +213,7 @@ const handleDelete = async (notification) => {
 }
 
 // Handle delete multiple notifications
-const handleDeleteMultiple = async () => {
+const handleDeleteMultiple = () => {
   const selectedNotifications = notifications.value.filter(n => n.selected)
   
   if (selectedNotifications.length === 0) {
@@ -128,12 +221,24 @@ const handleDeleteMultiple = async () => {
     return
   }
   
-  if (!confirm(`Are you sure you want to delete ${selectedNotifications.length} notification(s)?`)) {
-    return
-  }
+  deleteDialogMessage.value = `Are you sure you want to delete ${selectedNotifications.length} notification(s)?`
+  pendingDeleteAction.value = { type: 'multiple', notifications: selectedNotifications }
+  showDeleteDialog.value = true
+}
+
+// Execute multiple notifications delete
+const executeDeleteMultiple = async () => {
+  if (!pendingDeleteAction.value || pendingDeleteAction.value.type !== 'multiple') return
+  
+  deleteDialogLoading.value = true
+  const selectedNotifications = pendingDeleteAction.value.notifications
   
   const ids = selectedNotifications.map(n => n.id)
   const result = await deleteMultipleNotifications(ids)
+  
+  deleteDialogLoading.value = false
+  showDeleteDialog.value = false
+  pendingDeleteAction.value = null
   
   if (result.success) {
     showSuccessMessage(`${result.deletedCount || selectedNotifications.length} notification(s) deleted successfully`, 'success')
@@ -142,6 +247,22 @@ const handleDeleteMultiple = async () => {
   } else {
     showSuccessMessage(`Error: ${result.message || 'Failed to delete notifications'}`, 'error')
   }
+}
+
+// Handle delete dialog confirm
+const handleDeleteConfirm = () => {
+  if (pendingDeleteAction.value?.type === 'single') {
+    executeDelete()
+  } else if (pendingDeleteAction.value?.type === 'multiple') {
+    executeDeleteMultiple()
+  }
+}
+
+// Handle delete dialog cancel
+const handleDeleteCancel = () => {
+  showDeleteDialog.value = false
+  pendingDeleteAction.value = null
+  deleteDialogLoading.value = false
 }
 
 // Handle approve borrow request
@@ -170,6 +291,11 @@ const handleApprove = async (notification) => {
   const originalStatus = notification.borrowRequest.status
   notification.borrowRequest.status = 'processing' // Temporary status to disable button
   
+  // Also update in modal if it's the selected notification
+  if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+    selectedNotificationForDetails.value.borrowRequest.status = 'processing'
+  }
+  
   try {
     const result = await approveBorrowRequest(itemId, requestId)
     
@@ -186,6 +312,9 @@ const handleApprove = async (notification) => {
       if (refreshedNotification && refreshedNotification.borrowRequest.status === 'approved') {
         // It actually succeeded!
         notification.borrowRequest.status = 'approved'
+        if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+          selectedNotificationForDetails.value.borrowRequest.status = 'approved'
+        }
         
         // Mark notification as read
         if (!notification.isRead) {
@@ -205,6 +334,9 @@ const handleApprove = async (notification) => {
       } else {
         // It actually failed
         notification.borrowRequest.status = originalStatus
+        if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+          selectedNotificationForDetails.value.borrowRequest.status = originalStatus
+        }
         showSuccessMessage(`Error: ${result.message || 'Failed to approve borrow request'}`, 'error')
       }
       return
@@ -213,6 +345,9 @@ const handleApprove = async (notification) => {
     if (result.success === true) {
       // Update status immediately to 'approved'
       notification.borrowRequest.status = 'approved'
+      if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+        selectedNotificationForDetails.value.borrowRequest.status = 'approved'
+      }
       
       // Mark notification as read
       if (!notification.isRead) {
@@ -236,11 +371,17 @@ const handleApprove = async (notification) => {
     } else {
       // Revert status on error
       notification.borrowRequest.status = originalStatus
+      if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+        selectedNotificationForDetails.value.borrowRequest.status = originalStatus
+      }
       showSuccessMessage(`Error: ${result.message || 'Failed to approve borrow request'}`, 'error')
     }
   } catch (error) {
     // Revert status on error
     notification.borrowRequest.status = originalStatus
+    if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+      selectedNotificationForDetails.value.borrowRequest.status = originalStatus
+    }
     console.error('Error in handleApprove:', error)
     showSuccessMessage(`Error: ${error.message || 'Failed to approve borrow request. Please check console for details.'}`, 'error')
   }
@@ -269,6 +410,50 @@ const closeRejectModal = () => {
   notificationToReject.value = null
 }
 
+// Close lost item modal
+const closeLostItemModal = () => {
+  showLostItemModal.value = false
+  selectedLostItem.value = null
+  lostItemStatus.value = null
+  selectedNotification.value = null
+}
+
+// Extract status from notification message
+const extractLostDamagedStatus = (notification) => {
+  if (!notification || !notification.message) return null
+  
+  const message = notification.message.toUpperCase()
+  if (message.includes('REPORTED AS LOST') || message.includes('AS LOST')) {
+    return 'LOST'
+  } else if (message.includes('REPORTED AS DAMAGED') || message.includes('AS DAMAGED')) {
+    return 'DAMAGED'
+  }
+  
+  return null
+}
+
+// Get image URL for item
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return '/images/default.jpg'
+  
+  // If it's already a full URL, return it
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath
+  }
+  
+  // Get API base URL
+  const apiBase = axiosClient.defaults.baseURL || '/api'
+  const baseUrl = apiBase.replace('/api', '')
+  
+  // If it starts with /storage/, prepend base URL
+  if (imagePath.startsWith('/storage/')) {
+    return `${baseUrl}${imagePath}`
+  }
+  
+  // Otherwise, assume it's a storage path
+  return `${baseUrl}/storage/${imagePath}`
+}
+
 // Handle reject borrow request (called from modal)
 const handleReject = async () => {
   const notification = notificationToReject.value
@@ -285,12 +470,20 @@ const handleReject = async () => {
   const originalStatus = notification.borrowRequest.status
   notification.borrowRequest.status = 'processing' // Temporary status to disable button
   
+  // Also update in details modal if it's open
+  if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+    selectedNotificationForDetails.value.borrowRequest.status = 'processing'
+  }
+  
   try {
     const result = await rejectBorrowRequest(itemId, requestId)
     
     if (result.success) {
       // Update status immediately to 'rejected'
       notification.borrowRequest.status = 'rejected'
+      if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+        selectedNotificationForDetails.value.borrowRequest.status = 'rejected'
+      }
       
       // Mark notification as read
       if (!notification.isRead) {
@@ -312,11 +505,17 @@ const handleReject = async () => {
     } else {
       // Revert status on error
       notification.borrowRequest.status = originalStatus
+      if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+        selectedNotificationForDetails.value.borrowRequest.status = originalStatus
+      }
       showSuccessMessage(`Error: ${result.message || 'Failed to reject borrow request'}`, 'error')
     }
   } catch (error) {
     // Revert status on error
     notification.borrowRequest.status = originalStatus
+    if (selectedNotificationForDetails.value && selectedNotificationForDetails.value.id === notification.id) {
+      selectedNotificationForDetails.value.borrowRequest.status = originalStatus
+    }
     console.error('Error in handleReject:', error)
     showSuccessMessage(`Error: ${error.message || 'Failed to reject borrow request. Please check console for details.'}`, 'error')
   }
@@ -384,6 +583,8 @@ const getTypeIcon = (type) => {
   switch (type) {
     case 'low_stock': return 'warning'
     case 'borrow_request': return 'shopping_cart'
+    case 'item_lost_damaged_report': return 'report_problem'
+    case 'item_recovered': return 'check_circle'
     case 'auth': return 'login'
     case 'create': return 'add_circle'
     case 'update': return 'edit'
@@ -453,6 +654,16 @@ const successBannerDetails = ref(null)
 const showRejectModal = ref(false)
 const notificationToReject = ref(null)
 
+// Lost item details modal state
+const showLostItemModal = ref(false)
+const selectedLostItem = ref(null)
+const lostItemStatus = ref(null) // 'LOST' or 'DAMAGED'
+const selectedNotification = ref(null) // Store the notification to extract status
+
+// Generic notification details modal state
+const showNotificationDetailsModal = ref(false)
+const selectedNotificationForDetails = ref(null)
+
 // Setup real-time listener with popup notification
 const setupRealtimeWithPopup = () => {
   if (!window.Echo) {
@@ -468,17 +679,44 @@ const setupRealtimeWithPopup = () => {
       console.log('📬 New notification received:', data)
       
       if (data.notification) {
+        // Determine title based on notification type if not provided
+        let notificationTitle = data.notification.title
+        if (!notificationTitle) {
+          switch(data.notification.type) {
+            case 'supply_request_created':
+              notificationTitle = 'New Supply Request'
+              break
+            case 'supply_request_approved':
+            case 'supply_request_admin_approved':
+              notificationTitle = 'Receipt Available'
+              break
+            case 'supply_request_rejected':
+            case 'supply_request_admin_rejected':
+              notificationTitle = 'Request Rejected'
+              break
+            case 'supply_request_ready_pickup':
+            case 'supply_request_ready_for_pickup':
+              notificationTitle = 'Ready for Pickup'
+              break
+            case 'borrow_request':
+              notificationTitle = 'Borrow Request'
+              break
+            default:
+              notificationTitle = 'Low Stock Alert'
+          }
+        }
+        
         const newNotification = {
           id: data.notification.id,
           type: data.notification.type || 'low_stock',
-          title: data.notification.title || 'Low Stock Alert',
+          title: notificationTitle,
           message: data.notification.message,
           user: data.notification.item?.unit || 'System',
           role: 'System',
           timestamp: data.notification.timestamp || data.notification.created_at,
           date: data.notification.date,
           time: data.notification.time,
-          action: data.notification.title || (data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert'),
+          action: notificationTitle,
           isRead: data.notification.isRead ?? false,
           priority: data.notification.priority || 'high',
           item: data.notification.item,
@@ -569,6 +807,82 @@ watch(() => route.query.highlight, (notificationId) => {
           unwatch()
         }
       })
+    }
+  }
+}, { immediate: true })
+
+// Watch for route query to show lost item modal
+watch(() => route.query.showLostItem, async (itemId) => {
+  if (itemId) {
+    // Wait for notifications to load
+    if (notifications.value.length === 0) {
+      await fetchNotifications(100)
+    }
+    
+    // Find the notification by ID or item_id
+    const notificationId = route.query.notificationId
+    let notification = null
+    
+    if (notificationId) {
+      notification = notifications.value.find(n => n.id === parseInt(notificationId))
+    } else {
+      // Find by item_id
+      notification = notifications.value.find(n => 
+        n.item_id === parseInt(itemId) || n.item?.id === parseInt(itemId)
+      )
+    }
+    
+    if (notification && notification.type === 'item_lost_damaged_report') {
+      // Use the same logic as handleNotificationClick
+      if (notification.item && notification.item.id) {
+        selectedLostItem.value = notification.item
+        selectedNotification.value = notification
+        lostItemStatus.value = extractLostDamagedStatus(notification)
+        showLostItemModal.value = true
+      } else {
+        // Try to fetch item
+        try {
+          const endpoint = notification.item?.uuid 
+            ? `/items/check/${notification.item.uuid}`
+            : `/items/${itemId}`
+          
+          const response = await axiosClient.get(endpoint)
+          const itemData = response.data?.data || response.data?.item || response.data
+          
+          if (itemData) {
+            selectedLostItem.value = itemData
+            selectedNotification.value = notification
+            lostItemStatus.value = extractLostDamagedStatus(notification)
+            showLostItemModal.value = true
+          }
+        } catch (error) {
+          console.error('Error fetching item details:', error)
+        }
+      }
+      
+      // Clear the query parameter
+      router.replace({ query: {} })
+    }
+  }
+}, { immediate: true })
+
+// Watch for route query to show generic notification details modal
+watch(() => route.query.showDetails, async (notificationId) => {
+  if (notificationId) {
+    // Wait for notifications to load
+    if (notifications.value.length === 0) {
+      await fetchNotifications(100)
+    }
+    
+    // Find the notification by ID
+    const notification = notifications.value.find(n => n.id === parseInt(notificationId))
+    
+    if (notification) {
+      selectedNotificationForDetails.value = notification
+      showNotificationDetailsModal.value = true
+      
+      // Clear the query parameter
+      router.replace({ query: {} })
     }
   }
 }, { immediate: true })
@@ -1141,8 +1455,408 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+
+      <!-- Lost Item Details Modal -->
+      <div
+        v-if="showLostItemModal"
+        class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"
+        @click.self="closeLostItemModal"
+      >
+        <div 
+          class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border-2"
+          :class="lostItemStatus === 'DAMAGED' ? 'border-orange-500/20' : 'border-red-500/20'"
+        >
+          <!-- Modal Header -->
+          <div 
+            class="px-6 py-5 border-b-2 flex items-center justify-between shadow-lg"
+            :class="lostItemStatus === 'DAMAGED' 
+              ? 'bg-gradient-to-r from-orange-600 to-orange-700 border-orange-800' 
+              : 'bg-gradient-to-r from-red-600 to-red-700 border-red-800'"
+          >
+            <div class="flex items-center gap-4">
+              <div class="p-2.5 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+                <span class="material-icons-outlined text-white text-2xl">
+                  {{ lostItemStatus === 'DAMAGED' ? 'build' : 'report_problem' }}
+                </span>
+              </div>
+              <div>
+                <div class="flex items-center gap-3">
+                  <h2 class="text-2xl font-bold text-white leading-tight">
+                    {{ lostItemStatus === 'DAMAGED' ? 'Damaged' : lostItemStatus === 'LOST' ? 'Lost' : 'Lost/Damaged' }} Item Details
+                  </h2>
+                  <span 
+                    v-if="lostItemStatus"
+                    class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide"
+                    :class="lostItemStatus === 'DAMAGED' 
+                      ? 'bg-orange-800 text-orange-100' 
+                      : 'bg-red-800 text-red-100'"
+                  >
+                    {{ lostItemStatus }}
+                  </span>
+                </div>
+                <p class="text-sm mt-0.5" :class="lostItemStatus === 'DAMAGED' ? 'text-orange-100' : 'text-red-100'">
+                  Item information and image
+                </p>
+              </div>
+            </div>
+            <button
+              @click="closeLostItemModal"
+              class="p-2 text-white hover:bg-white/30 rounded-lg transition-all duration-200 hover:scale-110"
+            >
+              <span class="material-icons-outlined text-2xl">close</span>
+            </button>
+          </div>
+          
+          <!-- Modal Body -->
+          <div class="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+            <div v-if="!selectedLostItem" class="flex items-center justify-center py-20">
+              <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+                <p class="text-gray-600 dark:text-gray-400">Loading item details...</p>
+              </div>
+            </div>
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Item Image -->
+              <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">image</span>
+                    Item Image
+                  </h3>
+                </div>
+                <div class="p-4 flex items-center justify-center bg-gray-50 dark:bg-gray-900 min-h-[300px]">
+                  <img
+                    v-if="selectedLostItem.image_path"
+                    :src="getImageUrl(selectedLostItem.image_path)"
+                    :alt="selectedLostItem.unit || 'Item image'"
+                    class="max-w-full max-h-[400px] object-contain rounded-lg shadow-md"
+                    @error="$event.target.src = '/images/default.jpg'"
+                  />
+                  <div v-else class="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                    <span class="material-icons-outlined text-6xl mb-2">image_not_supported</span>
+                    <p class="text-sm font-medium">No image available</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Item Details -->
+              <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">info</span>
+                    Item Information
+                  </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                  <div class="grid grid-cols-1 gap-4">
+                    <!-- Status Badge at the top -->
+                    <div v-if="lostItemStatus" class="mb-2 pb-4 border-b-2 border-gray-200 dark:border-gray-700">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 block">Status</label>
+                      <div class="flex items-center gap-2">
+                        <span 
+                          class="px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wide"
+                          :class="lostItemStatus === 'DAMAGED' 
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' 
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'"
+                        >
+                          <span class="material-icons-outlined text-base align-middle mr-1">
+                            {{ lostItemStatus === 'DAMAGED' ? 'build' : 'report_problem' }}
+                          </span>
+                          {{ lostItemStatus === 'DAMAGED' ? 'Damaged' : 'Lost' }}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Item Name</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedLostItem.unit || 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Description</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedLostItem.description || 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Serial Number</label>
+                        <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedLostItem.serial_number || 'N/A' }}</p>
+                      </div>
+                      
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Model</label>
+                        <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedLostItem.model || 'N/A' }}</p>
+                      </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Category</label>
+                        <p class="text-base text-gray-900 dark:text-white">{{ selectedLostItem.category || 'N/A' }}</p>
+                      </div>
+                      
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Location</label>
+                        <p class="text-base text-gray-900 dark:text-white">{{ selectedLostItem.location || 'N/A' }}</p>
+                      </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Condition</label>
+                        <p class="text-base text-gray-900 dark:text-white">{{ selectedLostItem.condition || 'N/A' }}</p>
+                      </div>
+                      
+                      <div class="space-y-1">
+                        <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quantity</label>
+                        <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedLostItem.quantity || 0 }}</p>
+                      </div>
+                    </div>
+                    
+                    <div v-if="selectedLostItem.unit_value" class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Unit Value</label>
+                      <p class="text-base font-semibold text-green-600 dark:text-green-400">₱{{ Number(selectedLostItem.unit_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Modal Footer -->
+          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t-2 border-gray-200 dark:border-gray-700 flex justify-end gap-3 shadow-lg">
+            <button
+              @click="closeLostItemModal"
+              class="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-md hover:shadow-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generic Notification Details Modal -->
+      <div
+        v-if="showNotificationDetailsModal && selectedNotificationForDetails"
+        class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"
+        @click.self="closeNotificationDetailsModal"
+      >
+        <div 
+          class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col border-2"
+          :class="getNotificationTypeColor(selectedNotificationForDetails.type).includes('red') ? 'border-red-500/20' : getNotificationTypeColor(selectedNotificationForDetails.type).includes('green') ? 'border-green-500/20' : getNotificationTypeColor(selectedNotificationForDetails.type).includes('blue') ? 'border-blue-500/20' : getNotificationTypeColor(selectedNotificationForDetails.type).includes('purple') ? 'border-purple-500/20' : getNotificationTypeColor(selectedNotificationForDetails.type).includes('yellow') ? 'border-yellow-500/20' : 'border-gray-500/20'"
+        >
+          <!-- Modal Header -->
+          <div 
+            class="px-6 py-5 border-b-2 flex items-center justify-between shadow-lg"
+            :class="'bg-gradient-to-r ' + getNotificationTypeColor(selectedNotificationForDetails.type)"
+          >
+            <div class="flex items-center gap-4">
+              <div class="p-2.5 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+                <span class="material-icons-outlined text-white text-2xl">
+                  {{ getNotificationTypeIcon(selectedNotificationForDetails.type) }}
+                </span>
+              </div>
+              <div>
+                <h2 class="text-2xl font-bold text-white leading-tight">{{ selectedNotificationForDetails.title }}</h2>
+                <p class="text-sm text-white/80 mt-0.5">Notification details</p>
+              </div>
+            </div>
+            <button
+              @click="closeNotificationDetailsModal"
+              class="p-2 text-white hover:bg-white/30 rounded-lg transition-all duration-200 hover:scale-110"
+            >
+              <span class="material-icons-outlined text-2xl">close</span>
+            </button>
+          </div>
+          
+          <!-- Modal Body -->
+          <div class="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+            <div class="space-y-6">
+              <!-- Message Section -->
+              <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">message</span>
+                    Message
+                  </h3>
+                </div>
+                <div class="p-6">
+                  <p class="text-base text-gray-900 dark:text-white leading-relaxed whitespace-pre-wrap">
+                    {{ selectedNotificationForDetails.message }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Notification Information -->
+              <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">info</span>
+                    Notification Information
+                  </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Type</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">
+                        <span 
+                          class="px-3 py-1 rounded-full text-xs font-bold uppercase"
+                          :class="getNotificationPriority(selectedNotificationForDetails) === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : getNotificationPriority(selectedNotificationForDetails) === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'"
+                        >
+                          {{ selectedNotificationForDetails.type?.replace(/_/g, ' ') || 'Notification' }}
+                        </span>
+                      </p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Priority</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">
+                        <span :class="getPriorityColor(getNotificationPriority(selectedNotificationForDetails))" class="px-3 py-1 rounded-full text-xs font-bold uppercase">
+                          {{ getNotificationPriority(selectedNotificationForDetails) }}
+                        </span>
+                      </p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedNotificationForDetails.date || 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Time</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedNotificationForDetails.time || 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</label>
+                      <p class="text-base text-gray-900 dark:text-white">
+                        <span :class="selectedNotificationForDetails.isRead ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'" class="px-3 py-1 rounded-full text-xs font-bold uppercase">
+                          {{ selectedNotificationForDetails.isRead ? 'Read' : 'Unread' }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Item Information (if available) -->
+              <div v-if="selectedNotificationForDetails.item" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">inventory_2</span>
+                    Item Information
+                  </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Item Name</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedNotificationForDetails.item.unit || 'N/A' }}</p>
+                    </div>
+                    
+                    <div v-if="selectedNotificationForDetails.item.quantity !== undefined" class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quantity</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedNotificationForDetails.item.quantity || 0 }}</p>
+                    </div>
+                    
+                    <div v-if="selectedNotificationForDetails.item.serial_number" class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Serial Number</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedNotificationForDetails.item.serial_number }}</p>
+                    </div>
+                    
+                    <div v-if="selectedNotificationForDetails.item.model" class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Model</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedNotificationForDetails.item.model }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Borrow Request Information (if available) -->
+              <div v-if="selectedNotificationForDetails.borrowRequest" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-icons-outlined text-xl">shopping_cart</span>
+                    Borrow Request Details
+                  </h3>
+                </div>
+                <div class="p-6 space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Requested By</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedNotificationForDetails.borrowRequest.borrowed_by || 'N/A' }}</p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quantity</label>
+                      <p class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedNotificationForDetails.borrowRequest.quantity || 0 }} unit(s)</p>
+                    </div>
+                    
+                    <div v-if="selectedNotificationForDetails.borrowRequest.location" class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Location</label>
+                      <p class="text-base text-gray-900 dark:text-white">{{ selectedNotificationForDetails.borrowRequest.location }}</p>
+                    </div>
+                    
+                    <div class="space-y-1">
+                      <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Status</label>
+                      <p class="text-base text-gray-900 dark:text-white">
+                        <span 
+                          :class="selectedNotificationForDetails.borrowRequest.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : selectedNotificationForDetails.borrowRequest.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'"
+                          class="px-3 py-1 rounded-full text-xs font-bold uppercase"
+                        >
+                          {{ selectedNotificationForDetails.borrowRequest.status || 'Pending' }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Action Buttons for Pending Borrow Requests -->
+                  <div v-if="selectedNotificationForDetails.borrowRequest.status === 'pending' && selectedNotificationForDetails.item" class="pt-4 border-t-2 border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                    <button
+                      @click="handleApprove(selectedNotificationForDetails)"
+                      :disabled="selectedNotificationForDetails.borrowRequest.status !== 'pending'"
+                      class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+                    >
+                      <span class="material-icons-outlined text-lg">check_circle</span>
+                      <span>{{ selectedNotificationForDetails.borrowRequest.status === 'processing' ? 'Processing...' : 'Approve' }}</span>
+                    </button>
+                    <button
+                      @click="openRejectModal(selectedNotificationForDetails)"
+                      :disabled="selectedNotificationForDetails.borrowRequest.status !== 'pending'"
+                      class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+                    >
+                      <span class="material-icons-outlined text-lg">cancel</span>
+                      <span>{{ selectedNotificationForDetails.borrowRequest.status === 'processing' ? 'Processing...' : 'Decline' }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Modal Footer -->
+          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t-2 border-gray-200 dark:border-gray-700 flex justify-end gap-3 shadow-lg">
+            <button
+              @click="closeNotificationDetailsModal"
+              class="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-md hover:shadow-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Delete Confirmation Dialog -->
+  <DeleteConfirmationDialog
+    :is-open="showDeleteDialog"
+    :message="deleteDialogMessage"
+    :is-loading="deleteDialogLoading"
+    @confirm="handleDeleteConfirm"
+    @cancel="handleDeleteCancel"
+  />
 </template>
 
 <style scoped>

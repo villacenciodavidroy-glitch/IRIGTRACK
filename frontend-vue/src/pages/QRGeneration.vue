@@ -42,12 +42,46 @@ const inventoryItems = computed(() => {
     location: item.location || '',
     condition: item.condition || '',
     issuedTo: item.issued_to || 'Not Assigned',
+    issued_to_code: item.issued_to_code || null,
     actions: ['edit', 'delete'],
     id: item.id, // Keep the original ID for reference
     uuid: item.uuid, // Keep the UUID for API operations
-    quantity: item.quantity
+    quantity: item.quantity,
+    qrCodeVersion: item.qr_code_version || null // QR code validation year
   }))
 })
+
+// Function to split name into parts (for multi-line display)
+const getIssuedToNamePart = (fullName, partIndex) => {
+  if (!fullName || fullName === 'Not Assigned') return null
+  
+  // Remove status badges like [RESIGNED] or [INACTIVE]
+  const nameWithoutStatus = fullName.replace(/\s*\[(RESIGNED|INACTIVE)\]\s*$/, '').trim()
+  
+  // Split by "!" first (if present), then by space
+  let parts = []
+  if (nameWithoutStatus.includes('!')) {
+    // Split by "!" and keep the "!" with the first part
+    const exclamationIndex = nameWithoutStatus.indexOf('!')
+    const firstPart = nameWithoutStatus.substring(0, exclamationIndex + 1).trim()
+    const secondPart = nameWithoutStatus.substring(exclamationIndex + 1).trim()
+    
+    parts = [firstPart]
+    if (secondPart) {
+      parts.push(secondPart)
+    }
+  } else {
+    // Split by space, take first word and rest
+    const words = nameWithoutStatus.split(/\s+/).filter(w => w)
+    if (words.length >= 2) {
+      parts = [words[0], words.slice(1).join(' ')]
+    } else {
+      parts = [nameWithoutStatus]
+    }
+  }
+  
+  return parts[partIndex] || null
+}
 
 const filteredItems = computed(() => {
   const query = searchQuery.value?.toLowerCase().trim()
@@ -164,6 +198,9 @@ const printQrCode = () => {
   
   // Use new QR code if available, otherwise use the original
   const qrCodeToPrint = qrCodeUpdated.value ? newQrCode.value : qrItem.qrCode
+  
+  // Get current year for print
+  const year = currentYear.value
   
   // Create a new window for printing
   const printWindow = window.open('', '_blank')
@@ -322,8 +359,8 @@ const printQrCode = () => {
     <body>
       <div class="print-container">
         <div class="header">
-          <h1>QR Code ${qrCodeUpdated.value ? '(Updated 2025)' : ''}</h1>
-          ${qrCodeUpdated.value ? '<div class="year-badge">Updated 2025</div>' : ''}
+          <h1>QR Code ${qrCodeUpdated.value ? `(Updated ${year})` : ''}</h1>
+          ${qrCodeUpdated.value ? `<div class="year-badge">Updated ${year}</div>` : ''}
         </div>
         
         <div class="qr-wrapper">
@@ -583,6 +620,22 @@ const selectedItem = ref(null)
 const qrCodeUpdated = ref(false)
 const newQrCode = ref('')
 
+// Dynamic year calculations (realtime)
+const currentYear = computed(() => new Date().getFullYear())
+const previousYear = computed(() => currentYear.value - 1)
+const nextYear = computed(() => currentYear.value + 1)
+
+// Check if item is already validated for current year
+const isAlreadyValidated = (item) => {
+  if (!item) return false
+  // Check if qrCodeVersion exists and equals current year
+  // The backend sets version to current year when validating
+  if (item.qrCodeVersion) {
+    return item.qrCodeVersion === currentYear.value
+  }
+  return false
+}
+
 const specs = ref({
   article: '',
   category: '',
@@ -609,7 +662,8 @@ const openValidation = (item) => {
     poNumber: item.poNumber || '',
     location: item.location || '',
     condition: item.condition || '',
-    issuedTo: item.issuedTo || ''
+    issuedTo: item.issuedTo || '',
+    issued_to_code: item.issued_to_code || null
   }
   showValidation.value = true
 }
@@ -621,9 +675,17 @@ const goBack = () => {
   newQrCode.value = ''
 }
 
-// Generate new QR code for 2025
+// Generate new QR code for current year
 const generateNewQrCode = async () => {
   if (!selectedItem.value) return
+  
+  // Check if already validated for current year
+  if (isAlreadyValidated(selectedItem.value)) {
+    successMessage.value = `This item has already been validated for Calendar Year ${currentYear.value}. Validation will be available again in ${nextYear.value}.`
+    successModalType.value = 'error'
+    showSuccessModal.value = true
+    return
+  }
   
   try {
     // Show loading state
@@ -641,21 +703,63 @@ const generateNewQrCode = async () => {
       newQrCode.value = response.data.data.qr_code_image
       qrCodeUpdated.value = true
       
-      // Update the selected item with the new QR code
+      // Update the selected item with the new QR code and version from API response
+      // Priority: qr_code_data.version > data.qr_code_version > currentYear
+      const newVersion = response.data.qr_code_data?.version || 
+                        response.data.data?.qr_code_version || 
+                        currentYear.value
+      
       selectedItem.value.qrCode = response.data.data.qr_code_image
+      selectedItem.value.qrCodeVersion = newVersion
       
       // Show success message
-      successMessage.value = 'QR Code successfully updated to 2025!'
+      successMessage.value = `QR Code successfully updated to ${currentYear.value}!`
       successModalType.value = 'success'
       showSuccessModal.value = true
       
       // Refresh the items list to get the updated QR code
       await fetchitems()
+      
+      // Update selectedItem with the latest data from the refreshed items list
+      // This ensures we have the most up-to-date version
+      const updatedItem = items.value.find(item => item.uuid === selectedItem.value.uuid)
+      if (updatedItem) {
+        const mappedItem = inventoryItems.value.find(item => item.uuid === updatedItem.uuid)
+        if (mappedItem) {
+          // Update all relevant fields
+          selectedItem.value.qrCodeVersion = mappedItem.qrCodeVersion
+          selectedItem.value.qrCode = mappedItem.qrCode
+        }
+      }
+      
+      // Force reactivity update to ensure UI reflects the change
+      selectedItem.value = { ...selectedItem.value }
+      
+      // Keep button disabled after successful validation
+      const validateButton = document.querySelector('.validate-button')
+      if (validateButton) {
+        validateButton.disabled = true
+      }
     }
     
   } catch (error) {
     console.error('Error generating new QR code:', error)
-    successMessage.value = error.response?.data?.message || 'Failed to generate new QR code. Please try again.'
+    // Check if error is about already being validated
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to generate new QR code. Please try again.'
+    if (errorMessage.includes('already been validated') || errorMessage.includes('Calendar Year')) {
+      // Update selectedItem to reflect it's already validated
+      selectedItem.value.qrCodeVersion = currentYear.value
+      // Refresh items to get latest data
+      await fetchitems()
+      const updatedItem = items.value.find(item => item.uuid === selectedItem.value.uuid)
+      if (updatedItem) {
+        const mappedItem = inventoryItems.value.find(item => item.uuid === updatedItem.uuid)
+        if (mappedItem) {
+          selectedItem.value.qrCodeVersion = mappedItem.qrCodeVersion
+        }
+      }
+    }
+    successMessage.value = errorMessage
     successModalType.value = 'error'
     showSuccessModal.value = true
   } finally {
@@ -1014,8 +1118,19 @@ const navigateBack = () => {
                   </span>
                 </td>
                 <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
-                  <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]" :title="item.issuedTo">
-                    {{ item.issuedTo }}
+                  <div v-if="item.issuedTo && item.issuedTo !== 'Not Assigned'" class="max-w-[160px]">
+                    <div class="text-base font-bold text-gray-700 dark:text-gray-300">
+                      {{ getIssuedToNamePart(item.issuedTo, 0) }}
+                    </div>
+                    <div v-if="getIssuedToNamePart(item.issuedTo, 1)" class="text-base font-bold text-gray-700 dark:text-gray-300">
+                      {{ getIssuedToNamePart(item.issuedTo, 1) }}
+                    </div>
+                    <div v-if="item.issued_to_code" class="text-sm text-gray-500 dark:text-gray-400">
+                      ({{ item.issued_to_code }})
+                    </div>
+                  </div>
+                  <div v-else class="text-base text-gray-500 dark:text-gray-400">
+                    Not Assigned
                   </div>
                 </td>
                 <td class="sticky right-0 z-10 px-4 py-3 group-hover:bg-green-50 dark:group-hover:bg-gray-700" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'">
@@ -1287,7 +1402,7 @@ const navigateBack = () => {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Left Column: Current QR Code (2024) -->
+        <!-- Left Column: Current QR Code (Previous Year) -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
             <div class="flex items-center gap-3">
@@ -1296,7 +1411,7 @@ const navigateBack = () => {
               </div>
               <div>
                 <h2 class="text-lg font-bold text-white">Current QR Code</h2>
-                <p class="text-xs text-green-100">Calendar Year 2024</p>
+                <p class="text-xs text-green-100">Calendar Year {{ previousYear }}</p>
               </div>
             </div>
           </div>
@@ -1305,7 +1420,7 @@ const navigateBack = () => {
             <!-- QR Code Display -->
             <div class="flex flex-col items-center">
               <div class="bg-white dark:bg-gray-700 border-2 border-green-500 rounded-lg p-4 shadow-md mb-4">
-                <img :src="selectedItem?.qrCode" alt="QR Code 2024" class="w-56 h-56 object-contain">
+                <img :src="selectedItem?.qrCode" :alt="`QR Code ${previousYear}`" class="w-56 h-56 object-contain">
               </div>
               <p class="text-center text-gray-700 dark:text-gray-300 font-semibold text-sm mb-2">Property Account Code</p>
               <p class="text-center text-gray-900 dark:text-white font-bold text-base mb-6">{{ selectedItem?.propertyAccountCode }}</p>
@@ -1364,7 +1479,12 @@ const navigateBack = () => {
                   </div>
                   <div>
                     <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Issued To</div>
-                    <div class="text-sm font-bold text-gray-900 dark:text-white">{{ specs.issuedTo || 'N/A' }}</div>
+                    <div v-if="specs.issuedTo && specs.issuedTo !== 'Not Assigned' && specs.issuedTo !== 'N/A'" class="text-sm">
+                      <div class="font-bold text-gray-900 dark:text-white">{{ getIssuedToNamePart(specs.issuedTo, 0) }}</div>
+                      <div v-if="getIssuedToNamePart(specs.issuedTo, 1)" class="font-bold text-gray-900 dark:text-white">{{ getIssuedToNamePart(specs.issuedTo, 1) }}</div>
+                      <div v-if="specs.issued_to_code" class="text-gray-500 dark:text-gray-400">({{ specs.issued_to_code }})</div>
+                    </div>
+                    <div v-else class="text-sm font-bold text-gray-900 dark:text-white">N/A</div>
                   </div>
                 </div>
               </div>
@@ -1372,18 +1492,33 @@ const navigateBack = () => {
 
             <!-- Action Buttons -->
             <div class="flex flex-col gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <!-- Already Validated Message -->
+              <div v-if="isAlreadyValidated(selectedItem)" class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg p-4 mb-3">
+                <div class="flex items-start gap-3">
+                  <div class="p-2 bg-yellow-500 rounded-full flex-shrink-0">
+                    <span class="material-icons-outlined text-white text-xl">info</span>
+                  </div>
+                  <div>
+                    <p class="text-yellow-800 dark:text-yellow-300 font-bold text-base mb-1">Already Validated</p>
+                    <p class="text-yellow-700 dark:text-yellow-400 text-sm">This item has already been validated for Calendar Year {{ currentYear }}. Validation will be available again in {{ nextYear }}.</p>
+                  </div>
+                </div>
+              </div>
+              
               <button 
                 @click="generateNewQrCode"
-                class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold validate-button disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="isAlreadyValidated(selectedItem)"
+                class="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold validate-button disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
               >
                 <span class="material-icons-outlined">verified</span>
-                Validate & Generate 2025 QR Code
+                <span v-if="isAlreadyValidated(selectedItem)">Already Validated for {{ currentYear }}</span>
+                <span v-else>Validate & Generate QR Code</span>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Right Column: New QR Code (2025) -->
+        <!-- Right Column: New QR Code (Current Year) -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
             <div class="flex items-center gap-3">
@@ -1391,8 +1526,8 @@ const navigateBack = () => {
                 <span class="material-icons-outlined text-white text-xl">qr_code_2</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">New QR Code</h2>
-                <p class="text-xs text-green-100">Calendar Year 2025</p>
+                <h2 class="text-lg font-bold text-white">{{ isAlreadyValidated(selectedItem) ? 'Current QR Code' : 'New QR Code' }}</h2>
+                <p class="text-xs text-green-100">Calendar Year {{ currentYear }}</p>
               </div>
             </div>
           </div>
@@ -1400,10 +1535,10 @@ const navigateBack = () => {
           <div class="p-6 space-y-6">
             <!-- QR Code Display -->
             <div class="flex flex-col items-center">
-              <div class="bg-white dark:bg-gray-700 border-2 border-green-500 rounded-lg p-4 shadow-md mb-4" :class="{ 'qr-pulse-border': qrCodeUpdated }">
+              <div class="bg-white dark:bg-gray-700 border-2 border-green-500 rounded-lg p-4 shadow-md mb-4" :class="{ 'qr-pulse-border': qrCodeUpdated || isAlreadyValidated(selectedItem) }">
                 <img 
                   :src="qrCodeUpdated ? newQrCode : selectedItem?.qrCode" 
-                  alt="QR Code 2025" 
+                  :alt="`QR Code ${currentYear}`" 
                   class="w-56 h-56 object-contain"
                 >
               </div>
@@ -1420,7 +1555,7 @@ const navigateBack = () => {
                   </div>
                   <div>
                     <p class="text-green-800 dark:text-green-300 font-bold text-base mb-1">QR Code Updated Successfully!</p>
-                    <p class="text-green-700 dark:text-green-400 text-sm">The QR code has been validated and updated from Calendar Year 2024 to 2025.</p>
+                    <p class="text-green-700 dark:text-green-400 text-sm">The QR code has been validated and updated from Calendar Year {{ previousYear }} to {{ currentYear }}.</p>
                   </div>
                 </div>
               </div>
@@ -1435,15 +1570,40 @@ const navigateBack = () => {
             </div>
             
             <div v-else class="space-y-4">
-              <div class="bg-gradient-to-br from-gray-50 to-blue-50/30 dark:from-gray-700 dark:to-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-5">
+              <!-- Already Validated Status -->
+              <div v-if="isAlreadyValidated(selectedItem)" class="space-y-4">
+                <div class="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/30 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg p-5">
+                  <div class="flex items-start gap-3">
+                    <div class="p-2 bg-yellow-500 rounded-full flex-shrink-0">
+                      <span class="material-icons-outlined text-white text-xl">check_circle</span>
+                    </div>
+                    <div>
+                      <p class="text-yellow-800 dark:text-yellow-300 font-bold text-base mb-1">Already Validated for {{ currentYear }}</p>
+                      <p class="text-yellow-700 dark:text-yellow-400 text-sm">This item has already been validated for Calendar Year {{ currentYear }}. The QR code is up to date and no further validation is needed.</p>
+                      <p class="text-yellow-600 dark:text-yellow-500 text-xs mt-2 italic">Next validation will be available in {{ nextYear }}.</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <button 
+                  @click="printQrCode"
+                  class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 flex items-center justify-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg font-semibold"
+                >
+                  <span class="material-icons-outlined">print</span>
+                  Print QR Code
+                </button>
+              </div>
+              
+              <!-- Validation Required Status -->
+              <div v-else class="bg-gradient-to-br from-gray-50 to-blue-50/30 dark:from-gray-700 dark:to-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-5">
                 <div class="flex items-start gap-3">
                   <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
                     <span class="material-icons-outlined text-blue-600 dark:text-blue-300 text-xl">info</span>
                   </div>
                   <div>
                     <p class="text-gray-800 dark:text-white font-bold text-base mb-1">Validation Required</p>
-                    <p class="text-gray-700 dark:text-gray-300 text-sm">Click the <span class="font-semibold text-green-600 dark:text-green-400">"Validate & Generate 2025 QR Code"</span> button to generate the new QR code for Calendar Year 2025.</p>
-                    <p class="text-gray-600 dark:text-gray-400 text-xs mt-2 italic">This will update the QR code from 2024 to 2025.</p>
+                    <p class="text-gray-700 dark:text-gray-300 text-sm">Click the <span class="font-semibold text-green-600 dark:text-green-400">"Validate & Generate QR Code"</span> button to generate the new QR code for Calendar Year {{ currentYear }}.</p>
+                    <p class="text-gray-600 dark:text-gray-400 text-xs mt-2 italic">This will update the QR code from {{ previousYear }} to {{ currentYear }}.</p>
                   </div>
                 </div>
               </div>

@@ -34,27 +34,46 @@ class NotificationResource extends JsonResource
         }
         
         // Determine title and priority based on type
-        $title = $type === 'borrow_request' ? $requestedByName : 'Low Stock Alert';
-        $priority = $type === 'borrow_request' ? 'high' : 'high';
+        $title = match($type) {
+            'borrow_request' => $requestedByName,
+            'supply_request_created' => 'New Supply Request',
+            'supply_request_approved' => 'Receipt Available',
+            'supply_request_admin_approved' => 'Receipt Available',
+            'supply_request_rejected' => 'Request Rejected',
+            'supply_request_admin_rejected' => 'Request Rejected',
+            'supply_request_ready_pickup' => 'Ready for Pickup',
+            'supply_request_ready_for_pickup' => 'Ready for Pickup',
+            'item_lost_damaged_report' => 'Item Lost/Damaged Report',
+            'item_recovered' => 'Item Recovered',
+            default => 'Low Stock Alert'
+        };
+        $priority = in_array($type, ['borrow_request', 'item_lost_damaged_report', 'item_recovered']) ? 'high' : 'high';
         
         $data = [
             'id' => $this->notification_id,
             'item_id' => $this->item_id,
-            'message' => $this->message,
+            'message' => $this->message ?? '',
             'type' => $type,
             'title' => $title,
             'priority' => $priority,
-            'timestamp' => $this->created_at->toISOString(),
-            'date' => $this->created_at->format('d-m-Y'),
-            'time' => $this->created_at->format('h:i A'),
-            'created_at' => $this->created_at->toISOString(),
+            'timestamp' => $this->created_at ? $this->created_at->toISOString() : now()->toISOString(),
+            'date' => $this->created_at ? $this->created_at->format('d-m-Y') : now()->format('d-m-Y'),
+            'time' => $this->created_at ? $this->created_at->format('h:i A') : now()->format('h:i A'),
+            'created_at' => $this->created_at ? $this->created_at->toISOString() : now()->toISOString(),
             'isRead' => $this->is_read ?? false,
             'item' => $item ? [
-                'id' => $item->id,
+                'id' => $item->id ?? null,
                 'uuid' => $item->uuid ?? null,
-                'unit' => $item->unit,
-                'description' => $item->description,
-                'quantity' => $item->quantity,
+                'unit' => $item->unit ?? null,
+                'description' => $item->description ?? null,
+                'quantity' => $item->quantity ?? 0,
+                'serial_number' => $item->serial_number ?? null,
+                'model' => $item->model ?? null,
+                'image_path' => ($item->image_path && !empty($item->image_path)) ? asset('storage/' . $item->image_path) : null,
+                'unit_value' => $item->unit_value ?? null,
+                'category' => (method_exists($item, 'relationLoaded') && $item->relationLoaded('category') && $item->category) ? ($item->category->category ?? null) : null,
+                'location' => (method_exists($item, 'relationLoaded') && $item->relationLoaded('location') && $item->location) ? ($item->location->location ?? null) : null,
+                'condition' => (method_exists($item, 'relationLoaded') && $item->relationLoaded('condition') && $item->condition) ? ($item->condition->condition ?? null) : null,
             ] : null,
         ];
         
@@ -69,7 +88,7 @@ class NotificationResource extends JsonResource
                 'requested_by' => $requestedByName,
                 'requested_by_user_id' => $borrowRequest->requested_by_user_id,
                 'status' => $borrowRequest->status,
-                'created_at' => $borrowRequest->created_at->toISOString(),
+                'created_at' => $borrowRequest->created_at ? $borrowRequest->created_at->toISOString() : now()->toISOString(),
             ];
         }
         

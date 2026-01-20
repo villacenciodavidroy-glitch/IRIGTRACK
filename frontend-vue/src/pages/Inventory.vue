@@ -2,6 +2,9 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../composables/useItems'
+import useAuth from '../composables/useAuth'
+import useLocations from '../composables/useLocations'
+import useUsers from '../composables/useUsers'
 import axiosClient from '../axios'
 import SuccessModal from '../components/SuccessModal.vue'
 import { useDebouncedRef } from '../composables/useDebounce'
@@ -10,18 +13,72 @@ const router = useRouter()
 const searchQuery = ref('')
 const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const selectedCategory = ref('')
+const selectedStatus = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(8)
 const totalItems = ref(0)
+const showReturnedItems = ref(false)
+const returnedItems = ref([])
+const loadingReturnedItems = ref(false)
+
+// Reissue modal state
+const showReissueModal = ref(false)
+const selectedItemForReissue = ref(null)
+const reissueForm = ref({
+  location_id: null,
+  user_id: null,
+  selectedLocationId: null, // Track which location's personnel is selected
+  remarks: ''
+})
+const reissueLoading = ref(false)
+const { locations, fetchLocations } = useLocations()
+const { users, fetchusers } = useUsers()
 
 // Get items from the API using the composable
 const { items, fetchitems, loading, error } = useItems()
 
+// Get auth composable for admin check
+const { isAdmin, fetchCurrentUser } = useAuth()
+
 // Store channel reference for cleanup
 let inventoryChannel = null
 
+// User role state
+const userRole = ref('')
+
+// Check user role and redirect if needed
+const checkUserRole = async () => {
+  try {
+    const response = await axiosClient.get('/user')
+    if (response.data) {
+      const role = (response.data.role || '').toLowerCase()
+      userRole.value = role
+      // If user role is 'user', redirect to supply requests page
+      if (role === 'user') {
+        router.push('/supply-requests')
+        return true
+      }
+    }
+  } catch (error) {
+    console.error('Error checking user role:', error)
+  }
+  return false
+}
+
+// Check if user is Supply role
+const isSupplyRole = computed(() => {
+  return userRole.value === 'supply'
+})
+
 // Fetch items when component mounts
 onMounted(async () => {
+  // Fetch current user for admin check
+  await fetchCurrentUser()
+  
+  // Check if user should be redirected
+  const redirected = await checkUserRole()
+  if (redirected) return
+  
   await fetchitems()
   
   // Set up real-time listener - try multiple times until connected
@@ -325,6 +382,8 @@ const inventoryItems = computed(() => {
     qrCode: item.qr_code_image || '/images/qr-sample.png',
     image: item.image_path || '/images/default.jpg',
     article: item.unit || '',
+    serialNumber: item.serial_number || 'N/A',
+    model: item.model || 'N/A',
     category: item.category || 'Inventory',
     description: item.description || '',
     propertyAccountCode: item.pac || '',
@@ -335,6 +394,7 @@ const inventoryItems = computed(() => {
     condition: item.condition || '',
     conditionStatus: item.condition_status || null,
     issuedTo: item.issued_to || 'Not Assigned',
+    issued_to_code: item.issued_to_code || null,
     actions: ['edit', 'delete'],
     id: item.id, // Keep the original ID for reference
     uuid: item.uuid, // Keep the UUID for API operations
@@ -343,6 +403,38 @@ const inventoryItems = computed(() => {
     updatedAt: item.updated_at || null // Fallback for sorting
   }))
 })
+
+// Function to split name into parts (for multi-line display)
+const getIssuedToNamePart = (fullName, partIndex) => {
+  if (!fullName || fullName === 'Not Assigned') return null
+  
+  // Remove status badges like [RESIGNED] or [INACTIVE]
+  const nameWithoutStatus = fullName.replace(/\s*\[(RESIGNED|INACTIVE)\]\s*$/, '').trim()
+  
+  // Split by "!" first (if present), then by space
+  let parts = []
+  if (nameWithoutStatus.includes('!')) {
+    // Split by "!" and keep the "!" with the first part
+    const exclamationIndex = nameWithoutStatus.indexOf('!')
+    const firstPart = nameWithoutStatus.substring(0, exclamationIndex + 1).trim()
+    const secondPart = nameWithoutStatus.substring(exclamationIndex + 1).trim()
+    
+    parts = [firstPart]
+    if (secondPart) {
+      parts.push(secondPart)
+    }
+  } else {
+    // Split by space, take first word and rest
+    const words = nameWithoutStatus.split(/\s+/).filter(w => w)
+    if (words.length >= 2) {
+      parts = [words[0], words.slice(1).join(' ')]
+    } else {
+      parts = [nameWithoutStatus]
+    }
+  }
+  
+  return parts[partIndex] || null
+}
 
 // Non-consumable items for the main inventory table
 const nonConsumableItems = computed(() => {
@@ -361,6 +453,18 @@ const uniqueCategories = computed(() => {
   return Array.from(categories).sort()
 })
 
+// Get unique statuses for filter dropdown
+const uniqueStatuses = computed(() => {
+  const statuses = new Set()
+  nonConsumableItems.value.forEach(item => {
+    const status = item.conditionStatus || 'N/A'
+    if (status && status.trim()) {
+      statuses.add(status)
+    }
+  })
+  return Array.from(statuses).sort()
+})
+
 const filteredItems = computed(() => {
   const query = debouncedSearchQuery.value?.toLowerCase().trim()
   let result = nonConsumableItems.value
@@ -370,6 +474,14 @@ const filteredItems = computed(() => {
     result = result.filter(item => {
       const itemCategory = (item.category || '').trim()
       return itemCategory === selectedCategory.value
+    })
+  }
+  
+  // Filter by status
+  if (selectedStatus.value) {
+    result = result.filter(item => {
+      const itemStatus = item.conditionStatus || 'N/A'
+      return itemStatus === selectedStatus.value
     })
   }
   
@@ -431,6 +543,10 @@ watch(debouncedSearchQuery, () => {
 })
 
 watch(selectedCategory, () => {
+  currentPage.value = 1
+})
+
+watch(selectedStatus, () => {
   currentPage.value = 1
 })
 
@@ -675,6 +791,210 @@ const printQrCode = () => {
   }, 500)
 }
 
+// Fetch returned items available for reissue
+const fetchReturnedItems = async () => {
+  if (!isAdmin()) return
+  
+  loadingReturnedItems.value = true
+  try {
+    // Check baseURL to determine correct path
+    const baseURL = axiosClient.defaults.baseURL || '/api'
+    const path = baseURL.includes('/v1') 
+      ? '/memorandum-receipts/returned/available-for-reissue'
+      : '/v1/memorandum-receipts/returned/available-for-reissue'
+    const response = await axiosClient.get(path)
+    console.log('Returned items API response:', response.data)
+    if (response.data.success) {
+      returnedItems.value = response.data.data || []
+      console.log('Returned items count:', returnedItems.value.length)
+      console.log('Debug info:', response.data.debug)
+    } else {
+      returnedItems.value = []
+      console.warn('API returned success: false', response.data)
+    }
+  } catch (error) {
+    console.error('Error fetching returned items:', error)
+    returnedItems.value = []
+  } finally {
+    loadingReturnedItems.value = false
+  }
+}
+
+// Open returned items modal
+const openReturnedItemsModal = async () => {
+  showReturnedItems.value = true
+  if (returnedItems.value.length === 0) {
+    await fetchReturnedItems()
+  }
+}
+
+// Close returned items modal
+const closeReturnedItemsModal = () => {
+  showReturnedItems.value = false
+}
+
+// Open reissue modal
+const openReissueModal = async (item) => {
+  selectedItemForReissue.value = item
+  reissueForm.value = {
+    location_id: null,
+    user_id: null,
+    selectedLocationId: null,
+    remarks: ''
+  }
+  
+  // Fetch locations and users if not already loaded
+  if (locations.value.length === 0) {
+    await fetchLocations(1, 1000)
+  }
+  if (users.value.length === 0) {
+    await fetchusers()
+  }
+  
+  showReissueModal.value = true
+}
+
+// Close reissue modal
+const closeReissueModal = () => {
+  showReissueModal.value = false
+  selectedItemForReissue.value = null
+  reissueForm.value = {
+    location_id: null,
+    user_id: null,
+    selectedLocationId: null,
+    remarks: ''
+  }
+}
+
+// Reissue item
+const reissueItem = async () => {
+  if (!selectedItemForReissue.value) return
+  
+  // Parse selectedLocationId - it can be a number string (location ID) or string like "USER-123"
+  const selectedValue = reissueForm.value.selectedLocationId
+  
+  if (!selectedValue || selectedValue === 'null' || selectedValue === '') {
+    alert('Please select a Personnel or User in the "Issued To" field')
+    return
+  }
+  
+  // Determine if it's a user or location
+  let newLocationId = null
+  let newUserId = null
+  
+  if (selectedValue.startsWith('USER-')) {
+    // It's a user
+    newUserId = Number(selectedValue.replace('USER-', ''))
+  } else {
+    // It's a location/personnel
+    newLocationId = Number(selectedValue)
+  }
+  
+  reissueLoading.value = true
+  try {
+    const baseURL = axiosClient.defaults.baseURL || '/api'
+    const path = baseURL.includes('/v1')
+      ? `/memorandum-receipts/${selectedItemForReissue.value.id}/reissue`
+      : `/v1/memorandum-receipts/${selectedItemForReissue.value.id}/reissue`
+    
+    const response = await axiosClient.post(path, {
+      new_location_id: newLocationId,
+      new_user_id: newUserId,
+      remarks: reissueForm.value.remarks || null
+    })
+    
+    if (response.data.success) {
+      // Refresh returned items list
+      await fetchReturnedItems()
+      // Close modals
+      closeReissueModal()
+      alert('Item reissued successfully!')
+    } else {
+      alert(response.data.message || 'Failed to reissue item')
+    }
+  } catch (error) {
+    console.error('Error reissuing item:', error)
+    alert(error.response?.data?.message || 'Failed to reissue item')
+  } finally {
+    reissueLoading.value = false
+  }
+}
+
+// Computed property for filtered users (active only)
+const activeUsers = computed(() => {
+  return users.value.filter(user => user.status === 'ACTIVE')
+})
+
+// Computed property for locations with personnel
+const locationsWithPersonnel = computed(() => {
+  return locations.value.filter(loc => loc.personnel && loc.personnel.trim() !== '')
+})
+
+// Handle location selection - auto-fill personnel
+const handleLocationChange = (event) => {
+  const locationId = event.target.value ? Number(event.target.value) : null
+  reissueForm.location_id = locationId
+  
+  if (locationId) {
+    // Auto-select the personnel for this location
+    reissueForm.selectedLocationId = String(locationId)
+    reissueForm.user_id = null // Clear user_id since we're using location personnel
+  } else {
+    reissueForm.selectedLocationId = null
+    reissueForm.user_id = null
+  }
+}
+
+// Handle location change for reissue - auto-fill personnel when unit/section is selected
+const handleLocationChangeForReissue = () => {
+  const locationId = reissueForm.value.location_id
+  
+  if (locationId) {
+    // Find the location in locationsWithPersonnel to get the assigned personnel
+    const selectedLocation = locationsWithPersonnel.value.find(loc => Number(loc.id) === locationId)
+    
+    if (selectedLocation && selectedLocation.personnel) {
+      // Auto-select the personnel for this location
+      reissueForm.value.selectedLocationId = String(locationId)
+      reissueForm.value.user_id = null // Clear user_id since we're using location personnel
+    } else {
+      // If no personnel assigned, clear the selection
+      reissueForm.value.selectedLocationId = null
+      reissueForm.value.user_id = null
+    }
+  } else {
+    // If no location selected, clear everything
+    reissueForm.value.selectedLocationId = null
+    reissueForm.value.user_id = null
+  }
+}
+
+// Handle personnel change
+const handlePersonnelChange = (event) => {
+  const selectedValue = event.target.value
+  
+  if (!selectedValue || selectedValue === 'null' || selectedValue === '') {
+    reissueForm.selectedLocationId = null
+    reissueForm.user_id = null
+    reissueForm.location_id = null
+    return
+  }
+  
+  // Check if it's a user (starts with "USER-") or location (number string)
+  if (selectedValue.startsWith('USER-')) {
+    // It's a user
+    reissueForm.selectedLocationId = selectedValue
+    reissueForm.user_id = Number(selectedValue.replace('USER-', ''))
+    reissueForm.location_id = null
+  } else {
+    // It's a location/personnel
+    const locationId = Number(selectedValue)
+    reissueForm.selectedLocationId = String(locationId)
+    reissueForm.location_id = locationId
+    reissueForm.user_id = null
+  }
+}
+
 // Handle delete action
 const deleteItem = async () => {
   if (!itemToDelete.value) return
@@ -743,11 +1063,11 @@ const closeSuccessModal = () => {
               <span class="material-icons-outlined text-4xl text-white">inventory_2</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Inventory Management</h1>
-              <p class="text-green-100 text-base sm:text-lg">Comprehensive Asset Tracking and Management System</p>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">{{ isSupplyRole ? 'Supply Inventory Management' : 'Inventory Management' }}</h1>
+              <p class="text-green-100 text-base sm:text-lg">{{ isSupplyRole ? 'Manage and track supply items' : 'Comprehensive Asset Tracking and Management System' }}</p>
             </div>
           </div>
-          <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          <div v-if="isAdmin()" class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
             <button @click="goToCategories" class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center">
               <span class="material-icons-outlined text-lg mr-1.5">category</span>
               <span>Categories</span>
@@ -760,14 +1080,314 @@ const closeSuccessModal = () => {
               <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
               <span>Add New Item</span>
             </button>
+            <button 
+              @click="openReturnedItemsModal" 
+              class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
+            >
+              <span class="material-icons-outlined text-lg mr-1.5">assignment_return</span>
+              <span>Returned Items</span>
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Returned Items Modal -->
+    <div
+      v-if="showReturnedItems && isAdmin()"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="closeReturnedItemsModal"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 border-b border-blue-800 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">assignment_return</span>
+            <h2 class="text-xl font-bold text-white">Returned Items Available for Reissue</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+              <span class="text-base font-semibold text-white">{{ returnedItems.length }} items</span>
+            </div>
+            <button
+              @click="closeReturnedItemsModal"
+              class="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto p-6">
+          <div v-if="loadingReturnedItems" class="text-center py-12">
+            <span class="material-icons-outlined text-4xl text-gray-400 animate-spin">refresh</span>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">Loading returned items...</p>
+          </div>
+          
+          <div v-else-if="returnedItems.length === 0" class="text-center py-12">
+            <span class="material-icons-outlined text-6xl text-gray-400">inventory_2</span>
+            <p class="text-gray-500 dark:text-gray-400 mt-4 text-lg">No returned items available for reissue</p>
+            <p class="text-gray-400 dark:text-gray-500 mt-2 text-sm">Items that have been returned will appear here</p>
+          </div>
+          
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead class="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Serial Number</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Model</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Category</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Previous Assignee</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Returned Date</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tr v-for="returnedItem in returnedItems" :key="returnedItem.id" class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900 dark:text-white">{{ returnedItem.item?.unit || 'N/A' }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ returnedItem.item?.description || '' }}</div>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                    {{ returnedItem.item?.serial_number || 'N/A' }}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                    {{ returnedItem.item?.model || 'N/A' }}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                      {{ returnedItem.item?.category || 'N/A' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                    {{ returnedItem.previous_assignee || 'N/A' }}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                    {{ returnedItem.returned_at ? new Date(returnedItem.returned_at).toLocaleDateString() : 'N/A' }}
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm">
+                    <button
+                      @click="openReissueModal(returnedItem)"
+                      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      Reissue
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+          <button
+            @click="closeReturnedItemsModal"
+            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reissue Modal -->
+    <div
+      v-if="showReissueModal && selectedItemForReissue"
+      class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      @click.self="closeReissueModal"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col border-2 border-green-500/20">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5 border-b-2 border-green-800 flex items-center justify-between shadow-lg">
+          <div class="flex items-center gap-4">
+            <div class="p-2.5 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+              <span class="material-icons-outlined text-white text-2xl">assignment_return</span>
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold text-white leading-tight">Reissue Item</h2>
+              <p class="text-sm text-green-100 mt-0.5">Item unit/sections and personnel assignment</p>
+            </div>
+          </div>
+          <button
+            @click="closeReissueModal"
+            class="p-2 text-white hover:bg-white/30 rounded-lg transition-all duration-200 hover:scale-110"
+            :disabled="reissueLoading"
+          >
+            <span class="material-icons-outlined text-2xl">close</span>
+          </button>
+        </div>
+        
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+          <!-- Item Details Section -->
+          <div class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-3 border-b border-gray-200 dark:border-gray-600">
+              <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">info</span>
+                Item Details
+              </h3>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Item</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItemForReissue.item?.unit || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Serial Number</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItemForReissue.item?.serial_number || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Model</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItemForReissue.item?.model || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Previous Assignee</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItemForReissue.previous_assignee || 'N/A' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assignment Form Section -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b-2 border-green-800 shadow-md">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">location_on</span>
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-white">Assignment & Unit/Sections</h3>
+                  <p class="text-xs text-green-100">Item unit/sections and personnel assignment</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-6 space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Unit/Sections -->
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Unit/Sections <span class="text-red-500 font-bold">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 z-10 pointer-events-none">
+                      <span class="material-icons-outlined text-xl">location_on</span>
+                    </span>
+                    <select
+                      v-model.number="reissueForm.location_id"
+                      class="w-full pl-12 pr-10 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 appearance-none cursor-pointer hover:border-green-400"
+                      @change="handleLocationChangeForReissue"
+                    >
+                      <option :value="null" class="bg-gray-100 dark:bg-gray-800">Select Unit/Section</option>
+                      <option 
+                        v-for="location in locationsWithPersonnel" 
+                        :key="location.id" 
+                        :value="Number(location.id)"
+                        class="bg-white dark:bg-gray-700"
+                      >
+                        {{ location.location }} ({{ location.personnel }})
+                      </option>
+                    </select>
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <span class="material-icons-outlined">arrow_drop_down</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Issued To -->
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Issued To <span class="text-red-500 font-bold">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 z-10 pointer-events-none">
+                      <span class="material-icons-outlined text-xl">person</span>
+                    </span>
+                    <select
+                      v-model="reissueForm.selectedLocationId"
+                      class="w-full pl-12 pr-10 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 appearance-none cursor-pointer hover:border-green-400"
+                      @change="handlePersonnelChange"
+                    >
+                      <option :value="null" class="bg-gray-100 dark:bg-gray-800">Select Personnel or User</option>
+                      <!-- Personnel (from locations, no account) -->
+                      <optgroup label="Personnel (No Account)">
+                        <option 
+                          v-for="location in locationsWithPersonnel" 
+                          :key="`personnel-${location.id}`" 
+                          :value="String(location.id)"
+                          class="bg-white dark:bg-gray-700"
+                        >
+                          {{ location.personnel_code || 'N/A' }} - {{ location.location }} (Personnel)
+                        </option>
+                      </optgroup>
+                      <!-- Users (with accounts) -->
+                      <optgroup label="Users (With Account)">
+                        <option 
+                          v-for="user in activeUsers" 
+                          :key="`user-${user.id}`" 
+                          :value="`USER-${user.id}`"
+                          class="bg-white dark:bg-gray-700"
+                        >
+                          {{ user.user_code || 'N/A' }} - {{ user.location || 'N/A' }} (User Account)
+                        </option>
+                      </optgroup>
+                    </select>
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <span class="material-icons-outlined">arrow_drop_down</span>
+                    </span>
+                  </div>
+                  <p v-if="reissueForm.location_id && reissueForm.selectedLocationId && reissueForm.selectedLocationId !== reissueForm.location_id" class="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1">
+                    <span class="material-icons-outlined text-sm">info</span>
+                    <span>You can select a different personnel if needed</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Remarks -->
+              <div class="space-y-2">
+                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Remarks <span class="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  v-model="reissueForm.remarks"
+                  rows="4"
+                  class="w-full px-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 resize-none"
+                  placeholder="Enter any remarks about this reissue..."
+                ></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t-2 border-gray-200 dark:border-gray-700 flex justify-end gap-3 shadow-lg">
+          <button
+            @click="closeReissueModal"
+            class="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="reissueLoading"
+          >
+            Cancel
+          </button>
+          <button
+            @click="reissueItem"
+            :disabled="reissueLoading || !reissueForm.selectedLocationId"
+            class="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <span v-if="reissueLoading" class="material-icons-outlined animate-spin text-xl">refresh</span>
+            <span v-else class="material-icons-outlined text-xl">check_circle</span>
+            <span>{{ reissueLoading ? 'Reissuing...' : 'Reissue Item' }}</span>
+          </button>
         </div>
       </div>
     </div>
 
     <!-- Statistics Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+      <!-- Total Items - Hidden for Supply role -->
+      <div v-if="!isSupplyRole" class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Total Items</p>
@@ -778,10 +1398,11 @@ const closeSuccessModal = () => {
           </div>
         </div>
       </div>
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+      <!-- Supply Items - Always visible, but highlighted for Supply role -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5" :class="isSupplyRole ? 'border-blue-500 border-2' : ''">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Supply Items</p>
+            <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">{{ isSupplyRole ? 'Total Supply Items' : 'Supply Items' }}</p>
             <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ totalConsumableFilteredItems }}</p>
           </div>
           <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
@@ -802,8 +1423,8 @@ const closeSuccessModal = () => {
       </div>
     </div>
 
-    <!-- Enhanced Search Bar -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+    <!-- Enhanced Search Bar - Hidden for Supply role (they only see Supply items) -->
+    <div v-if="!isSupplyRole" class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
       <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
         <div class="flex flex-col sm:flex-row gap-3 flex-1">
           <div class="relative flex-1">
@@ -844,12 +1465,56 @@ const closeSuccessModal = () => {
               </button>
             </div>
           </div>
+          <div class="relative flex-shrink-0 sm:w-64">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-xl">flag</span>
+            </div>
+            <select
+              v-model="selectedStatus"
+              class="w-full pl-12 pr-10 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base appearance-none cursor-pointer"
+            >
+              <option value="">All Status</option>
+              <option v-for="status in uniqueStatuses" :key="status" :value="status">
+                {{ status }}
+              </option>
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500">arrow_drop_down</span>
+            </div>
+            <div v-if="selectedStatus" class="absolute inset-y-0 right-8 flex items-center pointer-events-auto">
+              <button @click="selectedStatus = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons-outlined text-lg">close</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Main Inventory Table Container -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <!-- Search Bar for Supply Items (Supply role only) -->
+    <div v-if="isSupplyRole" class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+      <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <span class="material-icons-outlined text-blue-400 dark:text-blue-400 text-xl">search</span>
+          </div>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search supply items by article, description, PAC, or unit/sections..."
+            class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 font-medium text-base"
+          >
+          <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+            <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+              <span class="material-icons-outlined text-lg">close</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Inventory Table Container - Hidden for Supply role -->
+    <div v-if="!isSupplyRole" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -909,6 +1574,14 @@ const closeSuccessModal = () => {
               <!-- Item details -->
               <div class="flex-1 min-w-0">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white truncate mb-1">{{ item.article }}</h3>
+                <div v-if="item.serialNumber && item.serialNumber !== 'N/A'" class="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  <span class="material-icons-outlined text-xs align-middle mr-1">qr_code_2</span>
+                  <span class="font-semibold">SN:</span> {{ item.serialNumber }}
+                </div>
+                <div v-if="item.model && item.model !== 'N/A'" class="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  <span class="material-icons-outlined text-xs align-middle mr-1">devices</span>
+                  <span class="font-semibold">Model:</span> {{ item.model }}
+                </div>
                 <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 line-clamp-2 mb-2">{{ item.description }}</p>
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="px-2 py-0.5 text-sm font-semibold rounded-full" style="background-color: #01200E; color: #FFFFFF;">{{ item.category }}</span>
@@ -1013,6 +1686,8 @@ const closeSuccessModal = () => {
               <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
               <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">IMAGE</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ARTICLE</th>
+              <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">SERIAL NUMBER</th>
+              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">MODEL</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CATEGORY</th>
               <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DESCRIPTION</th>
               <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QUANTITY</th>
@@ -1050,6 +1725,18 @@ const closeSuccessModal = () => {
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[130px]" :title="item.article">
                   {{ item.article }}
+                </div>
+              </td>
+              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]" :title="item.serialNumber">
+                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">qr_code_2</span>
+                  {{ item.serialNumber }}
+                </div>
+              </td>
+              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.model">
+                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">devices</span>
+                  {{ item.model }}
                 </div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
@@ -1115,8 +1802,19 @@ const closeSuccessModal = () => {
                 </span>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]" :title="item.issuedTo">
-                  {{ item.issuedTo }}
+                <div v-if="item.issuedTo && item.issuedTo !== 'Not Assigned'" class="max-w-[160px]">
+                  <div class="text-base font-bold text-gray-700 dark:text-gray-300">
+                    {{ getIssuedToNamePart(item.issuedTo, 0) }}
+                  </div>
+                  <div v-if="getIssuedToNamePart(item.issuedTo, 1)" class="text-base font-bold text-gray-700 dark:text-gray-300">
+                    {{ getIssuedToNamePart(item.issuedTo, 1) }}
+                  </div>
+                  <div v-if="item.issued_to_code" class="text-sm text-gray-500 dark:text-gray-400">
+                    ({{ item.issued_to_code }})
+                  </div>
+                </div>
+                <div v-else class="text-base text-gray-500 dark:text-gray-400">
+                  Not Assigned
                 </div>
               </td>
               <td class="sticky right-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-4 py-3">
@@ -1225,8 +1923,8 @@ const closeSuccessModal = () => {
       </div>
     </div>
 
-    <!-- Supply Category Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden mt-8">
+    <!-- Supply Category Table - Always visible, but moved to top for Supply role -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden" :class="isSupplyRole ? 'mt-0' : 'mt-8'">
       <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 border-b border-blue-800">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -1249,6 +1947,8 @@ const closeSuccessModal = () => {
               <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
               <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">IMAGE</th>
               <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ARTICLE</th>
+              <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">SERIAL NUMBER</th>
+              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">MODEL</th>
               <th class="min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CATEGORY</th>
               <th class="min-w-[240px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DESCRIPTION</th>
               <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QUANTITY</th>
@@ -1281,6 +1981,18 @@ const closeSuccessModal = () => {
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[160px]" :title="item.article">{{ item.article }}</div>
+              </td>
+              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]" :title="item.serialNumber">
+                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">qr_code_2</span>
+                  {{ item.serialNumber }}
+                </div>
+              </td>
+              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.model">
+                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">devices</span>
+                  {{ item.model }}
+                </div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">

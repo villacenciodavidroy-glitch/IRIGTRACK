@@ -49,6 +49,22 @@ class AuthService
         return false;
     }
 
+    // Block resigned users from logging in
+    if ($user->status === 'RESIGNED') {
+        return [
+            'error' => 'RESIGNED',
+            'message' => 'This account has been resigned and cannot log in.'
+        ];
+    }
+
+    // Block inactive users from logging in
+    if ($user->status === 'INACTIVE') {
+        return [
+            'error' => 'INACTIVE',
+            'message' => 'This account is inactive and cannot log in.'
+        ];
+    }
+
     $token = $user->createToken($user->username);
 
     // Log the login activity
@@ -64,6 +80,8 @@ class AuthService
             'role' => $user->role,
             'image' => $user->image,
             'location' => $user->location,
+            'user_code' => $user->user_code,
+            'status' => $user->status,
         ],
         'token' => $token->plainTextToken,
     ];

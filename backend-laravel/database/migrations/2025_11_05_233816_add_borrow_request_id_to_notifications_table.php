@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
+            // Check if column doesn't exist before adding
+            if (!Schema::hasColumn('notifications', 'borrow_request_id')) {
             $table->unsignedBigInteger('borrow_request_id')->nullable()->after('item_id');
             $table->foreign('borrow_request_id')->references('id')->on('borrow_requests')->onDelete('cascade');
+            }
+            // Check if type column doesn't exist before adding
+            if (!Schema::hasColumn('notifications', 'type')) {
             $table->string('type')->default('low_stock')->after('message'); // 'low_stock' or 'borrow_request'
+            }
         });
     }
 

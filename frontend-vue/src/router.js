@@ -20,6 +20,7 @@ import QRGeneration from './pages/QRGeneration.vue'
 import ActivityLog from './pages/ActivityLog.vue'
 import Profile from './pages/ProfileView.vue'
 import DeletedItems from './pages/DeletedItems.vue'
+import MaintenanceRecords from './pages/MaintenanceRecords.vue'
 import Notifications from './pages/Notifications.vue'
 import axiosClient from './axios'
 
@@ -59,6 +60,11 @@ const routes = [
                         path: 'deleted-items',
                         name: 'DeletedItems',
                         component: DeletedItems
+                    },
+                    {
+                        path: 'maintenance-records',
+                        name: 'MaintenanceRecords',
+                        component: MaintenanceRecords
                     }
                 ]
             },
@@ -86,6 +92,11 @@ const routes = [
                 path: 'admin',
                 name: 'Admin',
                 component: Admin
+            },
+            {
+                path: 'personnel-management',
+                name: 'PersonnelManagement',
+                component: () => import('./pages/PersonnelManagement.vue')
             },{
                 path: 'analytics',
                 name: 'Analytics',
@@ -137,6 +148,26 @@ const routes = [
                 component: () => import('./pages/reports/life-cycles-data.vue')
             },
             {
+                path: 'reports/maintenance-records',
+                name: 'MaintenanceRecordsReport',
+                component: () => import('./pages/reports/maintenance-records.vue')
+            },
+            {
+                path: 'reports/transactions',
+                name: 'TransactionsReport',
+                component: () => import('./pages/reports/transactions.vue')
+            },
+            {
+                path: 'reports/supply-usage-ranking',
+                name: 'SupplyUsageRanking',
+                component: () => import('./pages/reports/supply-usage-ranking.vue')
+            },
+            {
+                path: 'reports/user-supply-usage',
+                name: 'UserSupplyUsage',
+                component: () => import('./pages/reports/user-supply-usage.vue')
+            },
+            {
                 path: 'QRGeneration',
                 name: 'QRGeneration',
                 component: QRGeneration
@@ -155,6 +186,26 @@ const routes = [
                 path: 'transactions',
                 name: 'Transactions',
                 component: () => import('./pages/Transactions.vue')
+            },
+            {
+                path: 'supply-requests',
+                name: 'SupplyRequests',
+                component: () => import('./pages/SupplyRequests.vue')
+            },
+            {
+                path: 'supply-requests-management',
+                name: 'SupplyRequestsManagement',
+                component: () => import('./pages/SupplyRequestsManagement.vue')
+            },
+            {
+                path: 'unit-section-analytics',
+                name: 'UnitSectionAnalytics',
+                component: () => import('./pages/UnitSectionAnalytics.vue')
+            },
+            {
+                path: 'admin/supply-requests',
+                name: 'AdminSupplyRequests',
+                component: () => import('./pages/AdminSupplyRequests.vue')
             }
         ]
     },
@@ -185,7 +236,10 @@ const router = createRouter({
 const publicRoutes = ['Login', 'Signup', 'NotFound']
 
 // Define admin-only routes
-const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Transactions']
+const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Transactions', 'AdminSupplyRequests']
+
+// Define supply-only routes (supply role can access)
+const supplyRoutes = ['SupplyRequestsManagement', 'UnitSectionAnalytics']
 
 // Navigation guard for authentication and authorization
 router.beforeEach(async (to, from, next) => {
@@ -248,6 +302,23 @@ router.beforeEach(async (to, from, next) => {
         return
     }
     
+    // Redirect User role from Dashboard to Supply Requests
+    if (to.name === 'Dashboard') {
+        try {
+            const response = await axiosClient.get('/user')
+            if (response.data) {
+                const userRole = (response.data.role || '').toLowerCase()
+                if (userRole === 'user') {
+                    next('/supply-requests')
+                    return
+                }
+            }
+        } catch (error) {
+            // If error checking user, continue normally
+            console.error('Error checking user role for dashboard redirect:', error)
+        }
+    }
+    
     // Check if route requires admin access
     if (adminRoutes.includes(to.name)) {
         try {
@@ -286,6 +357,44 @@ router.beforeEach(async (to, from, next) => {
                 return
             }
             // For other errors, still check but allow with warning
+            next()
+        }
+    }
+    
+    // Check if route requires supply or admin access
+    if (supplyRoutes.includes(to.name)) {
+        try {
+            const response = await axiosClient.get('/user')
+            
+            if (response.data) {
+                const user = response.data
+                const role = (user.role || '').toLowerCase()
+                
+                if (!['supply', 'admin', 'super_admin'].includes(role)) {
+                    // Not supply or admin, redirect to dashboard
+                    next('/dashboard')
+                    return
+                }
+            } else {
+                localStorage.removeItem('token')
+                localStorage.removeItem('user')
+                next({
+                    name: 'Login',
+                    query: { redirect: to.fullPath }
+                })
+                return
+            }
+        } catch (error) {
+            console.error('Error checking user role:', error)
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                localStorage.removeItem('token')
+                localStorage.removeItem('user')
+                next({
+                    name: 'Login',
+                    query: { redirect: to.fullPath }
+                })
+                return
+            }
             next()
         }
     }

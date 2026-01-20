@@ -1,0 +1,273 @@
+name: irrigtrack
+
+# Note: For managed PostgreSQL, create it separately in DigitalOcean Databases
+# Then connect it to your app. The database component below is optional.
+# If you create managed DB separately, remove the databases section and
+# manually set DB_* environment variables instead.
+
+services:
+  - name: frontend
+    source_dir: frontend-vue
+    github:
+      repo: your-username/irrigtrack  # Update with your actual GitHub repo
+      branch: main
+    build_command: npm install && npm run build
+    run_command: npx serve -s dist -l $PORT
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    routes:
+      - path: /
+    envs:
+      # Build-time environment variables (used during npm build)
+      - key: VITE_API_BASE_URL
+        scope: BUILD_TIME
+        value: ${backend.URL}/api
+      - key: VITE_PY_API_BASE_URL
+        scope: BUILD_TIME
+        value: ${python-api.URL}
+      - key: VITE_PUSHER_APP_KEY
+        scope: BUILD_TIME
+        value: ${backend.REVERB_APP_KEY}
+      - key: VITE_PUSHER_HOST
+        scope: BUILD_TIME
+        value: ${backend.URL}  # Will be set automatically
+      - key: VITE_PUSHER_PORT
+        scope: BUILD_TIME
+        value: "443"
+      - key: VITE_PUSHER_SCHEME
+        scope: BUILD_TIME
+        value: "https"
+
+  - name: backend
+    source_dir: backend-laravel
+    github:
+      repo: your-username/irrigtrack  # Update with your actual GitHub repo
+      branch: main
+    build_command: |
+      composer install --no-dev --optimize-autoloader
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+      php artisan storage:link || true
+    run_command: php artisan serve --host=0.0.0.0 --port=$PORT
+    environment_slug: php
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    routes:
+      - path: /api
+    envs:
+      # Application Settings
+      - key: APP_NAME
+        value: "IRIGTRACK"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        value: ${backend.URL}
+      - key: APP_KEY
+        value: base64:YOUR_APP_KEY_HERE  # Generate with: php artisan key:generate
+      
+      # Database Configuration
+      # Option 1: If using managed PostgreSQL (recommended), set these manually in App Platform UI
+      # Option 2: If using database component below, these will be auto-injected
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        value: ${nia-db.HOSTNAME}  # Only if using database component
+        # value: your-managed-db-host.digitaloceanspaces.com  # If using managed DB separately
+      - key: DB_PORT
+        value: ${nia-db.PORT}  # Usually 25060 for managed DB
+        # value: "25060"  # If using managed DB separately
+      - key: DB_DATABASE
+        value: ${nia-db.DATABASE}
+        # value: "nia_db"  # If using managed DB separately
+      - key: DB_USERNAME
+        value: ${nia-db.USERNAME}
+        # value: "your-db-user"  # If using managed DB separately
+      - key: DB_PASSWORD
+        value: ${nia-db.PASSWORD}
+        # value: "your-db-password"  # If using managed DB separately (use secret)
+      
+      # Laravel Reverb (WebSocket) Configuration
+      - key: BROADCAST_DRIVER
+        value: reverb
+      - key: REVERB_APP_ID
+        value: your-reverb-app-id  # Generate with: php artisan reverb:install
+      - key: REVERB_APP_KEY
+        value: your-reverb-app-key  # Must match VITE_PUSHER_APP_KEY in frontend
+      - key: REVERB_APP_SECRET
+        value: your-reverb-app-secret
+      - key: REVERB_HOST
+        value: ${backend.URL}  # Will be set automatically (without https://)
+      - key: REVERB_PORT
+        value: "443"
+      - key: REVERB_SCHEME
+        value: "https"
+      
+      # Queue Configuration (if using queues)
+      - key: QUEUE_CONNECTION
+        value: database  # Use 'sync' for development, 'database' for production
+      
+      # Session Configuration
+      - key: SESSION_DRIVER
+        value: database
+      
+      # Cache Configuration
+      - key: CACHE_DRIVER
+        value: file  # Consider Redis for better performance
+      
+      # File Storage (DigitalOcean Spaces - S3 compatible)
+      # Uncomment and configure if using Spaces for file storage
+      # - key: FILESYSTEM_DISK
+      #   value: s3
+      # - key: AWS_ACCESS_KEY_ID
+      #   value: your-spaces-key
+      # - key: AWS_SECRET_ACCESS_KEY
+      #   value: your-spaces-secret
+      # - key: AWS_DEFAULT_REGION
+      #   value: nyc3
+      # - key: AWS_BUCKET
+      #   value: your-bucket-name
+      # - key: AWS_ENDPOINT
+      #   value: https://nyc3.digitaloceanspaces.com
+      # - key: AWS_URL
+      #   value: https://your-bucket-name.nyc3.digitaloceanspaces.com
+
+  # Laravel Reverb WebSocket Server (separate service)
+  # App Platform supports WebSocket, but Reverb needs to run as separate process
+  - name: reverb
+    source_dir: backend-laravel
+    github:
+      repo: your-username/irrigtrack
+      branch: main
+    build_command: composer install --no-dev --optimize-autoloader
+    run_command: php artisan reverb:start --host=0.0.0.0 --port=$PORT
+    environment_slug: php
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    # WebSocket support
+    health_check:
+      http_path: /
+    envs:
+      # Copy same environment variables as backend
+      - key: APP_NAME
+        value: "IRIGTRACK"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        value: ${backend.URL}
+      - key: APP_KEY
+        value: base64:YOUR_APP_KEY_HERE
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        value: ${nia-db.HOSTNAME}
+      - key: DB_PORT
+        value: ${nia-db.PORT}
+      - key: DB_DATABASE
+        value: ${nia-db.DATABASE}
+      - key: DB_USERNAME
+        value: ${nia-db.USERNAME}
+      - key: DB_PASSWORD
+        value: ${nia-db.PASSWORD}
+      - key: BROADCAST_DRIVER
+        value: reverb
+      - key: REVERB_APP_ID
+        value: ${backend.REVERB_APP_ID}
+      - key: REVERB_APP_KEY
+        value: ${backend.REVERB_APP_KEY}
+      - key: REVERB_APP_SECRET
+        value: ${backend.REVERB_APP_SECRET}
+      - key: REVERB_HOST
+        value: ${backend.URL}
+      - key: REVERB_PORT
+        value: "443"
+      - key: REVERB_SCHEME
+        value: "https"
+
+  - name: python-api
+    source_dir: .
+    github:
+      repo: your-username/irrigtrack  # Update with your actual GitHub repo
+      branch: main
+    build_command: pip install -r requirements.txt
+    run_command: python ml_api_server.py
+    environment_slug: python
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    routes:
+      - path: /ml
+    envs:
+      # Database connection for Python ML API
+      - key: DB_HOST
+        value: ${nia-db.HOSTNAME}
+        # value: your-managed-db-host.digitaloceanspaces.com  # If using managed DB separately
+      - key: DB_PORT
+        value: ${nia-db.PORT}
+        # value: "25060"  # If using managed DB separately
+      - key: DB_DATABASE
+        value: ${nia-db.DATABASE}
+        # value: "nia_db"  # If using managed DB separately
+      - key: DB_USERNAME
+        value: ${nia-db.USERNAME}
+        # value: "your-db-user"  # If using managed DB separately
+      - key: DB_PASSWORD
+        value: ${nia-db.PASSWORD}
+        # value: "your-db-password"  # If using managed DB separately
+      # Add any other Python-specific environment variables here
+
+  # Optional: Laravel Queue Worker
+  # Uncomment if you're using Laravel queues
+  # - name: queue-worker
+  #   source_dir: backend-laravel
+  #   github:
+  #     repo: your-username/irrigtrack
+  #     branch: main
+  #   build_command: composer install --no-dev --optimize-autoloader
+  #   run_command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+  #   environment_slug: php
+  #   instance_count: 1
+  #   instance_size_slug: basic-xxs
+  #   envs:
+  #     # Copy same env vars as backend
+  #     - key: APP_NAME
+  #       value: "IRIGTRACK"
+  #     - key: APP_ENV
+  #       value: production
+  #     - key: APP_DEBUG
+  #       value: "false"
+  #     - key: APP_URL
+  #       value: ${backend.URL}
+  #     - key: APP_KEY
+  #       value: base64:YOUR_APP_KEY_HERE
+  #     - key: DB_CONNECTION
+  #       value: pgsql
+  #     - key: DB_HOST
+  #       value: ${nia-db.HOSTNAME}
+  #     - key: DB_PORT
+  #       value: ${nia-db.PORT}
+  #     - key: DB_DATABASE
+  #       value: ${nia-db.DATABASE}
+  #     - key: DB_USERNAME
+  #       value: ${nia-db.USERNAME}
+  #     - key: DB_PASSWORD
+  #       value: ${nia-db.PASSWORD}
+  #     - key: QUEUE_CONNECTION
+  #       value: database
+
+# Optional: Database component (if you want App Platform to manage it)
+# Note: It's often better to create managed PostgreSQL separately for more control
+# databases:
+#   - name: nia-db
+#     engine: PG
+#     version: "15"
+#     production: true
+#     cluster_name: nia-db-cluster

@@ -14,7 +14,6 @@ const error = ref(null)
 const searchQuery = ref('')
 const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const statusFilter = ref('') // Default filter to show all requests (supply_approved and admin_assigned)
-const urgencyFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const currentPage = ref(1)
@@ -140,9 +139,6 @@ const fetchRequests = async (silent = false) => {
     }
     if (statusFilter.value) {
       params.status = statusFilter.value
-    }
-    if (urgencyFilter.value) {
-      params.urgency = urgencyFilter.value
     }
     if (startDate.value) {
       params.start_date = startDate.value
@@ -381,12 +377,6 @@ const extractItemDetails = (message) => {
   const quantityMatch = message.match(/Quantity\s*:\s*([^\n]+)/i)
   if (quantityMatch) {
     details['Quantity'] = quantityMatch[1].trim()
-  }
-  
-  // Extract Urgency Level
-  const urgencyMatch = message.match(/Urgency Level\s*:\s*([^\n]+)/i)
-  if (urgencyMatch) {
-    details['Urgency'] = urgencyMatch[1].trim()
   }
   
   return Object.keys(details).length > 0 ? details : null
@@ -670,18 +660,6 @@ const getStatusBadgeClass = (status) => {
   return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
 }
 
-// Get urgency badge class - Exact match to Personnel Management style
-const getUrgencyBadgeClass = (urgency) => {
-  const urgencyLower = urgency?.toLowerCase()
-  if (urgencyLower === 'high') {
-    return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-  }
-  if (urgencyLower === 'medium') {
-    return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-  }
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-}
-
 // Format date
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
@@ -821,7 +799,7 @@ watch(debouncedSearchQuery, () => {
   fetchRequests()
 })
 
-watch([statusFilter, urgencyFilter, startDate, endDate], () => {
+watch([statusFilter, startDate, endDate], () => {
   currentPage.value = 1
   fetchRequests()
 })
@@ -986,17 +964,6 @@ const statistics = computed(() => {
           </div>
           <div>
             <select
-              v-model="urgencyFilter"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">All Urgency</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-          </div>
-          <div>
-            <select
               v-model="itemsPerPage"
               @change="currentPage = 1"
               class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -1045,7 +1012,6 @@ const statistics = computed(() => {
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantity</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Supply Name</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Urgency</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
@@ -1094,11 +1060,6 @@ const statistics = computed(() => {
                   </div>
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">{{ request.supply_name || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', getUrgencyBadgeClass(request.urgency_level)]">
-                    {{ request.urgency_level }}
-                  </span>
-                </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', getStatusBadgeClass(request.status)]">
                     {{ request.status === 'supply_approved' ? 'Supply Approved' : 

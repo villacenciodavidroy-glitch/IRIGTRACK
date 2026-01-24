@@ -150,10 +150,6 @@ class SupplyRequestController extends Controller
                 }
             }
 
-            if ($request->has('urgency_level') && !empty($request->urgency_level)) {
-                $query->where('urgency_level', $request->urgency_level);
-            }
-
             if ($request->has('start_date') && !empty($request->start_date)) {
                 $query->whereDate('created_at', '>=', $request->start_date);
             }
@@ -340,7 +336,6 @@ class SupplyRequestController extends Controller
                     'quantity' => $request->quantity, // Total quantity for backward compatibility
                     'items' => $requestItems, // Array of all items
                     'items_count' => count($requestItems), // Number of items
-                    'urgency_level' => $request->urgency_level,
                     'notes' => $request->notes,
                     'status' => $request->status,
                     'user' => $userData,
@@ -485,7 +480,6 @@ class SupplyRequestController extends Controller
                     'quantity' => $request->quantity, // Total quantity for backward compatibility
                     'items' => $requestItems, // Array of all items
                     'items_count' => count($requestItems), // Number of items
-                    'urgency_level' => $request->urgency_level,
                     'notes' => $request->notes,
                     'status' => $request->status,
                     'approved_by' => $request->approver ? [
@@ -573,7 +567,7 @@ class SupplyRequestController extends Controller
                     'items' => 'required|array|min:1',
                     'items.*.item_id' => 'required|string',
                     'items.*.quantity' => 'required|integer|min:1',
-                    'urgency_level' => 'required|in:Low,Medium,High',
+                    'urgency_level' => 'nullable|in:Low,Medium,High',
                     'notes' => 'nullable|string|max:1000',
                 ];
                 
@@ -657,7 +651,7 @@ class SupplyRequestController extends Controller
                 $requestData = [
                     'item_id' => $itemsData[0]['item_id'], // Keep first item for backward compatibility
                     'quantity' => array_sum(array_column($itemsData, 'quantity')), // Total quantity
-                    'urgency_level' => $validated['urgency_level'],
+                    'urgency_level' => $validated['urgency_level'] ?? 'Medium',
                     'notes' => $validated['notes'] ?? null,
                     'status' => 'pending',
                     'requested_by_user_id' => $user->id,
@@ -698,7 +692,7 @@ class SupplyRequestController extends Controller
                 $validationRules = [
                     'item_id' => 'required|string',
                     'quantity' => 'required|integer|min:1',
-                    'urgency_level' => 'required|in:Low,Medium,High',
+                    'urgency_level' => 'nullable|in:Low,Medium,High',
                     'notes' => 'nullable|string|max:1000',
                 ];
                 
@@ -769,7 +763,7 @@ class SupplyRequestController extends Controller
                 $requestData = [
                     'item_id' => $validated['item_id'],
                     'quantity' => $validated['quantity'],
-                    'urgency_level' => $validated['urgency_level'],
+                    'urgency_level' => $validated['urgency_level'] ?? 'Medium',
                     'notes' => $validated['notes'] ?? null,
                     'status' => 'pending',
                     'requested_by_user_id' => $user->id,
@@ -809,9 +803,9 @@ class SupplyRequestController extends Controller
                 $requestedByName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
                 
                 if ($hasItems && $itemCount > 1) {
-                    $notificationMessage = "New supply request from {$requestedByName}: {$itemCount} item(s) (Total Quantity: {$totalQuantity}, Urgency: {$validated['urgency_level']})";
+                    $notificationMessage = "New supply request from {$requestedByName}: {$itemCount} item(s) (Total Quantity: {$totalQuantity})";
                 } else {
-                    $notificationMessage = "New supply request from {$requestedByName}: {$itemName} (Quantity: {$totalQuantity}, Urgency: {$validated['urgency_level']})";
+                    $notificationMessage = "New supply request from {$requestedByName}: {$itemName} (Quantity: {$totalQuantity})";
                 }
                 
                 // Use first item's ID for notification (or get from supply request items)
@@ -856,7 +850,6 @@ class SupplyRequestController extends Controller
                     $messageText .= "Quantity: {$totalQuantity}\n";
                 }
                 
-                $messageText .= "Urgency Level: {$validated['urgency_level']}\n";
                 if (!empty($validated['notes'])) {
                     $messageText .= "Notes: {$validated['notes']}\n";
                 }
@@ -1365,9 +1358,6 @@ class SupplyRequestController extends Controller
                                     $approvalMessage .= "\n  Quantity          : {$supplyRequest->quantity}";
                                 }
                                 
-                                if ($supplyRequest->urgency_level) {
-                                    $approvalMessage .= "\n  Urgency Level     : {$supplyRequest->urgency_level}";
-                                }
                                 $approvalMessage .= "\n";
                                 $approvalMessage .= "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
                                 $approvalMessage .= "\n";
@@ -3983,7 +3973,6 @@ class SupplyRequestController extends Controller
                 'quantity' => $supplyRequest->quantity,
                 'items' => $requestItems, // Array of all items
                 'items_count' => count($requestItems), // Number of items
-                'urgency_level' => $supplyRequest->urgency_level,
                 'notes' => $supplyRequest->notes,
                 'requesting_user_name' => $requestingUserName,
                 'requesting_user_email' => $requestingUserEmail,
@@ -4449,19 +4438,6 @@ class SupplyRequestController extends Controller
                 </tr>';
         }
         
-        $urgencyClass = 'badge-medium';
-        if (strtolower($data['urgency_level']) === 'high') {
-            $urgencyClass = 'badge-high';
-        } elseif (strtolower($data['urgency_level']) === 'low') {
-            $urgencyClass = 'badge-low';
-        }
-        
-        $html .= '
-                <tr class="info-row">
-                    <td class="info-label">Urgency Level:</td>
-                    <td class="info-value"><span class="badge ' . $urgencyClass . '">' . htmlspecialchars($data['urgency_level']) . '</span></td>
-                </tr>';
-        
         if (!empty($data['notes'])) {
             $html .= '
                 <tr class="info-row">
@@ -4608,7 +4584,6 @@ class SupplyRequestController extends Controller
                     'status' => $supplyRequest->status,
                     'item_name' => $itemName,
                     'quantity' => $supplyRequest->quantity,
-                    'urgency_level' => $supplyRequest->urgency_level,
                     'requested_by' => $requestingUserName,
                     'approved_by' => $approverName,
                     'approved_at' => $supplyRequest->approved_at ? $supplyRequest->approved_at->format('F d, Y h:i A') : null,

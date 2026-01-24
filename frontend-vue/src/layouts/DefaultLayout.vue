@@ -848,12 +848,6 @@ const extractItemDetails = (message) => {
     details['Quantity'] = quantityMatch[1].trim()
   }
   
-  // Extract Urgency Level
-  const urgencyMatch = message.match(/Urgency Level\s*:\s*([^\n]+)/i)
-  if (urgencyMatch) {
-    details['Urgency'] = urgencyMatch[1].trim()
-  }
-  
   return Object.keys(details).length > 0 ? details : null
 }
 

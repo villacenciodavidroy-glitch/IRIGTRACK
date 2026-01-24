@@ -28,7 +28,6 @@ const showRequestModal = ref(false)
 const selectedSupply = ref(null)
 const requestForm = ref({
   quantity: 1,
-  urgency_level: 'Medium',
   notes: '',
   target_supply_account_id: null
 })
@@ -419,12 +418,6 @@ const extractItemDetails = (message) => {
     }
   }
   
-  // Extract Urgency Level (common for all items)
-  const urgencyMatch = message.match(/Urgency Level\s*:\s*([^\n]+)/i)
-  if (urgencyMatch) {
-    details['Urgency'] = urgencyMatch[1].trim()
-  }
-  
   return Object.keys(details).length > 0 ? details : null
 }
 
@@ -558,7 +551,6 @@ const openRequestModal = async (supply) => {
   selectedSupply.value = supply
   requestForm.value = {
     quantity: 1,
-    urgency_level: 'Medium',
     notes: '',
     target_supply_account_id: null
   }
@@ -573,7 +565,6 @@ const closeRequestModal = () => {
   selectedSupply.value = null
   requestForm.value = {
     quantity: 1,
-    urgency_level: 'Medium',
     notes: '',
     target_supply_account_id: null
   }
@@ -674,7 +665,6 @@ const submitRequest = async (useCart = false) => {
       
       const response = await axiosClient.post('/supply-requests', {
         items: items,
-        urgency_level: requestForm.value.urgency_level,
         notes: requestForm.value.notes,
         target_supply_account_id: requestForm.value.target_supply_account_id
       })
@@ -744,7 +734,6 @@ const submitRequest = async (useCart = false) => {
       const response = await axiosClient.post('/supply-requests', {
         item_id: selectedSupply.value.uuid,
         quantity: requestForm.value.quantity,
-        urgency_level: requestForm.value.urgency_level,
         notes: requestForm.value.notes,
         target_supply_account_id: requestForm.value.target_supply_account_id
       })
@@ -889,14 +878,6 @@ const getStatusBadgeClass = (status, request = null) => {
   if (statusLower === 'rejected') return 'bg-red-100 text-red-800'
   if (statusLower === 'fulfilled') return 'bg-blue-100 text-blue-800'
   return 'bg-yellow-100 text-yellow-800'
-}
-
-// Get urgency badge class
-const getUrgencyBadgeClass = (urgency) => {
-  const urgencyLower = urgency?.toLowerCase()
-  if (urgencyLower === 'high') return 'bg-red-100 text-red-800'
-  if (urgencyLower === 'medium') return 'bg-yellow-100 text-yellow-800'
-  return 'bg-green-100 text-green-800'
 }
 
 // Format date
@@ -1674,34 +1655,6 @@ watch(requestStatusFilter, () => {
             </div>
           </div>
 
-          <!-- Urgency Level -->
-          <div class="space-y-2">
-            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-              <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">priority_high</span>
-              <span>Urgency Level <span class="text-red-500">*</span></span>
-            </label>
-            <div class="relative">
-              <select
-                v-model="requestForm.urgency_level"
-                class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none cursor-pointer font-medium"
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-              <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                <span class="material-icons-outlined">schedule</span>
-              </span>
-              <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                <span class="material-icons-outlined">keyboard_arrow_down</span>
-              </span>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span class="material-icons-outlined text-sm">info</span>
-              <span>Select the urgency level for your request</span>
-            </div>
-          </div>
-
           <!-- Supply Account Selection -->
           <div class="space-y-2">
             <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -1896,30 +1849,6 @@ watch(requestStatusFilter, () => {
               <h4 class="text-lg font-bold text-gray-900 dark:text-white">Request Details</h4>
             </div>
 
-            <!-- Urgency Level -->
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">priority_high</span>
-                <span>Urgency Level <span class="text-red-500">*</span></span>
-              </label>
-              <div class="relative">
-                <select
-                  v-model="requestForm.urgency_level"
-                  class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none cursor-pointer font-medium"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </select>
-                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                  <span class="material-icons-outlined">schedule</span>
-                </span>
-                <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                  <span class="material-icons-outlined">keyboard_arrow_down</span>
-                </span>
-              </div>
-            </div>
-
             <!-- Supply Account Selection -->
             <div class="space-y-2">
               <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -2059,7 +1988,6 @@ watch(requestStatusFilter, () => {
               <tr>
                 <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Item</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Urgency</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Status</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Date</th>
                 <th class="px-6 py-4 text-left text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">Actions</th>
@@ -2113,19 +2041,6 @@ watch(requestStatusFilter, () => {
                          : 'text-gray-900 dark:text-white'">
                     {{ getTotalQuantity(request) }}
                   </div>
-                </td>
-                <td class="px-6 py-4">
-                  <span 
-                    :class="[
-                      'px-3 py-1.5 text-xs font-bold rounded-full flex items-center gap-1.5 w-fit shadow-sm',
-                      getUrgencyBadgeClass(request.urgency_level)
-                    ]"
-                  >
-                    <span class="material-icons-outlined text-xs">
-                      {{ request.urgency_level?.toLowerCase() === 'high' ? 'priority_high' : request.urgency_level?.toLowerCase() === 'medium' ? 'schedule' : 'low_priority' }}
-                    </span>
-                    {{ request.urgency_level }}
-                  </span>
                 </td>
                 <td class="px-6 py-4">
                   <span 
@@ -2341,27 +2256,11 @@ watch(requestStatusFilter, () => {
                             <template v-else>
                               <!-- Single Item (backward compatible) -->
                               <div v-for="(value, key) in extractItemDetails(msg.message)" :key="key" 
-                                   v-if="key !== 'Urgency'"
                                    class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                                 <span class="text-xs text-gray-600 flex-shrink-0 font-semibold">{{ key }}:</span>
                                 <span class="text-xs font-bold text-gray-900 break-words sm:text-right">{{ value }}</span>
                               </div>
                             </template>
-                            <!-- Urgency Level (common for all) -->
-                            <div v-if="extractItemDetails(msg.message)?.Urgency" 
-                                 class="pt-2 border-t border-green-200 mt-2">
-                              <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-600 font-semibold">Urgency Level:</span>
-                                <span :class="[
-                                  'text-xs font-bold px-2 py-1 rounded',
-                                  extractItemDetails(msg.message).Urgency.toLowerCase() === 'high' ? 'bg-red-100 text-red-800' :
-                                  extractItemDetails(msg.message).Urgency.toLowerCase() === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-blue-100 text-blue-800'
-                                ]">
-                                  {{ extractItemDetails(msg.message).Urgency }}
-                                </span>
-                              </div>
-                            </div>
                           </div>
                         </div>
                         

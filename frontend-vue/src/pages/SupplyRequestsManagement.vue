@@ -21,7 +21,6 @@ const error = ref(null)
 const searchQuery = ref('')
 const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const statusFilter = ref('')
-const urgencyFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const currentPage = ref(1)
@@ -183,9 +182,6 @@ const fetchRequests = async (silent = false) => {
     }
     if (statusFilter.value) {
       params.status = statusFilter.value
-    }
-    if (urgencyFilter.value) {
-      params.urgency = urgencyFilter.value
     }
     if (startDate.value) {
       params.start_date = startDate.value
@@ -467,12 +463,6 @@ const extractItemDetails = (message) => {
     if (quantityMatch) {
       details['Quantity'] = quantityMatch[1].trim()
     }
-  }
-  
-  // Extract Urgency Level (common for all items)
-  const urgencyMatch = message.match(/Urgency Level\s*:\s*([^\n]+)/i)
-  if (urgencyMatch) {
-    details['Urgency'] = urgencyMatch[1].trim()
   }
   
   return Object.keys(details).length > 0 ? details : null
@@ -1262,14 +1252,6 @@ const getStatusBadgeClass = (status) => {
   return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-2 border-yellow-700 dark:border-yellow-500'
 }
 
-// Get urgency badge class
-const getUrgencyBadgeClass = (urgency) => {
-  const urgencyLower = urgency?.toLowerCase()
-  if (urgencyLower === 'high') return 'bg-gradient-to-r from-red-500 to-red-600 text-white border-2 border-red-700 dark:border-red-500'
-  if (urgencyLower === 'medium') return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-2 border-yellow-700 dark:border-yellow-500'
-  return 'bg-gradient-to-r from-green-500 to-green-600 text-white border-2 border-green-700 dark:border-green-500'
-}
-
 // Format date
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
@@ -1617,7 +1599,7 @@ watch(debouncedSearchQuery, () => {
   fetchRequests()
 })
 
-watch([statusFilter, urgencyFilter, startDate, endDate], () => {
+watch([statusFilter, startDate, endDate], () => {
     currentPage.value = 1
   fetchRequests()
 })
@@ -1950,25 +1932,6 @@ watch(itemsPerPage, () => {
           </div>
           <div>
             <label class="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase">
-              <span class="material-icons-outlined text-sm">priority_high</span>
-              <span>Urgency Level</span>
-            </label>
-            <div class="relative">
-            <select
-              v-model="urgencyFilter"
-                class="w-full px-4 py-3 pl-10 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 text-sm font-medium appearance-none transition-all"
-            >
-              <option value="">All Levels</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-              <span class="material-icons-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">priority_high</span>
-              <span class="material-icons-outlined absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">keyboard_arrow_down</span>
-            </div>
-          </div>
-          <div>
-            <label class="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase">
               <span class="material-icons-outlined text-sm">calendar_today</span>
               <span>Start Date</span>
             </label>
@@ -2054,10 +2017,6 @@ watch(itemsPerPage, () => {
                 <span class="material-icons-outlined text-xs">flag</span>
                 <span class="hidden sm:inline">{{ request.status === 'supply_approved' ? 'Supply Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status }}</span>
                 <span class="sm:hidden">{{ request.status === 'supply_approved' ? 'Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status.substring(0, 4) }}</span>
-              </span>
-              <span :class="['inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold uppercase rounded-lg shadow-sm', getUrgencyBadgeClass(request.urgency_level)]">
-                <span class="material-icons-outlined text-xs">priority_high</span>
-                {{ request.urgency_level }}
               </span>
             </div>
           </div>
@@ -2321,13 +2280,6 @@ watch(itemsPerPage, () => {
                 </th>
                 <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
                   <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">priority_high</span>
-                    <span class="hidden sm:inline">Urgency</span>
-                    <span class="sm:hidden">Urg</span>
-                  </div>
-                </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
-                  <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">flag</span>
                     <span>Status</span>
                   </div>
@@ -2435,13 +2387,6 @@ watch(itemsPerPage, () => {
                     <span class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">{{ request.supply_name || 'N/A' }}</span>
                   </div>
                 </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <span :class="['inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-bold uppercase tracking-wide rounded-lg shadow-sm', getUrgencyBadgeClass(request.urgency_level)]">
-                    <span class="material-icons-outlined text-xs">priority_high</span>
-                    <span class="hidden sm:inline">{{ request.urgency_level }}</span>
-                    <span class="sm:hidden">{{ request.urgency_level.substring(0, 1) }}</span>
-                    </span>
-                  </td>
                 <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
                   <span :class="['inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-bold uppercase tracking-wide rounded-lg shadow-sm', getStatusBadgeClass(request.status)]">
                     <span class="material-icons-outlined text-xs">flag</span>
@@ -3446,27 +3391,11 @@ watch(itemsPerPage, () => {
                             <template v-else>
                               <!-- Single Item (backward compatible) -->
                               <div v-for="(value, key) in extractItemDetails(msg.message)" :key="key" 
-                                   v-if="key !== 'Urgency'"
                                    class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                                 <span class="text-xs text-gray-600 flex-shrink-0 font-semibold">{{ key }}:</span>
                                 <span class="text-xs font-bold text-gray-900 break-words sm:text-right">{{ value }}</span>
                               </div>
                             </template>
-                            <!-- Urgency Level (common for all) -->
-                            <div v-if="extractItemDetails(msg.message)?.Urgency" 
-                                 class="pt-2 border-t border-green-200 mt-2">
-                              <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-600 font-semibold">Urgency Level:</span>
-                                <span :class="[
-                                  'text-xs font-bold px-2 py-1 rounded',
-                                  extractItemDetails(msg.message).Urgency.toLowerCase() === 'high' ? 'bg-red-100 text-red-800' :
-                                  extractItemDetails(msg.message).Urgency.toLowerCase() === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-blue-100 text-blue-800'
-                                ]">
-                                  {{ extractItemDetails(msg.message).Urgency }}
-                                </span>
-                              </div>
-                            </div>
                           </div>
                         </div>
                         

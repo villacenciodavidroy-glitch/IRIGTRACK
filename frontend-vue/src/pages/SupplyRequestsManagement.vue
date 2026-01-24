@@ -1615,7 +1615,7 @@ watch(itemsPerPage, () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 pb-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
+  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 pb-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
     <!-- Enhanced Professional Banner Notification -->
     <Transition name="banner-slide">
       <div
@@ -1696,21 +1696,21 @@ watch(itemsPerPage, () => {
     </Transition>
 
     <!-- Enhanced Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 shadow-2xl border-b-4 border-blue-900 mt-0">
+    <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 shadow-2xl border-b-4 border-blue-900 dark:border-gray-600 mt-0">
       <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
       <div class="relative px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-7 flex flex-col gap-3 sm:gap-4">
         <div class="flex items-start gap-3 sm:gap-4">
           <div class="flex items-center gap-2 sm:gap-3 pt-1 flex-shrink-0">
             <button 
               @click="router.push('/dashboard')" 
-              class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white rounded-lg sm:rounded-xl hover:bg-white/30 hover:scale-105 transition-all duration-200 shadow-lg"
+              class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm border-2 border-white/30 dark:border-gray-600 text-white rounded-lg sm:rounded-xl hover:bg-white/30 dark:hover:bg-gray-600/80 hover:scale-105 transition-all duration-200 shadow-lg"
               title="Return to Dashboard"
             >
               <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
             </button>
             <button 
               @click="refreshData" 
-              class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white rounded-lg sm:rounded-xl hover:bg-white/30 hover:scale-105 transition-all duration-200 shadow-lg"
+              class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm border-2 border-white/30 dark:border-gray-600 text-white rounded-lg sm:rounded-xl hover:bg-white/30 dark:hover:bg-gray-600/80 hover:scale-105 transition-all duration-200 shadow-lg"
               title="Refresh Data"
               :disabled="loading"
             >
@@ -1718,12 +1718,12 @@ watch(itemsPerPage, () => {
             </button>
           </div>
           <div class="flex items-start gap-2 sm:gap-4 flex-1 min-w-0">
-            <div class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
+            <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
               <span class="material-icons-outlined text-2xl sm:text-3xl text-white">inventory_2</span>
           </div>
           <div class="text-white flex-1 min-w-0">
               <h1 class="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight break-words mb-1">SUPPLY REQUESTS MANAGEMENT SYSTEM</h1>
-              <p class="text-white/95 text-xs sm:text-sm lg:text-base mt-1 sm:mt-1.5 font-semibold">Official Request Processing and Approval Portal</p>
+              <p class="text-white/95 dark:text-gray-300 text-xs sm:text-sm lg:text-base mt-1 sm:mt-1.5 font-semibold">Official Request Processing and Approval Portal</p>
             </div>
           </div>
         </div>
@@ -1732,9 +1732,9 @@ watch(itemsPerPage, () => {
 
     <!-- Enhanced Stock Overview Cards -->
     <div class="p-3 sm:p-4 lg:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg sm:rounded-xl shadow-lg border-2 border-blue-400 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
+      <div class="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-900 dark:to-blue-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-blue-400 dark:border-blue-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
         <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl">
+          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
             <span class="material-icons-outlined text-2xl sm:text-3xl">inventory_2</span>
           </div>
           <div class="text-right">
@@ -1742,13 +1742,13 @@ watch(itemsPerPage, () => {
           </div>
         </div>
           <div>
-          <p class="text-xs sm:text-sm font-bold text-blue-100 uppercase tracking-wider mb-1">Total Inventory Items</p>
-          <p class="text-xs text-blue-200">Active items in system</p>
+          <p class="text-xs sm:text-sm font-bold text-blue-100 dark:text-blue-200 uppercase tracking-wider mb-1">Total Inventory Items</p>
+          <p class="text-xs text-blue-200 dark:text-blue-300">Active items in system</p>
           </div>
           </div>
-      <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg sm:rounded-xl shadow-lg border-2 border-green-400 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
+      <div class="bg-gradient-to-br from-green-500 to-green-600 dark:from-green-900 dark:to-green-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-green-400 dark:border-green-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
         <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl">
+          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
             <span class="material-icons-outlined text-2xl sm:text-3xl">shopping_cart</span>
         </div>
           <div class="text-right">
@@ -1756,13 +1756,13 @@ watch(itemsPerPage, () => {
       </div>
         </div>
           <div>
-          <p class="text-xs sm:text-sm font-bold text-green-100 uppercase tracking-wider mb-1">Total Stock Quantity</p>
-          <p class="text-xs text-green-200">Units available</p>
+          <p class="text-xs sm:text-sm font-bold text-green-100 dark:text-green-200 uppercase tracking-wider mb-1">Total Stock Quantity</p>
+          <p class="text-xs text-green-200 dark:text-green-300">Units available</p>
           </div>
           </div>
-      <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg sm:rounded-xl shadow-lg border-2 border-red-400 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200 sm:col-span-2 lg:col-span-1" :class="{ 'animate-pulse': stockSummary.low_stock_count > 0 }">
+      <div class="bg-gradient-to-br from-red-500 to-red-600 dark:from-red-900 dark:to-red-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-red-400 dark:border-red-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200 sm:col-span-2 lg:col-span-1" :class="{ 'animate-pulse': stockSummary.low_stock_count > 0 }">
         <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl">
+          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
             <span class="material-icons-outlined text-2xl sm:text-3xl">warning</span>
           </div>
           <div class="text-right">
@@ -1770,21 +1770,21 @@ watch(itemsPerPage, () => {
           </div>
         </div>
         <div>
-          <p class="text-xs sm:text-sm font-bold text-red-100 uppercase tracking-wider mb-1">Low Stock Alert</p>
-          <p class="text-xs text-red-200">Requires attention</p>
+          <p class="text-xs sm:text-sm font-bold text-red-100 dark:text-red-200 uppercase tracking-wider mb-1">Low Stock Alert</p>
+          <p class="text-xs text-red-200 dark:text-red-300">Requires attention</p>
         </div>
       </div>
     </div>
 
     <!-- All Messages View -->
     <div v-if="showAllMessagesView" class="p-6">
-      <div class="bg-white shadow-sm border-2 border-gray-300 overflow-hidden">
+      <div class="bg-white dark:bg-gray-800 shadow-sm border-2 border-gray-300 dark:border-gray-700 overflow-hidden">
         <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-800 to-blue-700 px-6 py-4 border-b-2 border-blue-900 flex items-center justify-between">
+        <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 px-6 py-4 border-b-2 border-blue-900 dark:border-gray-600 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <button
               @click="closeAllMessagesView"
-              class="p-2 hover:bg-white/20 transition-colors"
+              class="p-2 hover:bg-white/20 dark:hover:bg-gray-600 transition-colors rounded"
               title="Return to Requests"
             >
               <span class="material-icons-outlined text-white text-lg">arrow_back</span>
@@ -1793,7 +1793,7 @@ watch(itemsPerPage, () => {
           </div>
           <button
             @click="fetchAllMessages"
-            class="p-2 hover:bg-white/20 transition-colors"
+            class="p-2 hover:bg-white/20 dark:hover:bg-gray-600 transition-colors rounded"
             title="Refresh Messages"
             :disabled="loadingAllMessages"
           >
@@ -1804,14 +1804,14 @@ watch(itemsPerPage, () => {
         <!-- Messages List -->
         <div class="p-6">
           <div v-if="loadingAllMessages" class="text-center py-12">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p class="text-gray-600">Loading messages...</p>
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+            <p class="text-gray-600 dark:text-gray-400">Loading messages...</p>
           </div>
 
           <div v-else-if="groupedMessages.length === 0" class="text-center py-12">
-            <span class="material-icons-outlined text-6xl text-gray-300 mb-4 block">message</span>
-            <h3 class="text-lg font-bold text-gray-900 mb-2">No Messages Available</h3>
-            <p class="text-gray-600 text-sm">No supply request communications found in the system.</p>
+            <span class="material-icons-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">message</span>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">No Messages Available</h3>
+            <p class="text-gray-600 dark:text-gray-400 text-sm">No supply request communications found in the system.</p>
           </div>
 
           <div v-else class="space-y-3">
@@ -1819,8 +1819,8 @@ watch(itemsPerPage, () => {
               v-for="message in groupedMessages"
               :key="`${message.sender?.id || message.user?.id}-${message.id}`"
               @click="handleAllMessageClick(message)"
-              class="p-4 border-2 border-gray-300 hover:bg-gray-50 hover:border-blue-500 cursor-pointer transition-all relative"
-              :class="{ 'bg-blue-50 border-blue-500': message.hasUnread }"
+              class="p-4 border-2 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer transition-all relative"
+              :class="{ 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-500': message.hasUnread }"
             >
               <!-- Unread indicator -->
               <div v-if="message.hasUnread" class="absolute left-0 top-0 bottom-0 w-1 bg-blue-700"></div>
@@ -1840,26 +1840,26 @@ watch(itemsPerPage, () => {
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
-                      <p class="text-sm font-semibold text-gray-900">
+                      <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {{ message.sender?.name || message.user?.name || 'Unknown' }}
                       </p>
-                      <span class="text-xs text-gray-700 bg-gray-200 border border-gray-300 px-2 py-0.5 font-medium uppercase">
+                      <span class="text-xs text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 px-2 py-0.5 font-medium uppercase">
                         {{ message.sender?.role || message.user?.role || 'user' }}
                       </span>
-                      <span v-if="message.groupedMessages && message.groupedMessages.length > 1" class="text-xs text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 font-medium">
+                      <span v-if="message.groupedMessages && message.groupedMessages.length > 1" class="text-xs text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 px-2 py-0.5 font-medium">
                         {{ message.groupedMessages.length }} messages
                       </span>
                     </div>
-                    <span class="text-xs text-gray-500 flex-shrink-0">
+                    <span class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                       {{ formatRelativeTime(message.created_at) }}
                     </span>
                   </div>
 
-                  <p class="text-sm text-gray-700 mb-2 line-clamp-2">
+                  <p class="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
                     {{ message.message }}
                   </p>
 
-                  <div class="flex items-center gap-4 text-xs text-gray-500">
+                  <div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                     <span>
                       <span class="font-medium">Request:</span> {{ message.supply_request?.item_name || 'N/A' }}
                     </span>
@@ -2242,49 +2242,49 @@ watch(itemsPerPage, () => {
         <div class="overflow-x-auto">
             <table class="min-w-full border-collapse">
               <thead>
-                <tr class="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 border-b-2 border-blue-900">
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <tr class="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600">
+                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">person</span>
                     <span class="hidden sm:inline">Requestor</span>
                     <span class="sm:hidden">User</span>
                   </div>
                 </th>
-                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">location_on</span>
                     <span class="hidden sm:inline">Location</span>
                     <span class="sm:hidden">Loc</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">description</span>
                     <span class="hidden xl:inline">Item Description</span>
                     <span class="xl:hidden">Item</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">inventory</span>
                     <span class="hidden sm:inline">Quantity</span>
                     <span class="sm:hidden">Qty</span>
                   </div>
                 </th>
-                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">business</span>
                     <span class="hidden xl:inline">Supply Unit</span>
                     <span class="xl:hidden">Unit</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">flag</span>
                     <span>Status</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30">
+                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1 sm:gap-2">
                     <span class="material-icons-outlined text-sm">calendar_today</span>
                     <span class="hidden xl:inline">Date Submitted</span>
@@ -2581,43 +2581,43 @@ watch(itemsPerPage, () => {
 
     <!-- Assign to Admin Modal -->
     <div v-if="showAssignModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="bg-white shadow-lg border-2 border-gray-400 w-full max-w-md">
-        <div class="bg-gradient-to-r from-blue-800 to-blue-700 border-b-2 border-blue-900 px-6 py-4 flex items-start justify-between">
+      <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 w-full max-w-md">
+        <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between">
           <div>
             <h3 class="text-lg font-bold text-white uppercase tracking-wide">Assign Request to Administrator</h3>
-            <p class="text-xs text-white/90 mt-1">Request Item: {{ selectedRequest?.item_name }}</p>
+            <p class="text-xs text-white/90 dark:text-gray-300 mt-1">Request Item: {{ selectedRequest?.item_name }}</p>
           </div>
-          <button @click="closeAssignModal" class="text-white hover:bg-white/20 p-1 transition-colors">
+          <button @click="closeAssignModal" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors">
             <span class="material-icons-outlined text-lg">close</span>
           </button>
         </div>
 
         <div class="p-6 space-y-5">
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Select Administrator <span class="text-red-600">*</span></label>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Select Administrator <span class="text-red-600 dark:text-red-400">*</span></label>
             <select
               v-model="assignForm.admin_id"
-              class="w-full px-4 py-2.5 border-2 border-gray-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-sm"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 dark:focus:ring-blue-500 text-sm rounded-lg"
             >
               <option value="">-- Select Administrator --</option>
-              <option v-for="admin in admins" :key="admin.id" :value="admin.id">
+              <option v-for="admin in admins" :key="admin.id" :value="admin.id" class="bg-white dark:bg-gray-700">
                 {{ admin.fullname || admin.username || admin.email }}
               </option>
             </select>
           </div>
         </div>
 
-        <div class="bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex items-center justify-end gap-3">
+        <div class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-gray-300 dark:border-gray-600 px-6 py-4 flex items-center justify-end gap-3">
           <button
             @click="closeAssignModal"
-            class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all"
+            class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-all rounded-lg"
           >
             Cancel
           </button>
           <button
             @click="assignToAdmin"
             :disabled="loading || !assignForm.admin_id"
-            class="px-5 py-2 text-sm font-semibold bg-purple-700 text-white border-2 border-purple-900 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-purple-700 transition-all"
+            class="px-5 py-2 text-sm font-semibold bg-purple-700 text-white border-2 border-purple-900 dark:border-purple-800 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-purple-700 transition-all rounded-lg"
           >
             Assign Request
           </button>
@@ -3248,40 +3248,40 @@ watch(itemsPerPage, () => {
 
     <!-- Reject Request Modal -->
     <div v-if="showRejectModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="bg-white shadow-lg border-2 border-gray-400 w-full max-w-md">
-        <div class="bg-gradient-to-r from-red-800 to-red-700 border-b-2 border-red-900 px-6 py-4 flex items-start justify-between">
+      <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 w-full max-w-md rounded-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-red-800 to-red-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-red-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between">
           <div>
             <h3 class="text-lg font-bold text-white uppercase tracking-wide">Reject Request</h3>
-            <p class="text-xs text-white/90 mt-1">Request Item: {{ selectedRequest?.item_name }}</p>
+            <p class="text-xs text-white/90 dark:text-gray-300 mt-1">Request Item: {{ selectedRequest?.item_name }}</p>
           </div>
-          <button @click="closeRejectModal" class="text-white hover:bg-white/20 p-1 transition-colors">
+          <button @click="closeRejectModal" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors rounded">
             <span class="material-icons-outlined text-lg">close</span>
           </button>
         </div>
 
         <div class="p-6 space-y-5">
           <div>
-            <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Rejection Reason <span class="text-red-600">*</span></label>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Rejection Reason <span class="text-red-600 dark:text-red-400">*</span></label>
             <textarea
               v-model="rejectForm.reason"
               rows="4"
-              class="w-full px-4 py-2.5 border-2 border-gray-300 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 text-sm resize-none"
+              class="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-red-600 dark:focus:border-red-500 focus:ring-1 focus:ring-red-600 dark:focus:ring-red-500 text-sm resize-none rounded-lg"
               placeholder="Please provide a reason for rejecting this request..."
             ></textarea>
           </div>
         </div>
 
-        <div class="bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex items-center justify-end gap-3">
+        <div class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-gray-300 dark:border-gray-600 px-6 py-4 flex items-center justify-end gap-3">
           <button
             @click="closeRejectModal"
-            class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all"
+            class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-all rounded-lg"
           >
             Cancel
           </button>
           <button
             @click="rejectRequest"
             :disabled="loading || !rejectForm.reason.trim()"
-            class="px-5 py-2 text-sm font-semibold bg-red-700 text-white border-2 border-red-900 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-700 transition-all"
+            class="px-5 py-2 text-sm font-semibold bg-red-700 text-white border-2 border-red-900 dark:border-red-800 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-700 transition-all rounded-lg"
           >
             Reject Request
           </button>
@@ -3291,44 +3291,44 @@ watch(itemsPerPage, () => {
 
     <!-- Message Modal -->
     <div v-if="showMessageModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="bg-white shadow-lg border-2 border-gray-400 w-full max-w-2xl max-h-[85vh] flex flex-col">
-        <div class="bg-gradient-to-r from-blue-800 to-blue-700 border-b-2 border-blue-900 px-6 py-4 flex items-start justify-between flex-shrink-0">
+      <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between flex-shrink-0">
           <div>
             <h3 class="text-lg font-bold text-white uppercase tracking-wide">Request Communications</h3>
-            <p class="text-xs text-white/90 mt-1">{{ selectedRequestForMessage?.item_name || 'Request' }} - {{ selectedRequestForMessage?.user?.name || 'User' }}</p>
+            <p class="text-xs text-white/90 dark:text-gray-300 mt-1">{{ selectedRequestForMessage?.item_name || 'Request' }} - {{ selectedRequestForMessage?.user?.name || 'User' }}</p>
           </div>
-          <button @click="closeMessageModal" class="text-white hover:bg-white/20 p-1 transition-colors flex-shrink-0">
+          <button @click="closeMessageModal" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors flex-shrink-0 rounded">
             <span class="material-icons-outlined text-lg">close</span>
           </button>
         </div>
 
         <!-- Messages List -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 message-modal-scroll">
           <div v-if="loadingMessages" class="flex justify-center py-8">
-            <span class="material-icons-outlined animate-spin text-2xl text-blue-700">refresh</span>
+            <span class="material-icons-outlined animate-spin text-2xl text-blue-700 dark:text-blue-400">refresh</span>
           </div>
-          <div v-else-if="messages.length === 0" class="text-center py-8 text-gray-500">
+          <div v-else-if="messages.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
             <span class="material-icons-outlined text-4xl mb-2 block">message</span>
             <p class="text-sm font-medium">No messages available</p>
           </div>
-          <div v-else v-for="msg in messages" :key="msg.id" class="flex gap-3 border-b border-gray-200 pb-4 last:border-0">
+          <div v-else v-for="msg in messages" :key="msg.id" class="flex gap-3 border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
             <div class="flex-shrink-0">
-              <div class="w-10 h-10 bg-blue-700 border-2 border-blue-800 flex items-center justify-center">
+              <div class="w-10 h-10 bg-blue-700 dark:bg-gray-600 border-2 border-blue-800 dark:border-gray-500 flex items-center justify-center rounded-lg">
                 <span class="material-icons-outlined text-white text-sm">person</span>
               </div>
             </div>
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-2">
-                <span class="text-sm font-bold text-gray-900">{{ msg.user.name }}</span>
-                <span class="text-xs text-gray-600 bg-gray-200 border border-gray-300 px-2 py-0.5 font-medium uppercase">{{ msg.user.role }}</span>
-                <span class="text-xs text-gray-600">{{ msg.created_at_formatted }}</span>
-                <span v-if="!msg.is_read && msg.user.id !== getCurrentUserId()" class="text-xs bg-blue-100 text-blue-900 border border-blue-300 px-2 py-0.5 font-semibold uppercase">New</span>
+                <span class="text-sm font-bold text-gray-900 dark:text-white">{{ msg.user.name }}</span>
+                <span class="text-xs text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 px-2 py-0.5 font-medium uppercase rounded">{{ msg.user.role }}</span>
+                <span class="text-xs text-gray-600 dark:text-gray-400">{{ msg.created_at_formatted }}</span>
+                <span v-if="!msg.is_read && msg.user.id !== getCurrentUserId()" class="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-300 border border-blue-300 dark:border-blue-700 px-2 py-0.5 font-semibold uppercase rounded">New</span>
               </div>
-              <div class="bg-gray-50 border border-gray-300 p-3">
-                <p class="text-sm text-gray-800 whitespace-pre-wrap break-words">{{ cleanMessageText(msg.message) }}</p>
+              <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 p-3 rounded-lg">
+                <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{{ cleanMessageText(msg.message) }}</p>
                 <!-- Receipt Details Display -->
                 <div v-if="extractReceiptUrl(msg.message)" class="mt-3 pt-3 border-t border-gray-200">
-                  <div class="bg-white border-2 border-green-300 rounded-lg shadow-sm overflow-hidden max-w-full">
+                  <div class="bg-white dark:bg-gray-700/50 border-2 border-green-300 dark:border-green-700 rounded-lg shadow-sm overflow-hidden max-w-full">
                     <!-- Receipt Header -->
                     <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-3 py-2.5">
                       <div class="flex items-center gap-2">
@@ -3338,45 +3338,45 @@ watch(itemsPerPage, () => {
                     </div>
                     
                     <!-- Receipt Body -->
-                    <div class="p-3 bg-gradient-to-br from-green-50 to-white">
+                    <div class="p-3 bg-gradient-to-br from-green-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-b-lg">
                       <div class="space-y-2">
                         <!-- Receipt Number -->
-                        <div v-if="extractReceiptNumber(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Receipt #</span>
-                          <span class="text-xs font-mono font-bold text-gray-900 break-all">{{ extractReceiptNumber(msg.message) }}</span>
+                        <div v-if="extractReceiptNumber(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 dark:border-green-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Receipt #</span>
+                          <span class="text-xs font-mono font-bold text-gray-900 dark:text-white break-all">{{ extractReceiptNumber(msg.message) }}</span>
                         </div>
                         
                         <!-- Approval Date -->
-                        <div v-if="extractApprovalDate(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Approved</span>
-                          <span class="text-xs text-gray-900 break-words sm:text-right">{{ extractApprovalDate(msg.message) }}</span>
+                        <div v-if="extractApprovalDate(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 dark:border-green-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved</span>
+                          <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApprovalDate(msg.message) }}</span>
                         </div>
                         
                         <!-- Approved By -->
-                        <div v-if="extractApproverName(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Approved By</span>
-                          <span class="text-xs text-gray-900 break-words sm:text-right">{{ extractApproverName(msg.message) }}</span>
+                        <div v-if="extractApproverName(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 dark:border-green-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved By</span>
+                          <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApproverName(msg.message) }}</span>
                         </div>
                         
                         <!-- Item Details Section -->
                         <div v-if="extractItemDetails(msg.message)" class="pt-2">
-                          <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <span class="material-icons-outlined text-green-600 text-sm">check_circle</span>
+                          <div class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <span class="material-icons-outlined text-green-600 dark:text-green-400 text-sm">check_circle</span>
                             <span>Item Details</span>
                           </div>
-                          <div class="bg-white rounded-lg border border-green-200 p-3 space-y-3">
+                          <div class="bg-white dark:bg-gray-700/50 rounded-lg border border-green-200 dark:border-green-800 p-3 space-y-3">
                             <template v-if="extractItemDetails(msg.message)?.Items">
                               <!-- Multiple Items -->
                               <div v-for="(item, idx) in extractItemDetails(msg.message).Items" :key="idx" 
                                    class="border-b border-green-100 last:border-b-0 pb-2 last:pb-0">
                                 <div class="flex items-start justify-between gap-2 mb-1">
                                   <div class="flex-1 min-w-0">
-                                    <div class="text-xs font-semibold text-green-700 mb-0.5">Item {{ item.number }}</div>
-                                    <div class="text-sm font-bold text-gray-900 break-words">{{ item.name }}</div>
+                                    <div class="text-xs font-semibold text-green-700 dark:text-green-400 mb-0.5">Item {{ item.number }}</div>
+                                    <div class="text-sm font-bold text-gray-900 dark:text-white break-words">{{ item.name }}</div>
                                   </div>
                                   <div class="text-right flex-shrink-0">
-                                    <div class="text-xs text-gray-500">Qty</div>
-                                    <div class="text-sm font-bold text-green-700">{{ item.quantity }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Qty</div>
+                                    <div class="text-sm font-bold text-green-700 dark:text-green-400">{{ item.quantity }}</div>
                                   </div>
                                 </div>
                               </div>
@@ -3413,10 +3413,10 @@ watch(itemsPerPage, () => {
                                 :src="extractQrCodeUrl(msg.message)" 
                                 alt="Receipt QR Code" 
                                 :class="[
-                                  'w-32 h-32 border-2 rounded-lg p-1 bg-white transition-all duration-300',
+                                  'w-32 h-32 border-2 rounded-lg p-1 bg-white dark:bg-gray-700 transition-all duration-300',
                                   hoveredQrCode === msg.id 
-                                    ? 'border-green-500 shadow-lg scale-110 border-4' 
-                                    : 'border-green-300 shadow-sm'
+                                    ? 'border-green-500 dark:border-green-400 shadow-lg scale-110 border-4' 
+                                    : 'border-green-300 dark:border-green-700 shadow-sm'
                                 ]"
                               />
                               <div 
@@ -3459,19 +3459,19 @@ watch(itemsPerPage, () => {
         </div>
 
         <!-- Message Input -->
-        <div class="bg-gray-100 border-t-2 border-gray-300 p-4">
+        <div class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-gray-300 dark:border-gray-600 p-4">
           <div class="flex gap-2">
             <textarea
               v-model="newMessage"
               @keydown.enter.exact.prevent="sendMessage"
               rows="2"
               placeholder="Enter your message..."
-              class="flex-1 px-4 py-2.5 border-2 border-gray-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-none text-sm"
+              class="flex-1 px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 focus:ring-1 focus:ring-blue-600 dark:focus:ring-blue-500 resize-none text-sm rounded-lg"
             ></textarea>
             <button
               @click="sendMessage"
               :disabled="!newMessage.trim()"
-              class="px-5 py-2.5 bg-blue-700 text-white border-2 border-blue-900 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-700 flex items-center gap-2 font-semibold text-sm transition-all"
+              class="px-5 py-2.5 bg-blue-700 text-white border-2 border-blue-900 dark:border-blue-800 hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-700 flex items-center gap-2 font-semibold text-sm transition-all rounded-lg"
             >
               <span class="material-icons-outlined text-sm">send</span>
               <span>Send</span>
@@ -3483,13 +3483,13 @@ watch(itemsPerPage, () => {
 
     <!-- Approval Proof Modal -->
     <div v-if="showApprovalProofModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div class="bg-white shadow-lg border-2 border-gray-400 w-full max-w-4xl max-h-[90vh] flex flex-col">
-        <div class="bg-gradient-to-r from-blue-800 to-blue-700 border-b-2 border-blue-900 px-6 py-4 flex items-start justify-between">
+      <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between">
           <div>
             <h3 class="text-lg font-bold text-white uppercase tracking-wide">Approval Receipt Verification</h3>
-            <p class="text-xs text-white/90 mt-1">{{ selectedRequestForProof?.item_name || 'Request' }} - {{ selectedRequestForProof?.user?.name || 'User' }}</p>
+            <p class="text-xs text-white/90 dark:text-gray-300 mt-1">{{ selectedRequestForProof?.item_name || 'Request' }} - {{ selectedRequestForProof?.user?.name || 'User' }}</p>
           </div>
-          <button @click="closeApprovalProofModal" class="text-white hover:bg-white/20 p-1 transition-colors">
+          <button @click="closeApprovalProofModal" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors rounded">
             <span class="material-icons-outlined text-lg">close</span>
           </button>
         </div>
@@ -3497,15 +3497,15 @@ watch(itemsPerPage, () => {
         <div class="flex-1 overflow-y-auto p-6 min-h-0">
           <div v-if="selectedRequestForProof?.approval_proof" class="space-y-4">
             <!-- Verification Info Box -->
-            <div class="bg-gradient-to-r from-blue-50 to-gray-50 border-2 border-blue-300 p-4">
+            <div class="bg-gradient-to-r from-blue-50 to-gray-50 dark:from-gray-700 dark:to-gray-800 border-2 border-blue-300 dark:border-gray-600 p-4 rounded-lg">
               <div class="flex items-start gap-3">
-                <span class="material-icons-outlined text-green-600 text-2xl">verified</span>
+                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-2xl">verified</span>
                 <div class="flex-1">
-                  <p class="text-sm font-semibold text-gray-900 mb-2">Receipt Verification for Item Pickup</p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-700">
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Receipt Verification for Item Pickup</p>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-700 dark:text-gray-300">
                     <div v-if="selectedRequestForProof?.request_number">
                       <span class="font-semibold">Receipt Number:</span> 
-                      <span class="font-mono bg-white px-2 py-1 rounded border border-gray-300">{{ selectedRequestForProof.request_number }}</span>
+                      <span class="font-mono bg-white dark:bg-gray-700 px-2 py-1 rounded border border-gray-300 dark:border-gray-600">{{ selectedRequestForProof.request_number }}</span>
                     </div>
                     <div v-if="selectedRequestForProof?.quantity">
                       <span class="font-semibold">Quantity:</span> {{ selectedRequestForProof.quantity }}
@@ -3518,23 +3518,23 @@ watch(itemsPerPage, () => {
                       <span class="capitalize">{{ selectedRequestForProof.status }}</span>
                     </div>
                   </div>
-                  <p class="text-xs text-gray-600 mt-3 italic">⚠️ Please verify the receipt details match the request before releasing items to the user.</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-3 italic">⚠️ Please verify the receipt details match the request before releasing items to the user.</p>
                 </div>
               </div>
             </div>
             
             <!-- Display image or PDF -->
-            <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700/50">
               <img
                 v-if="selectedRequestForProof.approval_proof && selectedRequestForProof.approval_proof.match(/\.(jpg|jpeg|png|gif)$/i)"
                 :src="selectedRequestForProof.approval_proof"
                 alt="Approval Proof"
-                class="w-full h-auto max-h-[60vh] object-contain bg-white"
+                class="w-full h-auto max-h-[60vh] object-contain bg-white dark:bg-gray-800"
                 @error="handleImageError"
               />
               <div v-else-if="selectedRequestForProof.approval_proof && selectedRequestForProof.approval_proof.match(/\.pdf$/i)" class="relative">
                 <!-- PDF Display Area -->
-                <div class="bg-white min-h-[60vh] flex flex-col">
+                <div class="bg-white dark:bg-gray-800 min-h-[60vh] flex flex-col">
                   <!-- Try to display PDF using API endpoint -->
                   <div class="flex-1 p-4">
                     <object
@@ -3597,20 +3597,20 @@ watch(itemsPerPage, () => {
               </div>
             </div>
           </div>
-          <div v-else class="text-center py-8 text-gray-500">
+          <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
             <span class="material-icons-outlined text-4xl mb-2 block">description</span>
             <p>No approval proof available</p>
           </div>
         </div>
 
-        <div class="bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex items-center justify-between gap-3">
-          <div class="text-xs text-gray-700 font-medium">
+        <div class="bg-gray-100 dark:bg-gray-700/50 border-t-2 border-gray-300 dark:border-gray-600 px-6 py-4 flex items-center justify-between gap-3">
+          <div class="text-xs text-gray-700 dark:text-gray-300 font-medium">
             <span class="font-bold">Note:</span> Verify receipt number and user details before releasing items
           </div>
           <div class="flex items-center gap-3">
             <button
               @click="closeApprovalProofModal"
-              class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all"
+              class="px-5 py-2 text-sm font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500 transition-all rounded-lg"
             >
               Close
             </button>
@@ -3621,19 +3621,19 @@ watch(itemsPerPage, () => {
 
     <!-- QR Code Modal -->
     <div v-if="showQrCodeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showQrCodeModal = false">
-      <div class="bg-white shadow-lg border-2 border-gray-400 max-w-md w-full mx-4">
-        <div class="bg-gradient-to-r from-blue-800 to-blue-700 border-b-2 border-blue-900 px-6 py-4 flex items-start justify-between">
+      <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 max-w-md w-full mx-4 rounded-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between">
           <div>
             <h3 class="text-lg font-bold text-white uppercase tracking-wide">Receipt QR Code</h3>
-            <p class="text-xs text-white/90 mt-1">Scan with mobile device to verify receipt details</p>
+            <p class="text-xs text-white/90 dark:text-gray-300 mt-1">Scan with mobile device to verify receipt details</p>
           </div>
-          <button @click="showQrCodeModal = false" class="text-white hover:bg-white/20 p-1 transition-colors">
+          <button @click="showQrCodeModal = false" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors rounded">
             <span class="material-icons-outlined text-lg">close</span>
           </button>
         </div>
         
         <div class="p-6 flex flex-col items-center space-y-5">
-          <div class="bg-gray-50 p-6 border-2 border-gray-300">
+          <div class="bg-gray-50 dark:bg-gray-700/50 p-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg">
             <img 
               v-if="selectedQrCodeUrl"
               :src="selectedQrCodeUrl" 
@@ -3643,18 +3643,18 @@ watch(itemsPerPage, () => {
           </div>
           
           <div class="text-center space-y-3 w-full">
-            <p class="text-sm font-bold text-gray-900 uppercase tracking-wide">QR Code Functions:</p>
-            <ul class="text-xs text-gray-700 space-y-2 text-left max-w-xs mx-auto">
-              <li class="flex items-start gap-2 border-b border-gray-200 pb-2">
-                <span class="text-blue-700 mt-0.5 font-bold">•</span>
+            <p class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">QR Code Functions:</p>
+            <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-2 text-left max-w-xs mx-auto">
+              <li class="flex items-start gap-2 border-b border-gray-200 dark:border-gray-600 pb-2">
+                <span class="text-blue-700 dark:text-blue-400 mt-0.5 font-bold">•</span>
                 <span>Verify receipt authenticity</span>
               </li>
-              <li class="flex items-start gap-2 border-b border-gray-200 pb-2">
-                <span class="text-blue-700 mt-0.5 font-bold">•</span>
+              <li class="flex items-start gap-2 border-b border-gray-200 dark:border-gray-600 pb-2">
+                <span class="text-blue-700 dark:text-blue-400 mt-0.5 font-bold">•</span>
                 <span>View receipt details</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="text-blue-700 mt-0.5 font-bold">•</span>
+                <span class="text-blue-700 dark:text-blue-400 mt-0.5 font-bold">•</span>
                 <span>Check approval status</span>
               </li>
             </ul>

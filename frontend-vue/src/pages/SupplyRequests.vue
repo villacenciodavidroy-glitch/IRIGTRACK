@@ -1187,7 +1187,7 @@ watch(requestStatusFilter, () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 pb-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
     <!-- Success/Error Banner -->
     <div
       v-if="showBanner"
@@ -1252,17 +1252,17 @@ watch(requestStatusFilter, () => {
           <button
             v-if="cart.length > 0"
             @click="openCart" 
-            class="bg-white text-blue-700 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 relative group"
+            class="bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-400 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 dark:border-gray-700 relative group"
           >
-            <span class="material-icons-outlined text-lg text-blue-700 group-hover:scale-110 transition-transform">shopping_cart</span>
+            <span class="material-icons-outlined text-lg text-blue-700 dark:text-blue-400 group-hover:scale-110 transition-transform">shopping_cart</span>
             <span>Cart</span>
             <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse">{{ cart.length }}</span>
           </button>
           <button
             @click="showHistoryModal = true; fetchMyRequests()" 
-            class="bg-white text-emerald-700 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 group"
+            class="bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 dark:border-gray-700 group"
           >
-            <span class="material-icons-outlined text-lg text-emerald-700 group-hover:rotate-180 transition-transform duration-500">history</span>
+            <span class="material-icons-outlined text-lg text-emerald-700 dark:text-emerald-400 group-hover:rotate-180 transition-transform duration-500">history</span>
             <span>My Requests</span>
           </button>
         </div>
@@ -1271,7 +1271,7 @@ watch(requestStatusFilter, () => {
 
     <!-- All Messages View -->
     <div v-if="showAllMessagesView" class="p-4 sm:p-6">
-      <div class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         <!-- Header -->
         <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -1312,8 +1312,8 @@ watch(requestStatusFilter, () => {
               v-for="message in groupedMessages"
               :key="`${message.sender?.id || message.user?.id}-${message.id}`"
               @click="handleAllMessageClick(message)"
-              class="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors relative"
-              :class="{ 'bg-blue-50 border-blue-300': message.hasUnread }"
+              class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors relative"
+              :class="{ 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600': message.hasUnread }"
             >
               <!-- Unread indicator -->
               <div v-if="message.hasUnread" class="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-lg"></div>
@@ -1333,22 +1333,22 @@ watch(requestStatusFilter, () => {
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
-                      <p class="text-sm font-semibold text-gray-900">
+                      <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {{ message.sender?.name || message.user?.name || 'Unknown' }}
                       </p>
-                      <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      <span class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                         {{ message.sender?.role || message.user?.role || 'user' }}
                       </span>
-                      <span v-if="message.groupedMessages && message.groupedMessages.length > 1" class="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">
+                      <span v-if="message.groupedMessages && message.groupedMessages.length > 1" class="text-xs text-gray-500 dark:text-gray-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">
                         {{ message.groupedMessages.length }} messages
                       </span>
                     </div>
-                    <span class="text-xs text-gray-500 flex-shrink-0">
+                    <span class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                       {{ formatRelativeTime(message.created_at) }}
                     </span>
                   </div>
 
-                  <p class="text-sm text-gray-700 mb-2 line-clamp-2">
+                  <p class="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">
                     {{ message.message }}
                   </p>
 
@@ -1555,7 +1555,7 @@ watch(requestStatusFilter, () => {
               <span class="material-icons-outlined text-lg">chevron_left</span>
               <span>Previous</span>
             </button>
-            <div class="px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+            <div class="px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
               Page <span class="text-emerald-600 dark:text-emerald-400">{{ currentPage }}</span> of 
               <span class="text-emerald-600 dark:text-emerald-400">{{ pagination.last_page }}</span>
             </div>

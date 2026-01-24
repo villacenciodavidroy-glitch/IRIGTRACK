@@ -506,7 +506,7 @@ const userAvatar = computed(() => {
 // Computed property for sidebar classes
 const sidebarClasses = computed(() => {
   return {
-    'fixed inset-y-0 left-0 w-64 xs:w-72 sm:w-80 lg:w-64 bg-white dark:bg-white shadow-lg z-20 flex flex-col transform transition-transform duration-300 ease-in-out': true,
+    'fixed inset-y-0 left-0 w-64 xs:w-72 sm:w-80 lg:w-64 bg-white dark:bg-gray-800 shadow-lg z-20 flex flex-col transform transition-transform duration-300 ease-in-out': true,
     '-translate-x-full': !isSidebarOpen.value && isMobile.value,
     'translate-x-0': isSidebarOpen.value || !isMobile.value
   }
@@ -1636,11 +1636,11 @@ onBeforeUnmount(() => {
     <!-- Sidebar -->
     <aside :class="sidebarClasses" class="sidebar transition-transform duration-300 ease-in-out">
       <!-- Logo -->
-      <div class="flex items-center px-4 xs:px-5 py-4 xs:py-5 h-16 xs:h-20 border-b border-gray-100">
+      <div class="flex items-center px-4 xs:px-5 py-4 xs:py-5 h-16 xs:h-20 border-b border-gray-100 dark:border-gray-700">
         <div class="h-8 w-8 xs:h-10 xs:w-10 rounded-full border-2 border-green-600 flex items-center justify-center flex-shrink-0">
           <img src="../assets/logo.png" alt="IrrigTrack" class="h-5 w-5 xs:h-7 xs:w-7 object-contain" />
         </div>
-        <span class="ml-2 xs:ml-3 text-base xs:text-lg font-semibold text-gray-800 dark:text-gray-900" style="font-weight: 600;">IrrigTrack</span>
+        <span class="ml-2 xs:ml-3 text-base xs:text-lg font-semibold text-gray-800 dark:text-gray-100" style="font-weight: 600;">IrrigTrack</span>
       </div>
 
       <!-- Navigation -->
@@ -1653,15 +1653,15 @@ onBeforeUnmount(() => {
             :class="[
               'flex items-center px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md mb-3 xs:mb-4 transition-colors',
               isActiveRoute(item.path)
-                ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
-                : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
+                ? 'bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-700'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
             ]"
             style="font-weight: 500;"
             @click="isMobile ? isSidebarOpen = false : null"
           >
             <span 
               class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
-              :class="isActiveRoute(item.path) ? 'text-green-600' : 'text-gray-600'"
+              :class="isActiveRoute(item.path) ? 'text-green-600 dark:text-green-300' : 'text-gray-600 dark:text-gray-300'"
             >
               {{ item.icon }}
             </span>
@@ -1675,15 +1675,15 @@ onBeforeUnmount(() => {
               :class="[
                 'w-full flex items-center justify-between px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md transition-colors',
                 isSubmenuActive(item.submenu) || isSubmenuOpen(item.id)
-                  ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
-                  : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
+                  ? 'bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-700'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               ]"
               style="font-weight: 500;"
             >
               <div class="flex items-center min-w-0 flex-1">
                 <span 
                   class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
-                  :class="isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600' : 'text-gray-600'"
+                  :class="isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600 dark:text-green-300' : 'text-gray-600 dark:text-gray-300'"
                 >
                   {{ item.icon }}
                 </span>
@@ -1692,7 +1692,7 @@ onBeforeUnmount(() => {
               <span 
                 class="material-icons-outlined text-base xs:text-lg transition-transform duration-200 flex-shrink-0"
                 :class="[
-                  isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600' : 'text-gray-600',
+                  isSubmenuActive(item.submenu) || isSubmenuOpen(item.id) ? 'text-green-600 dark:text-green-300' : 'text-gray-600 dark:text-gray-300',
                   { 'transform rotate-180': isSubmenuOpen(item.id) }
                 ]"
               >
@@ -1716,15 +1716,15 @@ onBeforeUnmount(() => {
                   :class="[
                     'flex items-center px-3 xs:px-4 sm:px-5 py-2.5 xs:py-3 text-sm xs:text-base rounded-md transition-colors',
                     isActiveRoute(subItem.path)
-                      ? 'bg-green-50 text-green-600 dark:bg-green-50 dark:text-green-600 border border-green-200'
-                      : 'text-gray-600 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-50'
+                      ? 'bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-700'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                   ]"
                   style="font-weight: 500;"
                   @click="isMobile ? isSidebarOpen = false : null"
                 >
                   <span 
                     class="material-icons-outlined mr-2 xs:mr-3 text-lg xs:text-xl flex-shrink-0"
-                    :class="isActiveRoute(subItem.path) ? 'text-green-600' : 'text-gray-600'"
+                    :class="isActiveRoute(subItem.path) ? 'text-green-600 dark:text-green-300' : 'text-gray-600 dark:text-gray-300'"
                   >
                     {{ subItem.icon }}
                   </span>
@@ -1737,9 +1737,9 @@ onBeforeUnmount(() => {
       </nav>
 
       <!-- User Info at Bottom -->
-      <div class="mt-auto border-t border-gray-200 dark:border-gray-200 p-3 xs:p-4 sm:p-5 bg-gray-50 dark:bg-gray-50">
-        <div class="text-gray-800 dark:text-gray-800 font-semibold mb-1 text-sm xs:text-base truncate">{{ userDisplayName }}</div>
-        <div class="text-gray-600 dark:text-gray-600 text-xs xs:text-sm">
+      <div class="mt-auto border-t border-gray-200 dark:border-gray-700 p-3 xs:p-4 sm:p-5 bg-gray-50 dark:bg-gray-800">
+        <div class="text-gray-800 dark:text-gray-100 font-semibold mb-1 text-sm xs:text-base truncate">{{ userDisplayName }}</div>
+        <div class="text-gray-600 dark:text-gray-300 text-xs xs:text-sm">
           <div class="truncate">{{ formatPhDate(currentDate) }}</div>
           <div class="truncate">at {{ formatTime(currentTime) }}</div>
         </div>

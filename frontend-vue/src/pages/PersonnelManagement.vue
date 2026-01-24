@@ -1,16 +1,21 @@
 <template>
-  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 md:p-8">
     <!-- Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-600 rounded-xl shadow-xl mb-6">
+    <div class="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-600 rounded-xl shadow-xl mb-6 border-b-4 border-emerald-700 dark:border-emerald-800">
+      <!-- Decorative background elements -->
+      <div class="absolute inset-0 opacity-10">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
+      </div>
       <div class="relative px-6 py-8 sm:px-8 sm:py-10">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div class="flex items-center gap-4">
-            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-200">
               <span class="material-icons-outlined text-4xl text-white">people</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1">Personnel Management</h1>
-              <p class="text-blue-100 text-sm sm:text-base">Manage personnel status and accountability</p>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 drop-shadow-sm">Personnel Management</h1>
+              <p class="text-emerald-100 text-sm sm:text-base font-medium">Manage personnel status and accountability</p>
             </div>
           </div>
         </div>
@@ -46,21 +51,21 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-6">
       <div class="flex flex-wrap gap-4 items-center">
         <div class="flex-1 min-w-[200px]">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search by name or user code..."
-            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
           />
         </div>
         <div>
           <select
             v-model="statusFilter"
             @change="currentPage = 1"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
           >
             <option value="all">All Status</option>
             <option value="ACTIVE">Active</option>
@@ -72,7 +77,7 @@
           <select
             v-model="itemsPerPage"
             @change="currentPage = 1"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
           >
             <option :value="10">10 per page</option>
             <option :value="25">25 per page</option>
@@ -84,10 +89,10 @@
     </div>
 
     <!-- Personnel Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gray-50 dark:bg-gray-700">
+          <thead class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User Code</th>
@@ -127,7 +132,7 @@
                 <span class="text-sm font-mono text-gray-900 dark:text-white">
                   {{ personnel.code || personnel.user_code || personnel.personnel_code || 'N/A' }}
                 </span>
-                <span v-if="personnel.type === 'PERSONNEL'" class="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                <span v-if="personnel.type === 'PERSONNEL'" class="ml-2 text-xs text-emerald-600 dark:text-emerald-400">
                   (Personnel)
                 </span>
               </td>
@@ -171,7 +176,7 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <button
                   @click="openIssuedItemsModal(personnel)"
-                  class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-4"
+                  class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
                   title="View all issued items"
                 >
                   View Items
@@ -179,7 +184,7 @@
                 <button
                   v-if="personnel.type === 'USER'"
                   @click="generateAccountabilityReport(personnel)"
-                  class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 mr-4"
+                  class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors"
                   title="Generate accountability report"
                 >
                   <span class="material-icons-outlined text-sm align-middle mr-1">description</span>
@@ -190,7 +195,7 @@
                   @click="openClearanceModal(personnel)"
                   :class="{
                     'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 font-bold': personnel.status === 'RESIGNED',
-                    'text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300': personnel.status !== 'RESIGNED'
+                    'text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300': personnel.status !== 'RESIGNED'
                   }"
                   class="mr-4"
                   :title="personnel.status === 'RESIGNED' ? 'URGENT: Clearance required for resigned user!' : 'Clear pending items'"
@@ -249,7 +254,7 @@
                   v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
                   @click="currentPage = page"
                   :class="{
-                    'z-10 bg-blue-50 dark:bg-blue-900 border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-300': currentPage === page,
+                    'z-10 bg-emerald-50 dark:bg-emerald-900 border-emerald-500 dark:border-emerald-400 text-emerald-600 dark:text-emerald-300': currentPage === page,
                     'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600': currentPage !== page
                   }"
                   class="relative inline-flex items-center px-4 py-2 border text-sm font-medium"
@@ -324,7 +329,7 @@
                     :checked="selectedItems.length === itemsWithMrCount && itemsWithMrCount > 0"
                     @change="toggleSelectAll"
                     :disabled="itemsWithMrCount === 0"
-                    class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                    class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 disabled:cursor-not-allowed"
                   />
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Select All ({{ selectedItems.length }}/{{ itemsWithMrCount }}) 
@@ -349,7 +354,7 @@
                 <button
                   v-if="selectedItems.length > 0"
                   @click="openBulkReassignModal"
-                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                  class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-medium transition-colors"
                   :disabled="processingBulk"
                 >
                   Reassign All Selected ({{ selectedItems.length }})
@@ -363,7 +368,7 @@
                 v-for="item in pendingItems"
                 :key="item.id || `item-${item.item?.id}`"
                 class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                :class="{ 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600': isItemSelected(item) }"
+                :class="{ 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-600': isItemSelected(item) }"
               >
                 <div class="flex items-start gap-3 mb-4">
                   <input
@@ -371,7 +376,7 @@
                     :checked="isItemSelected(item)"
                     @change="toggleItemSelection(item)"
                     @click.stop
-                    class="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                    class="mt-1 w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
                     :disabled="!item.id"
                     :class="{ 'cursor-not-allowed opacity-50': !item.id }"
                     :title="!item.id ? 'Items without MR records must be processed individually' : 'Select item for bulk operations'"
@@ -406,7 +411,7 @@
                   <button
                     @click.stop="openReassignModal(item)"
                     type="button"
-                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
                     :disabled="isItemProcessing(item) || processingBulk"
                   >
                     Reassign
@@ -449,7 +454,7 @@
             </label>
             <select
               v-model="reassignToUserId"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
             >
               <option value="">Select...</option>
               <option
@@ -470,7 +475,7 @@
             </button>
             <button
               @click="confirmReassign"
-              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
               :disabled="!reassignToUserId || processingItem"
             >
               {{ processingItem ? 'Processing...' : 'Reassign' }}
@@ -639,7 +644,7 @@
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Status:</label>
             <select
               v-model="issuedItemsStatusFilter"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white text-sm"
             >
               <option value="ALL">All Items</option>
               <option value="ISSUED">Issued Only</option>

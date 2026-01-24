@@ -44,3 +44,23 @@
     @apply text-lg xs:text-xl sm:text-2xl md:text-3xl;
   }
 }
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 5px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+.dark {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 #1f2937;
+}

@@ -652,7 +652,7 @@ const getStatusBadgeClass = (status) => {
     return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
   }
   if (statusLower === 'supply_approved' || statusLower === 'admin_assigned') {
-    return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
   }
   if (statusLower === 'rejected') {
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
@@ -834,7 +834,7 @@ const statistics = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 md:p-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
     <!-- Enhanced Professional Banner Notification -->
     <Transition name="banner-slide">
       <div
@@ -919,16 +919,21 @@ const statistics = computed(() => {
     </Transition>
 
     <!-- Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-600 rounded-xl shadow-xl mb-6">
+    <div class="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-600 rounded-xl shadow-xl mb-6 border-b-4 border-emerald-700 dark:border-emerald-800">
+      <!-- Decorative background elements -->
+      <div class="absolute inset-0 opacity-10">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
+      </div>
       <div class="relative px-6 py-8 sm:px-8 sm:py-10">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div class="flex items-center gap-4">
-            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-200">
               <span class="material-icons-outlined text-4xl text-white">assignment</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1">Supply Requests from Supply Account</h1>
-              <p class="text-blue-100 text-sm sm:text-base">View and manage requests approved by Supply Account. Approve or reject requests. Stock will be deducted when you approve.</p>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 drop-shadow-sm">Supply Requests from Supply Account</h1>
+              <p class="text-emerald-100 text-sm sm:text-base font-medium">View and manage requests approved by Supply Account. Approve or reject requests. Stock will be deducted when you approve.</p>
             </div>
           </div>
         </div>
@@ -938,20 +943,20 @@ const statistics = computed(() => {
     <!-- Main Content -->
     <div>
       <!-- Filters -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-6">
         <div class="flex flex-wrap gap-4 items-center">
           <div class="flex-1 min-w-[200px]">
             <input
               v-model="searchQuery"
               type="text"
               placeholder="Search by name, item, or request..."
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
             />
           </div>
           <div>
             <select
               v-model="statusFilter"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
             >
               <option value="">All Status</option>
               <option value="supply_approved">Supply Approved</option>
@@ -966,7 +971,7 @@ const statistics = computed(() => {
             <select
               v-model="itemsPerPage"
               @change="currentPage = 1"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
             >
               <option :value="8">8 per page</option>
               <option :value="10">10 per page</option>
@@ -981,7 +986,7 @@ const statistics = computed(() => {
       <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12">
         <div class="flex flex-col items-center justify-center">
           <div class="inline-block p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-4">
-            <span class="material-icons-outlined animate-spin text-4xl text-blue-600 dark:text-blue-400">refresh</span>
+            <span class="material-icons-outlined animate-spin text-4xl text-emerald-600 dark:text-emerald-400">refresh</span>
           </div>
           <p class="text-base font-medium text-gray-700 dark:text-gray-300">Loading requests...</p>
         </div>
@@ -1002,10 +1007,10 @@ const statistics = computed(() => {
       </div>
 
       <!-- Requests Table -->
-      <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+      <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead class="bg-gray-50 dark:bg-gray-700">
+            <thead class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
@@ -1072,7 +1077,7 @@ const statistics = computed(() => {
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button
                     @click="openMessageModal(request)"
-                    class="relative text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                    class="relative text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
                     title="Messages"
                   >
                     Messages
@@ -1089,14 +1094,14 @@ const statistics = computed(() => {
                   <template v-if="(request.status === 'supply_approved' || request.status === 'pending' || request.status === 'admin_assigned') && isAssignedAdmin(request)">
                     <button
                       @click="openApproveModal(request)"
-                      class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 mr-4"
+                      class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
                       title="Approve Request"
                     >
                       Approve
                     </button>
                     <button
                       @click="openRejectModal(request)"
-                      class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                      class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 font-medium transition-colors duration-200 hover:underline"
                       title="Reject Request"
                     >
                       Reject
@@ -1119,7 +1124,7 @@ const statistics = computed(() => {
             <button
               @click="currentPage = Math.max(1, currentPage - 1)"
               :disabled="currentPage === 1"
-              class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="relative inline-flex items-center px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
             >
               Previous
             </button>
@@ -1142,7 +1147,7 @@ const statistics = computed(() => {
                 <button
                   @click="currentPage = Math.max(1, currentPage - 1)"
                   :disabled="currentPage === 1"
-                  class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="relative inline-flex items-center px-2 py-2 rounded-l-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   <span class="material-icons-outlined text-sm">chevron_left</span>
                 </button>
@@ -1151,10 +1156,10 @@ const statistics = computed(() => {
                     v-if="page === 1 || page === pagination.last_page || (page >= currentPage - 1 && page <= currentPage + 1)"
                     @click="currentPage = page"
                     :class="{
-                      'z-10 bg-blue-50 dark:bg-blue-900 border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-300': currentPage === page,
+                      'z-10 bg-emerald-50 dark:bg-emerald-900 border-emerald-500 dark:border-emerald-400 text-emerald-600 dark:text-emerald-300': currentPage === page,
                       'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600': currentPage !== page
                     }"
-                    class="relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                    class="relative inline-flex items-center px-4 py-2 border-2 text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
                   >
                     {{ page }}
                   </button>
@@ -1168,7 +1173,7 @@ const statistics = computed(() => {
                 <button
                   @click="currentPage = Math.min(pagination.last_page, currentPage + 1)"
                   :disabled="currentPage >= pagination.last_page"
-                  class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="relative inline-flex items-center px-2 py-2 rounded-r-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   <span class="material-icons-outlined text-sm">chevron_right</span>
                 </button>
@@ -1184,7 +1189,7 @@ const statistics = computed(() => {
       <div v-if="showApproveModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeApproveModal">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-md transform transition-all">
           <!-- Modal Header -->
-          <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-lg border-b-2 border-blue-800">
+          <div class="bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-4 rounded-t-lg border-b-2 border-emerald-700 dark:border-emerald-800">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
@@ -1260,7 +1265,7 @@ const statistics = computed(() => {
                             <button
                               type="button"
                               @click="unrejectItem(it)"
-                              class="px-2 py-1 text-xs font-medium rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
+                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
                             >
                               Undo
                             </button>
@@ -1269,7 +1274,7 @@ const statistics = computed(() => {
                             <button
                               type="button"
                               @click="openRejectItemModal(it)"
-                              class="px-2 py-1 text-xs font-medium rounded bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1"
+                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
                             >
                               <span class="material-icons-outlined text-sm">report_problem</span>
                               Reject (defective)
@@ -1296,7 +1301,7 @@ const statistics = computed(() => {
             <button
               @click="closeApproveModal"
               :disabled="approvingRequest"
-              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <span class="material-icons-outlined text-lg">close</span>
               <span>Cancel</span>
@@ -1304,7 +1309,7 @@ const statistics = computed(() => {
             <button
               @click="approveRequest"
               :disabled="approvingRequest || allItemsRejectedInApproveModal()"
-              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md"
             >
               <span v-if="!approvingRequest" class="material-icons-outlined text-lg">check_circle</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
@@ -1323,19 +1328,19 @@ const statistics = computed(() => {
           <p v-if="rejectItemTarget?.item" class="text-sm text-gray-600 dark:text-gray-400 mb-3">
             {{ rejectItemTarget.item.item_name }} × {{ rejectItemTarget.item.quantity }}
           </p>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason <span class="text-red-500">*</span></label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason <span class="text-red-500 dark:text-red-400">*</span></label>
           <input
             v-model="rejectItemReason"
             type="text"
             placeholder="e.g. Defective, Damaged, Expired"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 mb-4"
+            class="w-full px-3 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-500 focus:border-red-500 dark:focus:border-red-500 mb-4 transition-all"
           />
           <div class="flex gap-3 justify-end">
             <button
               type="button"
               @click="closeRejectItemModal"
               :disabled="rejectingItem"
-              class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium disabled:opacity-50"
+              class="px-4 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 font-semibold disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:hover:scale-100"
             >
               Cancel
             </button>
@@ -1343,7 +1348,7 @@ const statistics = computed(() => {
               type="button"
               @click="rejectItem"
               :disabled="rejectingItem || !rejectItemReason.trim()"
-              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              class="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md"
             >
               <span v-if="rejectingItem" class="material-icons-outlined text-lg animate-spin">refresh</span>
               <span>{{ rejectingItem ? 'Rejecting...' : 'Reject item' }}</span>
@@ -1355,40 +1360,40 @@ const statistics = computed(() => {
 
     <!-- Reject Request Modal -->
     <div v-if="showRejectModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div class="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-md p-6 space-y-4">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-md p-6 space-y-4">
         <div class="flex items-start justify-between">
           <div>
-            <h3 class="text-lg font-semibold text-slate-800">Reject Request</h3>
-            <p class="text-sm text-slate-600 mt-1">Request: {{ selectedRequest?.item_name }}</p>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Reject Request</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Request: {{ selectedRequest?.item_name }}</p>
           </div>
-          <button @click="closeRejectModal" class="text-slate-500 hover:text-slate-700 transition-colors">
+          <button @click="closeRejectModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
             <span class="material-icons-outlined">close</span>
           </button>
         </div>
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1.5">Rejection Reason *</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Rejection Reason *</label>
             <textarea
               v-model="rejectForm.reason"
               rows="4"
               placeholder="Please provide a reason for rejection..."
-              class="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+              class="w-full px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-500 focus:border-red-500 dark:focus:border-red-500 resize-none transition-all"
             ></textarea>
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
             @click="closeRejectModal"
-            class="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-slate-700 hover:bg-gray-50 transition-colors"
+            class="px-4 py-2 text-sm font-medium rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
           >
             Cancel
           </button>
           <button
             @click="rejectRequest"
             :disabled="loading || !rejectForm.reason.trim()"
-            class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md"
           >
             Reject Request
           </button>
@@ -1398,13 +1403,13 @@ const statistics = computed(() => {
 
     <!-- Message Modal -->
     <div v-if="showMessageModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div class="bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl p-4 md:p-6 space-y-3 md:space-y-4 max-h-[85vh] flex flex-col">
-        <div class="flex items-start justify-between flex-shrink-0 border-b border-gray-200 pb-3">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-2xl p-4 md:p-6 space-y-3 md:space-y-4 max-h-[85vh] flex flex-col">
+        <div class="flex items-start justify-between flex-shrink-0 border-b-2 border-gray-200 dark:border-gray-700 pb-3">
           <div>
-            <h3 class="text-lg md:text-xl font-semibold text-slate-800">Messages</h3>
-            <p class="text-xs md:text-sm text-slate-600 mt-1">{{ selectedRequestForMessage?.item_name || 'Request' }} - {{ selectedRequestForMessage?.user?.name || 'User' }}</p>
+            <h3 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">Messages</h3>
+            <p class="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">{{ selectedRequestForMessage?.item_name || 'Request' }} - {{ selectedRequestForMessage?.user?.name || 'User' }}</p>
           </div>
-          <button @click="closeMessageModal" class="text-slate-500 hover:text-slate-700 flex-shrink-0 transition-colors">
+          <button @click="closeMessageModal" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 flex-shrink-0 transition-colors rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
             <span class="material-icons-outlined">close</span>
           </button>
         </div>
@@ -1412,32 +1417,32 @@ const statistics = computed(() => {
         <!-- Messages List -->
         <div class="flex-1 overflow-y-auto space-y-3 md:space-y-4 min-h-0 pr-1">
           <div v-if="loadingMessages" class="flex justify-center py-8">
-            <span class="material-icons-outlined animate-spin text-2xl text-slate-600">refresh</span>
+            <span class="material-icons-outlined animate-spin text-2xl text-emerald-600 dark:text-emerald-400">refresh</span>
           </div>
-          <div v-else-if="messages.length === 0" class="text-center py-8 text-slate-500">
+          <div v-else-if="messages.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
             <span class="material-icons-outlined text-4xl mb-2 block">message</span>
             <p class="text-sm">No messages yet</p>
           </div>
           <div v-else v-for="msg in messages" :key="msg.id" class="flex gap-3">
             <div class="flex-shrink-0">
-              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-                <span class="material-icons-outlined text-slate-600 text-sm">person</span>
+              <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center border-2 border-emerald-200 dark:border-emerald-700">
+                <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-sm">person</span>
               </div>
             </div>
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-sm font-semibold text-gray-900">{{ msg.user.name }}</span>
-                <span class="text-xs text-gray-500">{{ msg.user.role }}</span>
-                <span class="text-xs text-gray-500">{{ msg.created_at_formatted || formatDate(msg.created_at) }}</span>
-                <span v-if="!msg.is_read && msg.user.id !== getCurrentUserId()" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">New</span>
+                <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ msg.user.name }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ msg.user.role }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ msg.created_at_formatted || formatDate(msg.created_at) }}</span>
+                <span v-if="!msg.is_read && msg.user.id !== getCurrentUserId()" class="text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-700 font-medium">New</span>
               </div>
-              <div class="bg-gray-50 rounded-md p-3 border border-gray-200">
-                <p class="text-sm text-gray-800 whitespace-pre-wrap break-words">{{ cleanMessageText(msg.message) }}</p>
+              <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{{ cleanMessageText(msg.message) }}</p>
                 <!-- Receipt Details Display -->
-                <div v-if="extractReceiptUrl(msg.message)" class="mt-3 pt-3 border-t border-gray-200">
-                  <div class="bg-white border-2 border-green-300 rounded-lg shadow-sm overflow-hidden max-w-full">
+                <div v-if="extractReceiptUrl(msg.message)" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                  <div class="bg-white dark:bg-gray-700/50 border-2 border-emerald-300 dark:border-emerald-700 rounded-lg shadow-sm overflow-hidden max-w-full">
                     <!-- Receipt Header -->
-                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-3 py-2.5">
+                    <div class="bg-gradient-to-r from-emerald-600 to-green-600 px-3 py-2.5">
                       <div class="flex items-center gap-2">
                         <span class="material-icons-outlined text-white text-lg flex-shrink-0">receipt_long</span>
                         <h4 class="text-xs font-bold text-white uppercase tracking-wide truncate">Approval Receipt</h4>
@@ -1445,40 +1450,40 @@ const statistics = computed(() => {
                     </div>
                     
                     <!-- Receipt Body -->
-                    <div class="p-3 bg-gradient-to-br from-green-50 to-white">
+                    <div class="p-3 bg-gradient-to-br from-emerald-50 to-white dark:from-gray-700 dark:to-gray-800">
                       <div class="space-y-2">
                         <!-- Receipt Number -->
-                        <div v-if="extractReceiptNumber(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Receipt #</span>
-                          <span class="text-xs font-mono font-bold text-gray-900 break-all">{{ extractReceiptNumber(msg.message) }}</span>
+                        <div v-if="extractReceiptNumber(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-emerald-200 dark:border-emerald-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Receipt #</span>
+                          <span class="text-xs font-mono font-bold text-gray-900 dark:text-white break-all">{{ extractReceiptNumber(msg.message) }}</span>
                         </div>
                         
                         <!-- Approval Date -->
-                        <div v-if="extractApprovalDate(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Approved</span>
-                          <span class="text-xs text-gray-900 break-words sm:text-right">{{ extractApprovalDate(msg.message) }}</span>
+                        <div v-if="extractApprovalDate(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-emerald-200 dark:border-emerald-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved</span>
+                          <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApprovalDate(msg.message) }}</span>
                         </div>
                         
                         <!-- Approved By -->
-                        <div v-if="extractApproverName(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide flex-shrink-0">Approved By</span>
-                          <span class="text-xs text-gray-900 break-words sm:text-right">{{ extractApproverName(msg.message) }}</span>
+                        <div v-if="extractApproverName(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-emerald-200 dark:border-emerald-800 gap-1">
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved By</span>
+                          <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApproverName(msg.message) }}</span>
                         </div>
                         
                         <!-- Item Details Section -->
                         <div v-if="extractItemDetails(msg.message)" class="pt-2">
-                          <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Item Details</div>
-                          <div class="bg-white rounded border border-green-200 p-2 space-y-1.5">
+                          <div class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">Item Details</div>
+                          <div class="bg-white dark:bg-gray-700/50 rounded border border-emerald-200 dark:border-emerald-800 p-2 space-y-1.5">
                             <div v-for="(value, key) in extractItemDetails(msg.message)" :key="key" class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
-                              <span class="text-xs text-gray-600 flex-shrink-0">{{ key }}:</span>
-                              <span class="text-xs font-medium text-gray-900 break-words sm:text-right">{{ value }}</span>
+                              <span class="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">{{ key }}:</span>
+                              <span class="text-xs font-medium text-gray-900 dark:text-white break-words sm:text-right">{{ value }}</span>
                             </div>
                           </div>
                         </div>
                         
                         <!-- QR Code Section -->
-                        <div v-if="extractQrCodeUrl(msg.message)" class="pt-3 border-t border-green-200">
-                          <div class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 text-center">📱 Scan QR Code</div>
+                        <div v-if="extractQrCodeUrl(msg.message)" class="pt-3 border-t border-emerald-200 dark:border-emerald-800">
+                          <div class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2 text-center">📱 Scan QR Code</div>
                           <div class="flex justify-center">
                             <div 
                               class="relative cursor-pointer group"
@@ -1490,37 +1495,37 @@ const statistics = computed(() => {
                                 :src="extractQrCodeUrl(msg.message)" 
                                 alt="Receipt QR Code" 
                                 :class="[
-                                  'w-32 h-32 border-2 rounded-lg p-1 bg-white transition-all duration-300',
+                                  'w-32 h-32 border-2 rounded-lg p-1 bg-white dark:bg-gray-700 transition-all duration-300',
                                   hoveredQrCode === msg.id 
-                                    ? 'border-green-500 shadow-lg scale-110 border-4' 
-                                    : 'border-green-300 shadow-sm'
+                                    ? 'border-emerald-500 dark:border-emerald-400 shadow-lg scale-110 border-4' 
+                                    : 'border-emerald-300 dark:border-emerald-700 shadow-sm'
                                 ]"
                               />
                               <div 
                                 v-if="hoveredQrCode === msg.id"
                                 class="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg transition-opacity duration-300"
                               >
-                                <div class="text-white text-xs font-semibold bg-green-600 px-3 py-1 rounded-full">
+                                <div class="text-white text-xs font-semibold bg-emerald-600 px-3 py-1 rounded-full">
                                   Click to enlarge
                                 </div>
                               </div>
                             </div>
                           </div>
-                          <p class="text-xs text-center text-gray-600 mt-2">Scan to verify receipt details • Click to enlarge</p>
+                          <p class="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">Scan to verify receipt details • Click to enlarge</p>
                         </div>
                       </div>
                     </div>
                     
                     <!-- Receipt Footer -->
-                    <div class="bg-green-50 px-3 py-2.5 border-t border-green-200">
+                    <div class="bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2.5 border-t border-emerald-200 dark:border-emerald-800">
                       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div class="flex items-start gap-2 flex-1 min-w-0">
-                          <span class="material-icons-outlined text-green-600 text-sm flex-shrink-0 mt-0.5">info</span>
-                          <p class="text-xs text-green-700 break-words">Present this receipt when picking up items</p>
+                          <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-sm flex-shrink-0 mt-0.5">info</span>
+                          <p class="text-xs text-emerald-700 dark:text-emerald-300 break-words">Present this receipt when picking up items</p>
                         </div>
                         <button
                           @click="downloadReceiptPDF(extractReceiptUrl(msg.message), $event, msg)"
-                          class="px-2.5 py-1.5 text-xs text-green-700 hover:text-green-900 hover:bg-green-100 rounded-md transition-colors flex items-center gap-1.5 border border-green-300 bg-white flex-shrink-0 whitespace-nowrap"
+                          class="px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-700 flex-shrink-0 whitespace-nowrap shadow-sm hover:shadow-md transform hover:scale-105"
                           title="Download PDF receipt"
                         >
                           <span class="material-icons-outlined text-sm">download</span>
@@ -1536,19 +1541,19 @@ const statistics = computed(() => {
         </div>
 
         <!-- Message Input -->
-        <div class="border-t border-gray-200 pt-4">
+        <div class="border-t-2 border-gray-200 dark:border-gray-700 pt-4">
           <div class="flex gap-2">
             <textarea
               v-model="newMessage"
               @keydown.enter.exact.prevent="sendMessage"
               rows="2"
               placeholder="Type your message..."
-              class="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-slate-500 resize-none"
+              class="flex-1 px-4 py-2.5 text-sm border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-500 focus:border-emerald-500 dark:focus:border-emerald-500 resize-none transition-all"
             ></textarea>
             <button
               @click="sendMessage"
               :disabled="!newMessage.trim()"
-              class="px-4 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+              class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md font-semibold"
             >
               <span class="material-icons-outlined text-sm">send</span>
               <span>Send</span>
@@ -1560,19 +1565,19 @@ const statistics = computed(() => {
 
     <!-- QR Code Modal -->
     <div v-if="showQrCodeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" @click.self="showQrCodeModal = false">
-      <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-6 md:p-8 max-w-md w-full mx-4">
-        <div class="flex items-start justify-between mb-4 border-b border-gray-200 pb-3">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl border-2 border-gray-200 dark:border-gray-700 p-6 md:p-8 max-w-md w-full mx-4">
+        <div class="flex items-start justify-between mb-4 border-b-2 border-gray-200 dark:border-gray-700 pb-3">
           <div>
-            <h3 class="text-lg md:text-xl font-semibold text-slate-800">📱 Receipt QR Code</h3>
-            <p class="text-xs text-slate-600 mt-1">Scan with your mobile device to verify receipt details</p>
+            <h3 class="text-lg md:text-xl font-semibold text-gray-900 dark:text-white">📱 Receipt QR Code</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Scan with your mobile device to verify receipt details</p>
           </div>
-          <button @click="showQrCodeModal = false" class="text-slate-500 hover:text-slate-700 transition-colors">
+          <button @click="showQrCodeModal = false" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
             <span class="material-icons-outlined">close</span>
           </button>
         </div>
         
         <div class="flex flex-col items-center space-y-4">
-          <div class="bg-gradient-to-br from-green-50 to-white p-6 rounded-lg border-2 border-green-300">
+          <div class="bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-gray-800 p-6 rounded-lg border-2 border-emerald-300 dark:border-emerald-700">
             <img 
               v-if="selectedQrCodeUrl"
               :src="selectedQrCodeUrl" 
@@ -1582,18 +1587,18 @@ const statistics = computed(() => {
           </div>
           
           <div class="text-center space-y-2">
-            <p class="text-sm font-medium text-gray-700">Scan this QR code to:</p>
-            <ul class="text-xs text-gray-600 space-y-1 text-left max-w-xs mx-auto">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Scan this QR code to:</p>
+            <ul class="text-xs text-gray-600 dark:text-gray-400 space-y-1 text-left max-w-xs mx-auto">
               <li class="flex items-start gap-2">
-                <span class="text-green-600 mt-0.5">✓</span>
+                <span class="text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold">✓</span>
                 <span>Verify receipt authenticity</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="text-green-600 mt-0.5">✓</span>
+                <span class="text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold">✓</span>
                 <span>View receipt details</span>
               </li>
               <li class="flex items-start gap-2">
-                <span class="text-green-600 mt-0.5">✓</span>
+                <span class="text-emerald-600 dark:text-emerald-400 mt-0.5 font-bold">✓</span>
                 <span>Check approval status</span>
               </li>
             </ul>
@@ -1601,7 +1606,7 @@ const statistics = computed(() => {
           
           <button
             @click="showQrCodeModal = false"
-            class="w-full px-4 py-2 bg-slate-700 text-white rounded-md hover:bg-slate-800 transition-colors"
+            class="w-full px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 font-semibold"
           >
             Close
           </button>

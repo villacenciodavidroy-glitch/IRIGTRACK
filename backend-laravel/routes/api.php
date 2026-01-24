@@ -153,6 +153,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/supply-requests/all', [SupplyRequestController::class, 'getAllRequests'])->middleware('admin_or_supply');
     Route::post('/supply-requests/{id}/approve', [SupplyRequestController::class, 'approveRequest'])->middleware('admin_or_supply');
     Route::post('/supply-requests/{id}/reject', [SupplyRequestController::class, 'rejectRequest'])->middleware('admin_or_supply');
+    Route::post('/supply-requests/{id}/items/{itemId}/reject', [SupplyRequestController::class, 'rejectItem'])->middleware('admin_or_supply');
+    Route::post('/supply-requests/{id}/items/{itemId}/unreject', [SupplyRequestController::class, 'unrejectItem'])->middleware('admin_or_supply');
     Route::post('/supply-requests/{id}/forward', [SupplyRequestController::class, 'forwardToAdmin'])->middleware('admin_or_supply');
     Route::get('/supply-requests/stock-overview', [SupplyRequestController::class, 'getStockOverview'])->middleware('admin_or_supply');
     Route::get('/supply-requests/{id}/receipt', [SupplyRequestController::class, 'downloadReceipt']);
@@ -328,6 +330,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::get('supply-requests/all', [SupplyRequestController::class, 'getAllRequests'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/approve', [SupplyRequestController::class, 'approveRequest'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/reject', [SupplyRequestController::class, 'rejectRequest'])->middleware('admin_or_supply');
+        Route::post('supply-requests/{id}/items/{itemId}/reject', [SupplyRequestController::class, 'rejectItem'])->middleware('admin_or_supply');
+        Route::post('supply-requests/{id}/items/{itemId}/unreject', [SupplyRequestController::class, 'unrejectItem'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/forward', [SupplyRequestController::class, 'forwardToAdmin'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/fulfill', [SupplyRequestController::class, 'fulfillRequest'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/schedule-pickup', [SupplyRequestController::class, 'schedulePickup'])->middleware('admin_or_supply');

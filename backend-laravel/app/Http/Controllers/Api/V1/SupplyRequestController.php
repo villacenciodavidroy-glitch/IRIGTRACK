@@ -305,20 +305,26 @@ class SupplyRequestController extends Controller
                         $itemObj = $requestItem->item();
                         if ($itemObj) {
                             $requestItems[] = [
+                                'id' => $requestItem->id,
                                 'item_id' => $requestItem->item_id,
                                 'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
                                 'item_quantity' => $itemObj->quantity ?? 0,
                                 'quantity' => $requestItem->quantity,
+                                'status' => $requestItem->status ?? 'pending',
+                                'rejection_reason' => $requestItem->rejection_reason,
                             ];
                         }
                     }
                 } else {
                     // Single item - use main request data (backward compatible)
                     $requestItems[] = [
+                        'id' => null,
                         'item_id' => $request->item_id,
                         'item_name' => $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A',
                         'item_quantity' => $item ? ($item->quantity ?? 0) : 0,
                         'quantity' => $request->quantity,
+                        'status' => 'pending',
+                        'rejection_reason' => null,
                     ];
                 }
 
@@ -429,20 +435,26 @@ class SupplyRequestController extends Controller
                         $itemObj = $requestItem->item();
                         if ($itemObj) {
                             $requestItems[] = [
+                                'id' => $requestItem->id,
                                 'item_id' => $requestItem->item_id,
                                 'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
                                 'item_quantity' => $itemObj->quantity ?? 0,
                                 'quantity' => $requestItem->quantity,
+                                'status' => $requestItem->status ?? 'pending',
+                                'rejection_reason' => $requestItem->rejection_reason,
                             ];
                         }
                     }
                 } else {
                     // Single item - use main request data (backward compatible)
                     $requestItems[] = [
+                        'id' => null,
                         'item_id' => $request->item_id,
                         'item_name' => $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A',
                         'item_quantity' => $item ? ($item->quantity ?? 0) : 0,
                         'quantity' => $request->quantity,
+                        'status' => 'pending',
+                        'rejection_reason' => null,
                     ];
                 }
 
@@ -1095,12 +1107,52 @@ class SupplyRequestController extends Controller
                 }
             }
 
+            // Multi-item: resolve non-rejected items. If all rejected, cannot approve.
+            $itemsToProcess = [];
+            if (Schema::hasTable('supply_request_items')) {
+                $supplyRequest->load('items');
+            }
+            $hasMultiItem = $supplyRequest->relationLoaded('items') && $supplyRequest->items->count() > 0;
+            if ($hasMultiItem) {
+                foreach ($supplyRequest->items as $ri) {
+                    if (!$ri->isRejected()) {
+                        $itemsToProcess[] = $ri;
+                    }
+                }
+                if (count($itemsToProcess) === 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'All items have been rejected. Reject the entire request instead.'
+                    ], 400);
+                }
+            }
+
             $currentQuantity = $item->quantity ?? 0;
-            if ($supplyRequest->quantity > $currentQuantity) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Insufficient stock. Available: {$currentQuantity}, Requested: {$supplyRequest->quantity}"
-                ], 400);
+            if ($hasMultiItem) {
+                foreach ($itemsToProcess as $ri) {
+                    $it = $ri->item();
+                    if (!$it) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Item not found for line item ID: {$ri->id}"
+                        ], 404);
+                    }
+                    $avail = (int) ($it->quantity ?? 0);
+                    if ($ri->quantity > $avail) {
+                        $name = $it->unit ?? $it->description ?? 'N/A';
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Insufficient stock for {$name}. Available: {$avail}, Requested: {$ri->quantity}"
+                        ], 400);
+                    }
+                }
+            } else {
+                if ($supplyRequest->quantity > $currentQuantity) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Insufficient stock. Available: {$currentQuantity}, Requested: {$supplyRequest->quantity}"
+                    ], 400);
+                }
             }
 
             // Ensure requestedBy relationship is loaded with location BEFORE transaction
@@ -1135,18 +1187,10 @@ class SupplyRequestController extends Controller
                     // Admin approves supply_approved or pending requests
                     // After admin approval, request goes back to supply account for pickup scheduling
                     // NOTE: Quantity will be deducted when request is fulfilled, not at approval
+                    // Stock already validated above (single or multi-item)
                     $supplyRequest->status = 'ready_for_pickup';
                     $supplyRequest->approved_by = $user->id;
                     $supplyRequest->approved_at = now();
-                    
-                    // Check stock availability but don't deduct yet
-                    if ($supplyRequest->quantity > $currentQuantity) {
-                        DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Insufficient stock. Available: {$currentQuantity}, Requested: {$supplyRequest->quantity}"
-                        ], 400);
-                    }
                     
                     // Automatically generate receipt PDF (admin only)
                     try {
@@ -1182,11 +1226,13 @@ class SupplyRequestController extends Controller
                     $supplyRequest->refresh();
                     $supplyRequest->load(['requestedBy', 'approver', 'items']);
                     
-                    // Get all items for this request (multi-item support)
+                    // Get all items for this request (multi-item support) — only non-rejected
                     $requestItems = [];
                     if (Schema::hasTable('supply_request_items') && $supplyRequest->relationLoaded('items') && $supplyRequest->items->count() > 0) {
-                        // Multiple items - use items from pivot table
                         foreach ($supplyRequest->items as $requestItem) {
+                            if ($requestItem->isRejected()) {
+                                continue;
+                            }
                             $itemObj = $requestItem->item();
                             if ($itemObj) {
                                 $requestItems[] = [
@@ -1197,7 +1243,6 @@ class SupplyRequestController extends Controller
                             }
                         }
                     } else {
-                        // Single item - use main request data (backward compatible)
                         $freshItem = $supplyRequest->item();
                         if ($freshItem) {
                             $requestItems[] = [
@@ -1819,6 +1864,262 @@ class SupplyRequestController extends Controller
     }
 
     /**
+     * Reject a specific line item in a multi-item supply request (e.g. defective).
+     * Remaining non-rejected items can still be approved and processed.
+     */
+    public function rejectItem(Request $request, $id, $itemId): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+            }
+
+            $role = strtolower($user->role ?? '');
+            if (!in_array($role, ['supply', 'admin', 'super_admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: Only Supply Account and Admin can reject items'
+                ], 403);
+            }
+
+            $supplyRequest = SupplyRequest::findOrFail($id);
+
+            if ($role === 'supply' && Schema::hasColumn('supply_requests', 'target_supply_account_id')) {
+                if ($supplyRequest->target_supply_account_id !== $user->id && $supplyRequest->target_supply_account_id !== null) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized: You can only reject items in requests submitted to your supply account'
+                    ], 403);
+                }
+            }
+
+            if (in_array($role, ['admin', 'super_admin'])) {
+                if (!$supplyRequest->assigned_to_admin_id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Request must be assigned to an admin before rejecting items'
+                    ], 403);
+                }
+                if ($supplyRequest->assigned_to_admin_id !== $user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized: Only the assigned admin can reject items'
+                    ], 403);
+                }
+            }
+
+            if (!in_array($supplyRequest->status, ['pending', 'supply_approved', 'admin_assigned'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot reject items for request with status: {$supplyRequest->status}"
+                ], 400);
+            }
+
+            if (!Schema::hasTable('supply_request_items')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Multi-item requests are not supported'
+                ], 400);
+            }
+
+            $lineItem = SupplyRequestItem::where('supply_request_id', $id)->where('id', $itemId)->first();
+            if (!$lineItem) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Line item not found'
+                ], 404);
+            }
+
+            if ($lineItem->isRejected()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This item is already rejected'
+                ], 400);
+            }
+
+            $validated = $request->validate([
+                'rejection_reason' => 'required|string|max:1000',
+            ]);
+
+            $lineItem->status = SupplyRequestItem::STATUS_REJECTED;
+            $lineItem->rejection_reason = $validated['rejection_reason'];
+            $lineItem->rejected_at = now();
+            $lineItem->rejected_by = $user->id;
+            $lineItem->save();
+
+            $itemObj = $lineItem->item();
+            $itemName = $itemObj ? ($itemObj->unit ?? $itemObj->description ?? 'N/A') : 'N/A';
+            $itemId = $itemObj ? $itemObj->id : null;
+
+            // Load supply request with requestedBy relationship for notification
+            $supplyRequest->load(['requestedBy']);
+
+            // Create notification and message for the requester about the rejected item
+            $requestingUserId = $supplyRequest->requested_by_user_id;
+            if ($requestingUserId && $itemId) {
+                try {
+                    $rejecterName = $user->fullname ?? $user->username ?? $user->email ?? 'Supply Account';
+                    $rejectionReason = $validated['rejection_reason'];
+                    
+                    // Create notification message with rejection reason
+                    $notificationMessage = "Your supply request item \"{$itemName}\" (Quantity: {$lineItem->quantity}) has been rejected by {$rejecterName}.\n\n";
+                    $notificationMessage .= "Rejection Reason: {$rejectionReason}\n\n";
+                    $notificationMessage .= "Note: Other items in this request can still be processed.";
+                    
+                    $notification = Notification::create([
+                        'item_id' => $itemId,
+                        'user_id' => $requestingUserId,
+                        'message' => $notificationMessage,
+                        'type' => 'supply_request_rejected',
+                        'is_read' => false,
+                    ]);
+                    
+                    // Broadcast notification event for real-time updates
+                    if ($notification) {
+                        $notification->refresh();
+                        $notification->load('item');
+                        event(new NotificationCreated($notification));
+                        Log::info("Item rejection notification created and broadcasted for supply request ID: {$supplyRequest->id}, Item: {$itemName}");
+                    }
+                    
+                    // Create message in supply request messages thread
+                    $rejectionMessage = "Item \"{$itemName}\" (Quantity: {$lineItem->quantity}) has been rejected.\n\n";
+                    $rejectionMessage .= "Rejection Reason:\n{$rejectionReason}\n\n";
+                    $rejectionMessage .= "Rejected By: {$rejecterName}";
+                    if ($user->role) {
+                        $rejectionMessage .= " (" . ucfirst($user->role) . ")";
+                    }
+                    $rejectionMessage .= "\n\nNote: Other items in this request can still be processed.";
+                    
+                    $message = SupplyRequestMessage::create([
+                        'supply_request_id' => $supplyRequest->id,
+                        'user_id' => $user->id, // Supply/Admin who rejected (sender)
+                        'message' => $rejectionMessage,
+                        'is_read' => false,
+                    ]);
+                    
+                    if ($message) {
+                        Log::info("Item rejection message created for supply request ID: {$supplyRequest->id}, Item: {$itemName}, Message ID: {$message->id}");
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error creating item rejection notification/message: ' . $e->getMessage());
+                    Log::error('Stack trace: ' . $e->getTraceAsString());
+                    // Continue even if notification/message fails - item rejection is already saved
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Item \"{$itemName}\" rejected. Remaining items can still be processed.",
+                'data' => [
+                    'id' => $lineItem->id,
+                    'item_id' => $lineItem->item_id,
+                    'status' => $lineItem->status,
+                    'rejection_reason' => $lineItem->rejection_reason,
+                ]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error rejecting supply request item: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reject item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Undo rejection of a specific line item (restore to pending).
+     */
+    public function unrejectItem(Request $request, $id, $itemId): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+            }
+
+            $role = strtolower($user->role ?? '');
+            if (!in_array($role, ['supply', 'admin', 'super_admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: Only Supply Account and Admin can unreject items'
+                ], 403);
+            }
+
+            $supplyRequest = SupplyRequest::findOrFail($id);
+
+            if ($role === 'supply' && Schema::hasColumn('supply_requests', 'target_supply_account_id')) {
+                if ($supplyRequest->target_supply_account_id !== $user->id && $supplyRequest->target_supply_account_id !== null) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized: You can only unreject items in requests submitted to your supply account'
+                    ], 403);
+                }
+            }
+
+            if (in_array($role, ['admin', 'super_admin'])) {
+                if ($supplyRequest->assigned_to_admin_id && $supplyRequest->assigned_to_admin_id !== $user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized: Only the assigned admin can unreject items'
+                    ], 403);
+                }
+            }
+
+            if (!in_array($supplyRequest->status, ['pending', 'supply_approved', 'admin_assigned'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot unreject items for request with status: {$supplyRequest->status}"
+                ], 400);
+            }
+
+            $lineItem = SupplyRequestItem::where('supply_request_id', $id)->where('id', $itemId)->first();
+            if (!$lineItem) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Line item not found'
+                ], 404);
+            }
+
+            if (!$lineItem->isRejected()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This item is not rejected'
+                ], 400);
+            }
+
+            $lineItem->status = SupplyRequestItem::STATUS_PENDING;
+            $lineItem->rejection_reason = null;
+            $lineItem->rejected_at = null;
+            $lineItem->rejected_by = null;
+            $lineItem->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Item restored. It can be processed again.',
+                'data' => [
+                    'id' => $lineItem->id,
+                    'item_id' => $lineItem->item_id,
+                    'status' => $lineItem->status,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error unrejecting supply request item: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to restore item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Forward supply request to another supply account (Supply role)
      */
     public function forwardToAdmin(Request $request, $id): JsonResponse
@@ -2127,8 +2428,14 @@ class SupplyRequestController extends Controller
             if (Schema::hasTable('supply_request_items')) {
                 $supplyRequest->load('items');
                 if ($supplyRequest->items && $supplyRequest->items->count() > 0) {
+                    $requestItems = $supplyRequest->items->filter(fn ($ri) => !$ri->isRejected())->values();
+                    if ($requestItems->isEmpty()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'No items to fulfill; all line items were rejected.'
+                        ], 400);
+                    }
                     $hasMultipleItems = true;
-                    $requestItems = $supplyRequest->items;
                 }
             }
             
@@ -3582,11 +3889,13 @@ class SupplyRequestController extends Controller
             $item = $supplyRequest->item();
             $requestingUser = $supplyRequest->requestedBy;
             
-            // Get all items for this request (multi-item support)
+            // Get all items for this request (multi-item support) — only non-rejected
             $requestItems = [];
             if (Schema::hasTable('supply_request_items') && $supplyRequest->relationLoaded('items') && $supplyRequest->items->count() > 0) {
-                // Multiple items - use items from pivot table
                 foreach ($supplyRequest->items as $requestItem) {
+                    if ($requestItem->isRejected()) {
+                        continue;
+                    }
                     $itemObj = $requestItem->item();
                     if ($itemObj) {
                         $requestItems[] = [
@@ -3597,7 +3906,6 @@ class SupplyRequestController extends Controller
                     }
                 }
             } else {
-                // Single item - use main request data (backward compatible)
                 if ($item) {
                     $requestItems[] = [
                         'item_name' => $item->unit ?? $item->description ?? 'N/A',

@@ -66,6 +66,10 @@ const assignForm = ref({
 const rejectForm = ref({
   reason: ''
 })
+const showRejectItemModal = ref(false)
+const rejectItemTarget = ref(null) // { requestId, item }
+const rejectItemReason = ref('')
+const rejectingItem = ref(false)
 const admins = ref([])
 const supplyAccounts = ref([])
 const requestPollingInterval = ref(null) // Polling interval for requests
@@ -671,13 +675,113 @@ const fetchSupplyAccounts = async () => {
 
 // Open approve modal
 const openApproveModal = (request) => {
-  // Check if request can be approved
-  if (request.status !== 'pending') {
-    showSimpleBanner(`Cannot approve request. Current status: ${request.status}. Only pending requests can be approved.`, 'error', true, 5000)
+  if (request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_assigned') {
+    showSimpleBanner(`Cannot approve request. Current status: ${request.status}.`, 'error', true, 5000)
     return
   }
   requestToApprove.value = request
   showApproveModal.value = true
+}
+
+const isMultiItemApprove = () => {
+  const r = requestToApprove.value
+  return r && ((r.items_count > 1) || (r.items && r.items.length > 1))
+}
+
+const approveModalNonRejectedItems = () => {
+  const r = requestToApprove.value
+  if (!r?.items?.length) return []
+  return r.items.filter((i) => (i.status || 'pending') !== 'rejected')
+}
+
+const allItemsRejectedInApproveModal = () => {
+  return isMultiItemApprove() && approveModalNonRejectedItems().length === 0
+}
+
+// Calculate total quantity excluding rejected items
+const getTotalQuantity = (request) => {
+  if (!request) return 0
+  if (request.items && request.items.length > 0) {
+    return request.items
+      .filter((item) => (item.status || 'pending') !== 'rejected')
+      .reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)
+  }
+  // For single-item requests, check if rejected
+  if (request.items && request.items.length === 1) {
+    const item = request.items[0]
+    if ((item.status || 'pending') === 'rejected') {
+      return 0
+    }
+  }
+  return parseInt(request.quantity) || 0
+}
+
+// Check if an item is rejected
+const isItemRejected = (item) => {
+  return item && (item.status || 'pending') === 'rejected'
+}
+
+const openRejectItemModal = (item) => {
+  if (!requestToApprove.value) return
+  rejectItemTarget.value = { requestId: requestToApprove.value.id, item }
+  rejectItemReason.value = ''
+  showRejectItemModal.value = true
+}
+
+const closeRejectItemModal = () => {
+  showRejectItemModal.value = false
+  rejectItemTarget.value = null
+  rejectItemReason.value = ''
+}
+
+const rejectItem = async () => {
+  const t = rejectItemTarget.value
+  if (!t?.requestId || !t?.item?.id || !rejectItemReason.value.trim()) {
+    showSimpleBanner('Please provide a reason (e.g. Defective)', 'error', true, 4000)
+    return
+  }
+  rejectingItem.value = true
+  try {
+    const res = await axiosClient.post(`/supply-requests/${t.requestId}/items/${t.item.id}/reject`, {
+      rejection_reason: rejectItemReason.value.trim()
+    })
+    if (res.data.success) {
+      const idx = requestToApprove.value?.items?.findIndex((i) => i.id === t.item.id)
+      if (idx !== undefined && idx >= 0 && requestToApprove.value.items) {
+        requestToApprove.value.items[idx].status = 'rejected'
+        requestToApprove.value.items[idx].rejection_reason = rejectItemReason.value.trim()
+      }
+      showSimpleBanner(res.data.message || 'Item rejected. Remaining items can still be processed.', 'success', true, 4000)
+      closeRejectItemModal()
+    } else {
+      showSimpleBanner(res.data.message || 'Failed to reject item', 'error', true, 5000)
+    }
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || 'Failed to reject item'
+    showSimpleBanner(msg, 'error', true, 5000)
+  } finally {
+    rejectingItem.value = false
+  }
+}
+
+const unrejectItem = async (item) => {
+  if (!requestToApprove.value || !item?.id) return
+  try {
+    const res = await axiosClient.post(`/supply-requests/${requestToApprove.value.id}/items/${item.id}/unreject`)
+    if (res.data.success) {
+      const idx = requestToApprove.value.items?.findIndex((i) => i.id === item.id)
+      if (idx !== undefined && idx >= 0 && requestToApprove.value.items) {
+        requestToApprove.value.items[idx].status = 'pending'
+        requestToApprove.value.items[idx].rejection_reason = null
+      }
+      showSimpleBanner(res.data.message || 'Item restored.', 'success', true, 3000)
+    } else {
+      showSimpleBanner(res.data.message || 'Failed to restore item', 'error', true, 5000)
+    }
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || 'Failed to restore item'
+    showSimpleBanner(msg, 'error', true, 5000)
+  }
 }
 
 // Close approve modal
@@ -1965,12 +2069,33 @@ watch(itemsPerPage, () => {
               <span class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Item Details</span>
             </div>
             <div v-if="request.items && request.items.length > 1" class="space-y-3">
-              <div v-for="(item, idx) in request.items" :key="idx" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
-                <div class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ item.item_name }}</div>
+              <div v-for="(item, idx) in request.items" :key="idx" 
+                   :class="['rounded-lg p-3 border', isItemRejected(item) 
+                     ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700' 
+                     : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600']">
+                <div class="flex items-center justify-between mb-1">
+                  <div :class="['text-sm font-bold', isItemRejected(item) 
+                    ? 'text-red-700 dark:text-red-300 line-through' 
+                    : 'text-gray-900 dark:text-white']">
+                    {{ item.item_name }}
+                  </div>
+                  <span v-if="isItemRejected(item)" class="px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">
+                    Rejected
+                  </span>
+                </div>
+                <div v-if="isItemRejected(item) && item.rejection_reason" class="text-xs text-red-600 dark:text-red-400 mb-2 italic">
+                  Reason: {{ item.rejection_reason }}
+                </div>
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <span class="material-icons-outlined text-xs text-gray-400 dark:text-gray-500">inventory</span>
-                    <span class="text-xs text-gray-600 dark:text-gray-400">Qty: <span class="font-bold text-gray-900 dark:text-white">{{ item.quantity }}</span></span>
+                    <span :class="['text-xs', isItemRejected(item) 
+                      ? 'text-red-600 dark:text-red-400 line-through' 
+                      : 'text-gray-600 dark:text-gray-400']">
+                      Qty: <span :class="['font-bold', isItemRejected(item) 
+                        ? 'text-red-700 dark:text-red-300' 
+                        : 'text-gray-900 dark:text-white']">{{ item.quantity }}</span>
+                    </span>
                   </div>
                   <div class="flex items-center gap-1">
                     <span class="material-icons-outlined text-xs text-gray-400 dark:text-gray-500">storage</span>
@@ -1979,8 +2104,8 @@ watch(itemsPerPage, () => {
                 </div>
               </div>
               <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 flex items-center justify-between border border-blue-200 dark:border-blue-700">
-                <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">Total Quantity:</span>
-                <span class="text-sm font-bold text-blue-700 dark:text-blue-300">{{ request.quantity }}</span>
+                <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">Total Quantity (Non-Rejected):</span>
+                <span class="text-sm font-bold text-blue-700 dark:text-blue-300">{{ getTotalQuantity(request) }}</span>
               </div>
             </div>
             <div v-else class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
@@ -2276,19 +2401,31 @@ watch(itemsPerPage, () => {
                 <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
                   <div v-if="request.items && request.items.length > 1" class="space-y-1.5 sm:space-y-2">
                     <div v-for="(item, idx) in request.items" :key="idx" class="flex items-center gap-1.5 sm:gap-2">
-                      <span class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-sm font-bold">
-                      {{ item.quantity }}
+                      <span v-if="isItemRejected(item)" 
+                            class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-xs sm:text-sm font-bold line-through"
+                            :title="'Rejected: ' + (item.rejection_reason || 'Defective')">
+                        {{ item.quantity }}
+                      </span>
+                      <span v-else 
+                            class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-sm font-bold">
+                        {{ item.quantity }}
                       </span>
                     </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-200 dark:border-gray-600 flex items-center gap-1">
                       <span class="material-icons-outlined text-xs hidden sm:inline">summarize</span>
                       <span class="hidden sm:inline">Total: </span>
-                      <span class="font-bold text-gray-900 dark:text-white">{{ request.quantity }}</span>
+                      <span class="font-bold text-gray-900 dark:text-white">{{ getTotalQuantity(request) }}</span>
                     </div>
                   </div>
                   <div v-else>
-                    <span class="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-base font-bold">
-                    {{ request.quantity }}
+                    <span v-if="request.items && request.items.length === 1 && isItemRejected(request.items[0])"
+                          class="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-xs sm:text-base font-bold line-through"
+                          :title="'Rejected: ' + (request.items[0].rejection_reason || 'Defective')">
+                      {{ request.items[0].quantity }}
+                    </span>
+                    <span v-else
+                          class="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-base font-bold">
+                      {{ getTotalQuantity(request) }}
                     </span>
                   </div>
                 </td>
@@ -2679,12 +2816,12 @@ watch(itemsPerPage, () => {
               <div class="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg flex-shrink-0">
                 <span class="material-icons-outlined text-green-600 dark:text-green-400 text-2xl">help_outline</span>
               </div>
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <p class="text-base font-semibold text-gray-900 dark:text-white mb-2">
                   Are you sure you want to approve this request?
                 </p>
                 <div v-if="requestToApprove" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mt-3">
-                  <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                  <div v-if="!isMultiItemApprove()" class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">inventory_2</span>
                       <span><strong>Item:</strong> {{ requestToApprove.item_name || requestToApprove.item?.name || 'N/A' }}</span>
@@ -2702,10 +2839,57 @@ watch(itemsPerPage, () => {
                       <span><strong>Status:</strong> <span class="capitalize">{{ requestToApprove.status }}</span></span>
                     </div>
                   </div>
+                  <div v-else class="text-sm text-gray-700 dark:text-gray-300 space-y-3">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">person</span>
+                      <span><strong>Requested by:</strong> {{ requestToApprove.requested_by_user?.name || requestToApprove.user?.name || 'N/A' }}</span>
+                    </div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">Reject defective items below. Only non-rejected items will be approved.</p>
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                      <div
+                        v-for="(it, idx) in requestToApprove.items"
+                        :key="it.id || idx"
+                        class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border"
+                        :class="(it.status || 'pending') === 'rejected' ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'"
+                      >
+                        <div class="min-w-0 flex-1">
+                          <span class="font-medium">{{ it.item_name || 'N/A' }}</span>
+                          <span class="text-gray-500 dark:text-gray-400 ml-1">× {{ it.quantity }}</span>
+                          <p v-if="(it.status || 'pending') === 'rejected'" class="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                            Rejected: {{ it.rejection_reason || 'Defective' }}
+                          </p>
+                        </div>
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                          <template v-if="(it.status || 'pending') === 'rejected'">
+                            <button
+                              type="button"
+                              @click="unrejectItem(it)"
+                              class="px-2 py-1 text-xs font-medium rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
+                            >
+                              Undo
+                            </button>
+                          </template>
+                          <template v-else>
+                            <button
+                              type="button"
+                              @click="openRejectItemModal(it)"
+                              class="px-2 py-1 text-xs font-medium rounded bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1"
+                            >
+                              <span class="material-icons-outlined text-sm">report_problem</span>
+                              Reject (defective)
+                            </button>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+                    <p v-if="allItemsRejectedInApproveModal()" class="text-sm text-red-600 dark:text-red-400 font-medium">
+                      All items rejected. Reject the entire request instead, or undo some rejections.
+                    </p>
+                  </div>
                 </div>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-3 flex items-start gap-2">
+                <p v-if="!allItemsRejectedInApproveModal()" class="text-sm text-gray-600 dark:text-gray-400 mt-3 flex items-start gap-2">
                   <span class="material-icons-outlined text-green-500 text-sm mt-0.5">info</span>
-                  <span>The request will be approved and the requester will be notified.</span>
+                  <span>{{ isMultiItemApprove() ? 'Only non-rejected items will be approved and the requester notified.' : 'The request will be approved and the requester will be notified.' }}</span>
                 </p>
               </div>
             </div>
@@ -2723,12 +2907,50 @@ watch(itemsPerPage, () => {
             </button>
             <button
               @click="approveRequest"
-              :disabled="approvingRequest"
+              :disabled="approvingRequest || allItemsRejectedInApproveModal()"
               class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span v-if="!approvingRequest" class="material-icons-outlined text-lg">check_circle</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
               <span>{{ approvingRequest ? 'Approving...' : 'Approve Request' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Reject Item (Defective) Modal -->
+    <Transition name="modal-fade">
+      <div v-if="showRejectItemModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRejectItemModal">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-md p-6">
+          <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Reject item (defective)</h4>
+          <p v-if="rejectItemTarget?.item" class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            {{ rejectItemTarget.item.item_name }} × {{ rejectItemTarget.item.quantity }}
+          </p>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason <span class="text-red-500">*</span></label>
+          <input
+            v-model="rejectItemReason"
+            type="text"
+            placeholder="e.g. Defective, Damaged, Expired"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 mb-4"
+          />
+          <div class="flex gap-3 justify-end">
+            <button
+              type="button"
+              @click="closeRejectItemModal"
+              :disabled="rejectingItem"
+              class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              @click="rejectItem"
+              :disabled="rejectingItem || !rejectItemReason.trim()"
+              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <span v-if="rejectingItem" class="material-icons-outlined text-lg animate-spin">refresh</span>
+              <span>{{ rejectingItem ? 'Rejecting...' : 'Reject item' }}</span>
             </button>
           </div>
         </div>
@@ -2770,14 +2992,35 @@ watch(itemsPerPage, () => {
                   Mark this request as fulfilled?
                 </p>
                 <div v-if="requestToFulfill" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mt-3">
-                  <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                  <div v-if="requestToFulfill.items && requestToFulfill.items.length > 1" class="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">person</span>
+                      <span><strong>Requested by:</strong> {{ requestToFulfill.requested_by_user?.name || requestToFulfill.user?.name || 'N/A' }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">flag</span>
+                      <span><strong>Status:</strong> <span class="capitalize">{{ requestToFulfill.status }}</span></span>
+                    </div>
+                    <p class="text-xs font-medium text-amber-600 dark:text-amber-400 pt-1">Approved items to fulfill (rejected excluded):</p>
+                    <div class="space-y-1.5 max-h-32 overflow-y-auto">
+                      <div v-for="(it, idx) in requestToFulfill.items.filter(i => !isItemRejected(i))" :key="it.id || idx" class="flex justify-between text-xs">
+                        <span class="text-gray-700 dark:text-gray-300">{{ it.item_name }}</span>
+                        <span class="font-bold text-gray-900 dark:text-white">× {{ it.quantity }}</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
+                      <span class="font-semibold text-gray-700 dark:text-gray-300">Total quantity (approved):</span>
+                      <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ getTotalQuantity(requestToFulfill) }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">inventory_2</span>
                       <span><strong>Item:</strong> {{ requestToFulfill.item_name || requestToFulfill.item?.name || 'N/A' }}</span>
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">inventory</span>
-                      <span><strong>Quantity:</strong> {{ requestToFulfill.quantity }}</span>
+                      <span><strong>Quantity:</strong> {{ getTotalQuantity(requestToFulfill) }}</span>
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">person</span>

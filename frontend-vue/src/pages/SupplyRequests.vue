@@ -787,6 +787,29 @@ const closeCancelModal = () => {
   }
 }
 
+// Calculate total quantity excluding rejected items
+const getTotalQuantity = (request) => {
+  if (!request) return 0
+  if (request.items && request.items.length > 0) {
+    return request.items
+      .filter((item) => (item.status || 'pending') !== 'rejected')
+      .reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)
+  }
+  // For single-item requests, check if rejected
+  if (request.items && request.items.length === 1) {
+    const item = request.items[0]
+    if ((item.status || 'pending') === 'rejected') {
+      return 0
+    }
+  }
+  return parseInt(request.quantity) || 0
+}
+
+// Check if an item is rejected
+const isItemRejected = (item) => {
+  return item && (item.status || 'pending') === 'rejected'
+}
+
 // Cancel pending request
 const cancelRequest = async () => {
   if (!requestToCancel.value) return
@@ -2074,15 +2097,21 @@ watch(requestStatusFilter, () => {
                 </td>
                 <td class="px-6 py-4">
                   <div v-if="request.items && request.items.length > 1" class="space-y-2">
-                    <div v-for="(item, idx) in request.items" :key="idx" class="text-sm font-semibold text-gray-900 dark:text-white">
+                    <div v-for="(item, idx) in request.items" :key="idx" 
+                         :class="['text-sm font-semibold', isItemRejected(item) 
+                           ? 'text-red-600 dark:text-red-400 line-through' 
+                           : 'text-gray-900 dark:text-white']">
                       {{ item.quantity }}
                     </div>
                     <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400 pt-2 mt-2 border-t-2 border-emerald-200 dark:border-emerald-700">
-                      Total: {{ request.quantity }}
+                      Total: {{ getTotalQuantity(request) }}
                     </div>
                   </div>
-                  <div v-else class="text-lg font-bold text-gray-900 dark:text-white">
-                    {{ request.quantity }}
+                  <div v-else class="text-lg font-bold" 
+                       :class="request.items && request.items.length === 1 && isItemRejected(request.items[0])
+                         ? 'text-red-600 dark:text-red-400 line-through'
+                         : 'text-gray-900 dark:text-white'">
+                    {{ getTotalQuantity(request) }}
                   </div>
                 </td>
                 <td class="px-6 py-4">

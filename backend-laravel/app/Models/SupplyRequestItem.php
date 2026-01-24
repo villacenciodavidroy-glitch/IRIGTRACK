@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Item;
+use App\Models\User;
 
 class SupplyRequestItem extends Model
 {
@@ -15,7 +16,24 @@ class SupplyRequestItem extends Model
         'supply_request_id',
         'item_id',
         'quantity',
+        'status',
+        'rejection_reason',
+        'rejected_at',
+        'rejected_by',
     ];
+
+    protected $casts = [
+        'rejected_at' => 'datetime',
+    ];
+
+    /** Item status: pending (default), rejected */
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_REJECTED = 'rejected';
+
+    public function isRejected(): bool
+    {
+        return ($this->status ?? self::STATUS_PENDING) === self::STATUS_REJECTED;
+    }
 
     /**
      * Get the supply request this item belongs to
@@ -23,6 +41,14 @@ class SupplyRequestItem extends Model
     public function supplyRequest(): BelongsTo
     {
         return $this->belongsTo(SupplyRequest::class);
+    }
+
+    /**
+     * Get the user who rejected this line item (if any)
+     */
+    public function rejectedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 
     /**

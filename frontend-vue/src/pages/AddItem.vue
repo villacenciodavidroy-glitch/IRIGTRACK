@@ -36,8 +36,8 @@
                 <span class="material-icons-outlined text-white text-xl">description</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Basic Information</h2>
-                <p class="text-xs text-green-100">Essential item details and identification</p>
+                <h2 class="text-lg font-bold text-white">{{ getSectionTitle('section_basic_info', 'Basic Information') }}</h2>
+                <p class="text-xs text-green-100">{{ getSectionSubtitle('section_basic_info', 'Essential item details and identification') }}</p>
               </div>
             </div>
           </div>
@@ -45,7 +45,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- Article -->
           <div class="form-group">
-            <label class="form-label">Article <span class="text-red-500">*</span></label>
+            <label class="form-label">{{ getLabel('article', 'Article') }} <span class="text-red-500">*</span></label>
             <div class="relative flex items-center">
               <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                 <span class="material-icons-outlined">inventory_2</span>
@@ -53,7 +53,7 @@
               <input
                 v-model="formData.unit"
                 type="text"
-                placeholder="Enter article"
+                :placeholder="getPlaceholder('article', 'Enter article')"
                 class="form-input-enhanced !pl-12"
                 required
               />
@@ -62,13 +62,13 @@
 
           <!-- Category -->
           <div class="form-group">
-            <label class="form-label">Category <span class="text-red-500">*</span></label>
+            <label class="form-label">{{ getLabel('category', 'Category') }} <span class="text-red-500">*</span></label>
             <div class="relative flex items-center">
               <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                 <span class="material-icons-outlined">category</span>
               </span>
               <select v-model="formData.category" class="form-select-enhanced !pl-12" required>
-                <option value="" disabled>Select category</option>
+                <option value="" disabled>{{ getPlaceholder('category', 'Select category') }}</option>
                 <option v-for="category in categories" 
                     :key="category.id" 
                     :value="category.id || category.category_id">
@@ -80,18 +80,18 @@
 
               <!-- Description -->
               <div class="form-group md:col-span-2">
-                <label class="form-label">Description <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('description', 'Description') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">description</span>
                   </span>
-                  <input type="text" v-model="formData.description" class="form-input-enhanced !pl-12" placeholder="Enter description" required>
+                  <input type="text" v-model="formData.description" class="form-input-enhanced !pl-12" :placeholder="getPlaceholder('description', 'Enter description')" required>
                 </div>
               </div>
 
               <!-- Serial Number -->
               <div class="form-group">
-                <label class="form-label">Serial Number <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('serial_number', 'Serial Number') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">qr_code</span>
@@ -99,7 +99,7 @@
                   <input
                     v-model="formData.serial_number"
                     type="text"
-                    placeholder="Auto-generated serial number"
+                    :placeholder="getPlaceholder('serial_number', 'Auto-generated serial number')"
                     class="form-input-enhanced !pl-12 !pr-24"
                     required
                   />
@@ -113,12 +113,12 @@
                     <span>Generate</span>
                   </button>
                 </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-generated unique identifier for equipment tracking</p>
+                <p v-if="getHelperText('serial_number')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ getHelperText('serial_number') }}</p>
               </div>
 
               <!-- Model -->
               <div class="form-group">
-                <label class="form-label">Model <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('model', 'Model') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">devices</span>
@@ -126,7 +126,7 @@
                   <input
                     v-model="formData.model"
                     type="text"
-                    placeholder="Enter model"
+                    :placeholder="getPlaceholder('model', 'Enter model')"
                     class="form-input-enhanced !pl-12"
                     required
                   />
@@ -144,8 +144,8 @@
                 <span class="material-icons-outlined text-white text-xl">payments</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Financial & Acquisition Details</h2>
-                <p class="text-xs text-green-100">Property account code, valuation, and acquisition information</p>
+                <h2 class="text-lg font-bold text-white">{{ getSectionTitle('section_financial', 'Financial & Acquisition Details') }}</h2>
+                <p class="text-xs text-green-100">{{ getSectionSubtitle('section_financial', 'Property account code, valuation, and acquisition information') }}</p>
               </div>
             </div>
           </div>
@@ -153,29 +153,29 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Property Account Code -->
               <div class="form-group">
-                <label class="form-label">Property Account Code <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('property_account_code', 'Property Account Code') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">qr_code</span>
                   </span>
-                  <input type="text" v-model="formData.propertyAccountCode" class="form-input-enhanced !pl-12" placeholder="Enter property account code" required>
+                  <input type="text" v-model="formData.propertyAccountCode" class="form-input-enhanced !pl-12" :placeholder="getPlaceholder('property_account_code', 'Enter property account code')" required>
                 </div>
               </div>
 
               <!-- Unit Value -->
               <div class="form-group">
-                <label class="form-label">Unit Value <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('unit_value', 'Unit Value') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">payments</span>
                   </span>
-                  <input type="text" v-model="formData.unitValue" class="form-input-enhanced !pl-12" placeholder="32,200.00" required>
+                  <input type="text" v-model="formData.unitValue" class="form-input-enhanced !pl-12" :placeholder="getPlaceholder('unit_value', '32,200.00')" required>
                 </div>
               </div>
 
               <!-- Quantity -->
               <div class="form-group">
-                <label class="form-label">Quantity <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('quantity', 'Quantity') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">inventory</span>
@@ -184,7 +184,7 @@
                     type="number" 
                     v-model="formData.quantity" 
                     class="form-input-enhanced !pl-12" 
-                    placeholder="Enter quantity" 
+                    :placeholder="getPlaceholder('quantity', 'Enter quantity')" 
                     min="1"
                     required
                   >
@@ -193,7 +193,7 @@
 
               <!-- Date Acquired -->
               <div class="form-group">
-                <label class="form-label">Date Acquired <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('date_acquired', 'Date Acquired') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">calendar_today</span>
@@ -204,12 +204,12 @@
 
               <!-- P.O Number -->
               <div class="form-group">
-                <label class="form-label">P.O Number <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('po_number', 'P.O Number') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">receipt</span>
                   </span>
-                  <input type="text" v-model="formData.poNumber" class="form-input-enhanced !pl-12" placeholder="Enter P.O number" required>
+                  <input type="text" v-model="formData.poNumber" class="form-input-enhanced !pl-12" :placeholder="getPlaceholder('po_number', 'Enter P.O number')" required>
                 </div>
               </div>
             </div>
@@ -224,8 +224,8 @@
                 <span class="material-icons-outlined text-white text-xl">location_on</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Assignment & Unit/Sections</h2>
-                <p class="text-xs text-green-100">Item unit/sections and personnel assignment</p>
+                <h2 class="text-lg font-bold text-white">{{ getSectionTitle('section_assignment', 'Assignment & Unit/Sections') }}</h2>
+                <p class="text-xs text-green-100">{{ getSectionSubtitle('section_assignment', 'Item unit/sections and personnel assignment') }}</p>
               </div>
             </div>
           </div>
@@ -233,13 +233,13 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Unit/Sections -->
               <div class="form-group">
-                <label class="form-label">Unit/Sections <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('unit_sections', 'Unit/Sections') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">location_on</span>
                   </span>
                   <select v-model="formData.location" class="form-select-enhanced !pl-12" required>
-                    <option value="" disabled>Select Unit/Section</option>
+                    <option value="" disabled>{{ getPlaceholder('unit_sections', 'Select Unit/Section') }}</option>
                     <option  v-for="location in locations" 
                         :key="location.id" 
                         :value="location.id || location.location_id">
@@ -251,13 +251,13 @@
 
               <!-- Issued To -->
               <div class="form-group">
-                <label class="form-label">Issued To <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('issued_to', 'Issued To') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">person</span>
                   </span>
                   <select v-model="formData.issuedTo" class="form-select-enhanced !pl-12" required>
-                    <option value="" disabled>Select Personnel</option>
+                    <option value="" disabled>{{ getPlaceholder('issued_to', 'Select Personnel') }}</option>
                     <option v-for="location in locationsWithPersonnel" 
                         :key="location.id || location.location_id" 
                         :value="location.id || location.location_id">
@@ -282,8 +282,8 @@
                 <span class="material-icons-outlined text-white text-xl">build</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Condition & Status</h2>
-                <p class="text-xs text-green-100">Item condition assessment and classification</p>
+                <h2 class="text-lg font-bold text-white">{{ getSectionTitle('section_condition', 'Condition & Status') }}</h2>
+                <p class="text-xs text-green-100">{{ getSectionSubtitle('section_condition', 'Item condition assessment and classification') }}</p>
               </div>
             </div>
           </div>
@@ -309,13 +309,13 @@
 
               <!-- Condition Number -->
               <div class="form-group">
-                <label class="form-label">Condition Number <span class="text-red-500">*</span></label>
+                <label class="form-label">{{ getLabel('condition_number', 'Condition Number') }} <span class="text-red-500">*</span></label>
                 <div class="relative flex items-center">
                   <span class="absolute left-4 text-green-600 dark:text-green-400 z-10">
                     <span class="material-icons-outlined">tag</span>
                   </span>
                   <select v-model="formData.conditionNumber" class="form-select-enhanced !pl-12" required>
-                    <option value="" disabled>Select Condition Number</option>
+                    <option value="" disabled>{{ getPlaceholder('condition_number', 'Select Condition Number') }}</option>
                     <option v-for="condition_number in filteredConditionNumbers" 
                         :key="condition_number.id" 
                         :value="condition_number.id || condition_number.condition_number_id">
@@ -396,14 +396,14 @@
                 <span class="material-icons-outlined text-white text-xl">image</span>
               </div>
               <div>
-                <h2 class="text-lg font-bold text-white">Asset Image</h2>
-                <p class="text-xs text-green-100">Upload item photograph or documentation image</p>
+                <h2 class="text-lg font-bold text-white">{{ getSectionTitle('section_asset_image', 'Asset Image') }}</h2>
+                <p class="text-xs text-green-100">{{ getSectionSubtitle('section_asset_image', 'Upload item photograph or documentation image') }}</p>
               </div>
             </div>
           </div>
           <div class="p-6">
             <div class="form-group">
-              <label class="form-label">Item Image</label>
+              <label class="form-label">{{ getLabel('item_image', 'Item Image') }}</label>
               <div class="mt-3">
                 <div
                   @click="$refs.fileInput.click()"
@@ -450,9 +450,9 @@
                     </div>
                     <div class="text-center space-y-1">
                       <span class="font-bold text-gray-800 dark:text-white block">
-                        <span class="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-500 hover:underline">Click to upload</span> or drag and drop
+                        <span class="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-500 hover:underline">{{ getPlaceholder('item_image', 'Click to upload') }}</span> or drag and drop
                       </span>
-                      <p class="text-xs text-gray-600 dark:text-gray-400 font-medium">PNG, JPG, GIF up to 10MB</p>
+                      <p v-if="getHelperText('item_image')" class="text-xs text-gray-600 dark:text-gray-400 font-medium">{{ getHelperText('item_image') }}</p>
                     </div>
                   </div>
                   <input
@@ -519,6 +519,7 @@ import useLocations from '../composables/useLocations'
 import useConditions from '../composables/useConditions'
 import usecategories from '../composables/useCategories'
 import useConditionNumbers from '../composables/useConditionNumbers'
+import useFormLabels from '../composables/useFormLabels'
 import axiosClient from '../axios'
 import useUsers from '../composables/useUsers'
 import SuccessModal from '../components/SuccessModal.vue'
@@ -614,6 +615,7 @@ const { categories, fetchcategories } = usecategories(formData)
 const { condition_numbers, fetchcondition_numbers } = useConditionNumbers(formData)
 // Note: We're not using users anymore, but keeping for potential future use
 const { users, fetchusers } = useUsers(formData)
+const { fetchLabels, getLabel, getPlaceholder, getSectionTitle, getSectionSubtitle, getHelperText } = useFormLabels()
 
 // const handleImageUpload = (event) => {
 //   const file = event.target.files[0]
@@ -930,6 +932,7 @@ const generateSerialNumber = async () => {
 // Fetch all dropdown data when component mounts
 onMounted(async () => {
   try {
+    await fetchLabels()
     // Generate serial number automatically
     await generateSerialNumber()
     

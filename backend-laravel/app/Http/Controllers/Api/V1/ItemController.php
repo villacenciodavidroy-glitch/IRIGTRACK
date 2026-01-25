@@ -1628,7 +1628,7 @@ class ItemController extends Controller
         
         // Get logo as base64
         $logoBase64 = null;
-        $logoPath = public_path('logo.png');
+        $logoPath = \App\Support\Logo::path();
         if (file_exists($logoPath)) {
             $logoContent = file_get_contents($logoPath);
             $logoBase64 = base64_encode($logoContent);
@@ -1821,7 +1821,7 @@ class ItemController extends Controller
         
         // Get logo as base64
         $logoBase64 = null;
-        $logoPath = public_path('logo.png');
+        $logoPath = \App\Support\Logo::path();
         if (file_exists($logoPath)) {
             $logoContent = file_get_contents($logoPath);
             $logoBase64 = base64_encode($logoContent);
@@ -1923,7 +1923,7 @@ class ItemController extends Controller
         
         // Get logo as base64
         $logoBase64 = null;
-        $logoPath = public_path('logo.png');
+        $logoPath = \App\Support\Logo::path();
         if (file_exists($logoPath)) {
             $logoContent = file_get_contents($logoPath);
             $logoBase64 = base64_encode($logoContent);

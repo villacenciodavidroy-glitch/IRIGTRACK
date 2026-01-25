@@ -15,6 +15,7 @@ use App\Models\Notification;
 use App\Models\ItemUsage;
 use App\Events\NotificationCreated;
 use App\Events\SupplyRequestApproved;
+use App\Traits\LogsActivity;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class SupplyRequestController extends Controller
 {
+    use LogsActivity;
     /**
      * Get available supply stocks for user dashboard
      */
@@ -870,6 +872,22 @@ class SupplyRequestController extends Controller
                 // Continue even if message creation fails - request already created
             }
 
+            // Log activity: Supply request created
+            try {
+                $userName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                if ($hasItems && $itemCount > 1) {
+                    $description = "Created supply request for {$itemCount} item(s) (Total Quantity: {$totalQuantity})";
+                } else {
+                    $description = "Created supply request for '{$itemName}' (Quantity: {$totalQuantity})";
+                }
+                if (!empty($validated['notes'])) {
+                    $description .= " - Notes: " . substr($validated['notes'], 0, 100);
+                }
+                $this->logActivity($request, 'Created Supply Request', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log supply request creation activity: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Supply request created successfully',
@@ -983,6 +1001,17 @@ class SupplyRequestController extends Controller
 
             // Refresh the model to get updated data
             $supplyRequest->refresh();
+
+            // Log activity: Supply request cancelled
+            try {
+                $userName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $item = $supplyRequest->item();
+                $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                $description = "Cancelled supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id})";
+                $this->logActivity($request, 'Cancelled Supply Request', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log supply request cancellation activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -1508,6 +1537,17 @@ class SupplyRequestController extends Controller
                 // Load relationships (don't eager load 'item')
                 $supplyRequest->load(['requestedBy', 'approver']);
 
+                // Log activity: Supply request approved
+                try {
+                    $approverName = $user->fullname ?? $user->username ?? $user->email ?? 'Admin';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $description = "Approved supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) by {$approverName}";
+                    $this->logActivity($request, 'Approved Supply Request', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log supply request approval activity: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => $role === 'supply' 
@@ -1835,6 +1875,18 @@ class SupplyRequestController extends Controller
                     }
                 }
 
+                // Log activity: Supply request rejected
+                try {
+                    $rejecterName = $user->fullname ?? $user->username ?? $user->email ?? 'Admin';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $rejectionReason = $validated['rejection_reason'] ?? 'No reason provided';
+                    $description = "Rejected supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) by {$rejecterName}. Reason: " . substr($rejectionReason, 0, 100);
+                    $this->logActivity($request, 'Rejected Supply Request', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log supply request rejection activity: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Supply request rejected successfully',
@@ -1999,6 +2051,16 @@ class SupplyRequestController extends Controller
                 }
             }
 
+            // Log activity: Item rejected
+            try {
+                $rejecterName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $rejectionReason = $validated['rejection_reason'] ?? 'No reason provided';
+                $description = "Rejected item '{$itemName}' (Quantity: {$lineItem->quantity}) from supply request ID: {$supplyRequest->id} by {$rejecterName}. Reason: " . substr($rejectionReason, 0, 100);
+                $this->logActivity($request, 'Rejected Supply Request Item', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log item rejection activity: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => "Item \"{$itemName}\" rejected. Remaining items can still be processed.",
@@ -2090,6 +2152,17 @@ class SupplyRequestController extends Controller
             $lineItem->rejected_at = null;
             $lineItem->rejected_by = null;
             $lineItem->save();
+
+            // Log activity: Item unrejected/restored
+            try {
+                $restorerName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $item = $lineItem->item();
+                $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                $description = "Restored item '{$itemName}' (Quantity: {$lineItem->quantity}) from supply request ID: {$supplyRequest->id} by {$restorerName}";
+                $this->logActivity($request, 'Restored Supply Request Item', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log item restoration activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -2191,6 +2264,21 @@ class SupplyRequestController extends Controller
             // Load relationships
             $supplyRequest->load(['requestedBy', 'approver']);
 
+            // Log activity: Supply request forwarded
+            try {
+                $forwarderName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $targetName = $targetSupplyAccount->fullname ?? $targetSupplyAccount->username ?? $targetSupplyAccount->email ?? 'Supply Account';
+                $item = $supplyRequest->item();
+                $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                $description = "Forwarded supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) to {$targetName} by {$forwarderName}";
+                if (!empty($validated['comments'])) {
+                    $description .= " - Comments: " . substr($validated['comments'], 0, 100);
+                }
+                $this->logActivity($request, 'Forwarded Supply Request', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log supply request forwarding activity: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Supply request forwarded to another supply account successfully',
@@ -2264,6 +2352,18 @@ class SupplyRequestController extends Controller
 
             // Load relationships
             $supplyRequest->load(['requestedBy', 'approver', 'assignedToAdmin']);
+
+            // Log activity: Supply request assigned to admin
+            try {
+                $assignerName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $adminName = $admin->fullname ?? $admin->username ?? $admin->email ?? 'Admin';
+                $item = $supplyRequest->item();
+                $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                $description = "Assigned supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) to admin {$adminName} by {$assignerName}";
+                $this->logActivity($request, 'Assigned Supply Request', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log supply request assignment activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -2346,6 +2446,17 @@ class SupplyRequestController extends Controller
 
                 // Load relationships
                 $supplyRequest->load(['requestedBy', 'approver', 'assignedToAdmin']);
+
+                // Log activity: Supply request accepted by admin
+                try {
+                    $accepterName = $user->fullname ?? $user->username ?? $user->email ?? 'Admin';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $description = "Accepted and approved supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) by admin {$accepterName}";
+                    $this->logActivity($request, 'Accepted Supply Request', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log supply request acceptance activity: ' . $e->getMessage());
+                }
 
             return response()->json([
                 'success' => true,
@@ -2725,6 +2836,20 @@ class SupplyRequestController extends Controller
                     // Continue even if message creation fails - transaction already committed
                 }
 
+                // Log activity: Supply request fulfilled
+                try {
+                    $fulfillerName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $description = "Fulfilled supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) by {$fulfillerName}";
+                    if (!empty($validated['fulfillment_notes'])) {
+                        $description .= " - Notes: " . substr($validated['fulfillment_notes'], 0, 100);
+                    }
+                    $this->logActivity($request, 'Fulfilled Supply Request', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log supply request fulfillment activity: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Supply request fulfilled successfully. Quantity deducted from stock.',
@@ -2922,6 +3047,18 @@ class SupplyRequestController extends Controller
                 $supplyRequest->refresh();
                 $supplyRequest->load(['requestedBy', 'approver']);
                 
+                // Log activity: Pickup scheduled
+                try {
+                    $schedulerName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $pickupTime = $pickupScheduledAt->format('M d, Y h:i A');
+                    $description = "Scheduled pickup for supply request '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) - Pickup time: {$pickupTime} by {$schedulerName}";
+                    $this->logActivity($request, 'Scheduled Pickup', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log pickup scheduling activity: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => $notifyUser ? 'Pickup time scheduled and user notified successfully' : 'Pickup time scheduled successfully',
@@ -3128,6 +3265,17 @@ class SupplyRequestController extends Controller
                         Log::warning("Failed to create notification for request ID: {$supplyRequest->id}: " . $notifError->getMessage());
                     }
                 }
+
+                // Log activity: User notified for pickup
+                try {
+                    $notifierName = $user->fullname ?? $user->username ?? $user->email ?? 'Supply Account';
+                    $item = $supplyRequest->item();
+                    $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+                    $description = "Notified user that supply request for '{$itemName}' (Quantity: {$supplyRequest->quantity}, Request ID: {$supplyRequest->id}) is ready for pickup by {$notifierName}";
+                    $this->logActivity($request, 'Notified User for Pickup', $description);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log user notification activity: ' . $e->getMessage());
+                }
                 
                 return response()->json([
                     'success' => true,
@@ -3156,6 +3304,95 @@ class SupplyRequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to notify user: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Notify admin that a supply item needs restocking (Supply Account or Admin).
+     * Creates a low_stock notification visible to admins.
+     */
+    public function notifyAdminRestock(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated'
+                ], 401);
+            }
+
+            $role = strtolower($user->role ?? '');
+            if (!in_array($role, ['supply', 'admin', 'super_admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: Only Supply Account and Admin can notify restock'
+                ], 403);
+            }
+
+            $validated = $request->validate([
+                'item_id' => 'required|integer|exists:items,id',
+            ]);
+
+            $item = Item::with('category')->find($validated['item_id']);
+            if (!$item) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Item not found'
+                ], 404);
+            }
+
+            $supplyCategory = Category::where('category', 'Supply')->first();
+            if (!$supplyCategory || $item->category_id != $supplyCategory->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Item is not a supply item'
+                ], 422);
+            }
+
+            $itemName = $item->unit ?? $item->description ?? 'N/A';
+            $qty = $item->quantity ?? 0;
+            $requesterName = $user->fullname ?? $user->username ?? $user->email ?? 'Supply';
+            $message = "Restock requested: {$itemName} (current qty: {$qty}). Requested by {$requesterName}.";
+
+            $notification = Notification::create([
+                'item_id' => $item->id,
+                'message' => $message,
+                'type' => 'low_stock',
+                'is_read' => false,
+                'user_id' => null,
+            ]);
+
+            if ($notification) {
+                Log::info("Restock notification created for item: {$itemName} (ID: {$item->id}) by user ID: {$user->id}");
+            }
+
+            // Log activity: Notified admin to restock
+            try {
+                $requesterName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
+                $description = "Notified admin to restock item '{$itemName}' (Current quantity: {$qty}) by {$requesterName}";
+                $this->logActivity($request, 'Notified Admin to Restock', $description);
+            } catch (\Exception $e) {
+                Log::warning('Failed to log restock notification activity: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Admin has been notified to restock this item',
+                'data' => ['notification_id' => $notification->notification_id ?? null],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in notifyAdminRestock: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to notify admin: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -3960,7 +4197,7 @@ class SupplyRequestController extends Controller
             
             // Get logo as base64 for embedding in PDF
             $logoBase64 = null;
-            $logoPath = public_path('logo.png');
+            $logoPath = \App\Support\Logo::path();
             if (file_exists($logoPath)) {
                 $logoContent = file_get_contents($logoPath);
                 $logoBase64 = base64_encode($logoContent);

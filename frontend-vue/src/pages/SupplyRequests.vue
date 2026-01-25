@@ -589,7 +589,7 @@ const addToCart = async () => {
   if (existingIndex !== -1) {
     // Update quantity if already in cart
     cart.value[existingIndex].quantity = requestForm.value.quantity
-    showSimpleBanner('Item quantity updated in cart', 'success', true, 3000)
+    showSimpleBanner('Item quantity updated in request list', 'success', true, 3000)
   } else {
     // Add new item to cart
     cart.value.push({
@@ -599,7 +599,7 @@ const addToCart = async () => {
       quantity: requestForm.value.quantity,
       availableStock: selectedSupply.value.quantity
     })
-    showSimpleBanner('Item added to cart successfully!', 'success', true, 3000)
+    showSimpleBanner('Item added to request list successfully!', 'success', true, 3000)
   }
   
   closeRequestModal()
@@ -646,7 +646,7 @@ const submitRequest = async (useCart = false) => {
   if (useCart) {
     // Submit multiple items from cart
     if (cart.value.length === 0) {
-      showSimpleBanner('Cart is empty', 'error', true, 3000)
+      showSimpleBanner('Request list is empty', 'error', true, 3000)
       return
     }
     
@@ -1254,8 +1254,8 @@ watch(requestStatusFilter, () => {
             @click="openCart" 
             class="bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-400 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 dark:border-gray-700 relative group"
           >
-            <span class="material-icons-outlined text-lg text-blue-700 dark:text-blue-400 group-hover:scale-110 transition-transform">shopping_cart</span>
-            <span>Cart</span>
+            <span class="material-icons-outlined text-lg text-blue-700 dark:text-blue-400 group-hover:scale-110 transition-transform">playlist_add</span>
+            <span>Request List</span>
             <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse">{{ cart.length }}</span>
           </button>
           <button
@@ -1527,7 +1527,7 @@ watch(requestStatusFilter, () => {
                   ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg'
                   : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'"
               >
-                <span class="material-icons-outlined text-lg">{{ supply.quantity > 0 ? 'add_shopping_cart' : 'block' }}</span>
+                <span class="material-icons-outlined text-lg">{{ supply.quantity > 0 ? 'playlist_add' : 'block' }}</span>
                 <span>{{ supply.quantity > 0 ? 'Request Item' : 'Out of Stock' }}</span>
               </button>
             </div>
@@ -1574,12 +1574,12 @@ watch(requestStatusFilter, () => {
 
     <!-- Enhanced Request Modal -->
     <div v-if="showRequestModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRequestModal">
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 md:p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-modal-in">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-modal-in overflow-hidden">
         <!-- Enhanced Header -->
-        <div class="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-start justify-between p-6 md:p-8 pb-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div class="flex items-start gap-4 flex-1">
             <div class="p-3 bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 rounded-xl">
-              <span class="material-icons-outlined text-2xl text-emerald-600 dark:text-emerald-400">add_shopping_cart</span>
+              <span class="material-icons-outlined text-2xl text-emerald-600 dark:text-emerald-400">playlist_add</span>
             </div>
             <div class="flex-1">
               <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Request Supply</h3>
@@ -1597,7 +1597,7 @@ watch(requestStatusFilter, () => {
           </button>
         </div>
 
-        <div class="space-y-5">
+        <div class="flex-1 overflow-y-auto px-6 md:px-8 py-4 space-y-5 min-h-0">
           <!-- Item Information Card -->
           <div class="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 p-4 rounded-xl border border-emerald-200 dark:border-emerald-800">
             <div class="grid grid-cols-2 gap-4">
@@ -1714,31 +1714,33 @@ watch(requestStatusFilter, () => {
           </div>
         </div>
 
-        <!-- Enhanced Action Buttons -->
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            @click="closeRequestModal"
-            class="px-6 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-semibold transition-all duration-200 flex items-center justify-center gap-2 whitespace-nowrap min-w-[120px]"
-          >
-            <span class="material-icons-outlined text-lg">close</span>
-            <span>Cancel</span>
-          </button>
-          <button
-            @click="addToCart"
-            :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity"
-            class="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none whitespace-nowrap min-w-[140px]"
-          >
-            <span class="material-icons-outlined text-lg">shopping_cart</span>
-            <span>Add to Cart</span>
-          </button>
-          <button
-            @click="submitRequest(false)"
-            :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity || !requestForm.target_supply_account_id"
-            class="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none whitespace-nowrap min-w-[160px]"
-          >
-            <span class="material-icons-outlined text-lg">send</span>
-            <span>Submit Request</span>
-          </button>
+        <!-- Enhanced Action Buttons (sticky footer, all buttons in one row) -->
+        <div class="flex-shrink-0 p-6 md:p-8 pt-4 border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <div class="flex flex-row items-center justify-end gap-3">
+            <button
+              @click="closeRequestModal"
+              class="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-gray-400 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold transition-all duration-200 whitespace-nowrap min-w-[110px] flex-shrink-0"
+            >
+              <span class="material-icons-outlined text-lg leading-none">close</span>
+              <span>Cancel</span>
+            </button>
+            <button
+              @click="addToCart"
+              :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity"
+              class="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 shadow-lg hover:shadow-xl disabled:transform-none whitespace-nowrap min-w-[180px] flex-shrink-0"
+            >
+              <span class="material-icons-outlined text-lg leading-none">playlist_add</span>
+              <span>Add To Request List</span>
+            </button>
+            <button
+              @click="submitRequest(false)"
+              :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity || !requestForm.target_supply_account_id"
+              class="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 shadow-lg hover:shadow-xl disabled:transform-none whitespace-nowrap min-w-[150px] flex-shrink-0"
+            >
+              <span class="material-icons-outlined text-lg leading-none">playlist_add</span>
+              <span>Request Item</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1753,7 +1755,7 @@ watch(requestStatusFilter, () => {
               <span class="material-icons-outlined text-2xl text-blue-600 dark:text-blue-400">shopping_cart</span>
             </div>
             <div class="flex-1">
-              <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Request Cart</h3>
+              <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Request List</h3>
               <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Review and submit multiple items at once</p>
             </div>
             <div v-if="cart.length > 0" class="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-sm font-bold">
@@ -1773,8 +1775,8 @@ watch(requestStatusFilter, () => {
           <div class="p-6 bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 rounded-full inline-block mb-4">
             <span class="material-icons-outlined text-6xl text-gray-400 dark:text-gray-500">shopping_cart</span>
           </div>
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Your cart is empty</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-6">Add items to your cart to submit a request</p>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Your request list is empty</h3>
+          <p class="text-gray-600 dark:text-gray-400 mb-6">Add items to your request list to submit a request</p>
           <button
             @click="showCart = false"
             class="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold flex items-center gap-2 mx-auto"

@@ -71,6 +71,7 @@ const rejectItemReason = ref('')
 const rejectingItem = ref(false)
 const admins = ref([])
 const supplyAccounts = ref([])
+const notifyingRestockItemId = ref(null) // item id when "Notify restock" is in progress
 const requestPollingInterval = ref(null) // Polling interval for requests
 const requestRealtimeListener = ref(null) // Real-time listener reference
 
@@ -278,6 +279,25 @@ const fetchStockOverview = async () => {
     if (err.response?.status !== 401 && err.response?.status !== 403) {
       console.warn('Stock overview fetch failed, using default values:', err.message)
     }
+  }
+}
+
+// Notify admin that a supply item needs restocking
+const notifyAdminRestock = async (item) => {
+  if (notifyingRestockItemId.value !== null) return
+  notifyingRestockItemId.value = item.id
+  try {
+    const response = await axiosClient.post('/supply-requests/notify-restock', { item_id: item.id })
+    if (response.data?.success) {
+      showSimpleBanner('Admin has been notified to restock this item.', 'success', true, 5000)
+    } else {
+      showSimpleBanner(response.data?.message || 'Failed to notify admin.', 'error', true, 5000)
+    }
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || 'Failed to notify admin.'
+    showSimpleBanner(msg, 'error', true, 5000)
+  } finally {
+    notifyingRestockItemId.value = null
   }
 }
 
@@ -1772,6 +1792,69 @@ watch(itemsPerPage, () => {
         <div>
           <p class="text-xs sm:text-sm font-bold text-red-100 dark:text-red-200 uppercase tracking-wider mb-1">Low Stock Alert</p>
           <p class="text-xs text-red-200 dark:text-red-300">Requires attention</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supply (Quantity) Snapshot -->
+    <div class="p-3 sm:p-4 lg:p-6">
+      <div class="bg-gradient-to-br from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-lg sm:rounded-xl shadow-lg border-2 border-slate-600 dark:border-slate-700 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <span class="material-icons-outlined text-white text-xl sm:text-2xl">folder</span>
+            <h2 class="text-base sm:text-lg font-bold text-white">Supply (Quantity)</h2>
+          </div>
+          <span class="bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 rounded-md">Snapshot</span>
+        </div>
+        
+        <!-- Table: scrollable body, sticky header -->
+        <div class="px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
+          <div 
+            class="supply-snapshot-scroll relative rounded-lg border border-slate-600 dark:border-slate-700 max-h-[240px] sm:max-h-[280px] lg:max-h-[360px] overflow-y-auto overflow-x-auto"
+            style="overscroll-behavior: contain;"
+          >
+            <table class="w-full min-w-[320px]">
+              <thead class="sticky top-0 z-10 bg-slate-700 dark:bg-slate-800">
+                <tr class="border-b-2 border-slate-600 dark:border-slate-700 shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+                  <th class="text-left py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">ITEM NAME</th>
+                  <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">QUANTITY</th>
+                  <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider w-36 sm:w-44">ACTION</th>
+                </tr>
+              </thead>
+              <tbody class="bg-slate-700/50 dark:bg-slate-800/50">
+                <tr 
+                  v-for="item in stockOverview" 
+                  :key="item.id"
+                  class="border-b border-slate-600/50 dark:border-slate-700/50 hover:bg-slate-600/30 dark:hover:bg-slate-700/30 transition-colors"
+                >
+                  <td class="py-3 px-4 text-sm sm:text-base text-white font-medium">{{ item.unit || item.description || 'N/A' }}</td>
+                  <td class="py-3 px-4 text-right">
+                    <span class="inline-flex items-center justify-center bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-green-600 dark:border-green-700 min-w-[3rem] sm:min-w-[4rem]">
+                      {{ item.quantity || 0 }}
+                    </span>
+                  </td>
+                  <td class="py-3 px-4 text-right">
+                    <button
+                      type="button"
+                      :disabled="notifyingRestockItemId !== null"
+                      @click="notifyAdminRestock(item)"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white border-2 border-amber-600 dark:border-amber-700 shadow-sm"
+                      :title="'Notify admin to restock ' + (item.unit || item.description || 'this item')"
+                    >
+                      <span class="material-icons-outlined text-sm sm:text-base" :class="{ 'animate-spin': notifyingRestockItemId === item.id }">{{ notifyingRestockItemId === item.id ? 'hourglass_empty' : 'inventory_2' }}</span>
+                      <span class="hidden sm:inline">{{ notifyingRestockItemId === item.id ? 'Sending…' : 'Notify restock' }}</span>
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="stockOverview.length === 0">
+                  <td colspan="3" class="py-6 px-4 text-center text-sm text-white/70">
+                    No supply items available
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -3728,5 +3811,30 @@ watch(itemsPerPage, () => {
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
+}
+
+/* Supply Snapshot Scrollbar Styling */
+.supply-snapshot-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) rgba(30, 41, 59, 0.3);
+}
+
+.supply-snapshot-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.supply-snapshot-scroll::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 4px;
+}
+
+.supply-snapshot-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 4px;
+}
+
+.supply-snapshot-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
 }
 </style>

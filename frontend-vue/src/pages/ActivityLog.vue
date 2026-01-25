@@ -12,6 +12,8 @@ const totalEntries = ref(0)
 const totalPages = ref(1)
 const loading = ref(false)
 const error = ref('')
+const showDetailsModal = ref(false)
+const selectedEntry = ref(null)
 
 // Store channel reference for cleanup
 let activityLogsChannel = null
@@ -155,8 +157,9 @@ onMounted(() => {
   setTimeout(setupRealtimeListener, 500)
 })
 
-// Clean up Echo listeners when component is unmounted
+// Clean up Echo listeners and escape handler when component is unmounted
 onUnmounted(() => {
+  window.removeEventListener('keydown', escapeHandler)
   if (window.Echo && activityLogsChannel) {
     console.log('🔇 Removing real-time activity logs listener...')
     try {
@@ -215,6 +218,14 @@ watch(currentPage, () => {
   fetchActivityLogs()
 })
 
+const escapeHandler = (e) => {
+  if (e.key === 'Escape' && showDetailsModal.value) closeDetails()
+}
+watch(showDetailsModal, (open) => {
+  if (open) window.addEventListener('keydown', escapeHandler)
+  else window.removeEventListener('keydown', escapeHandler)
+})
+
 // Pagination methods
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
@@ -244,6 +255,77 @@ const pageNumbers = computed(() => {
     pages.push(i)
   }
   return pages
+})
+
+const openDetails = (entry) => {
+  selectedEntry.value = entry
+  showDetailsModal.value = true
+}
+
+const closeDetails = () => {
+  showDetailsModal.value = false
+  selectedEntry.value = null
+}
+
+/**
+ * Parse activity log description into structured fields for clearer display.
+ * Handles patterns like: Item 'X' (Serial: ..., Model: ...) MR #N ... by user Y. Description: Z
+ */
+function parseActivityDetails(description) {
+  if (!description || typeof description !== 'string') return { fields: [], raw: '' }
+  const raw = description.trim()
+  const fields = []
+
+  const itemMatch = raw.match(/Item\s+'([^']*)'/)
+  if (itemMatch) {
+    fields.push({ label: 'Item', value: itemMatch[1], highlight: true })
+  }
+
+  const serialMatch = raw.match(/Serial:\s*([^\s,)]+)/)
+  if (serialMatch) {
+    fields.push({ label: 'Serial', value: serialMatch[1], mono: true })
+  }
+
+  const modelMatch = raw.match(/Model:\s*([^\s)]+)/)
+  if (modelMatch) {
+    const v = modelMatch[1].replace(/\)\s*$/, '').trim()
+    if (v) fields.push({ label: 'Model', value: v, mono: true })
+  }
+
+  const mrMatch = raw.match(/MR\s*#(\d+)/i)
+  if (mrMatch) {
+    fields.push({ label: 'MR #', value: mrMatch[1], mono: true })
+  }
+
+  const reportedMatch = raw.match(/(?:reported|marked)\s+as\s+(\w+)/i)
+  if (reportedMatch) {
+    fields.push({ label: 'Status', value: reportedMatch[1], badge: true })
+  }
+
+  const byUserMatch = raw.match(/by\s+user\s+([^.]+?)(?:\s*\.|$)/i) || raw.match(/by\s+user\s+(\S+)/i)
+  if (byUserMatch) {
+    const v = byUserMatch[1].trim()
+    if (v) fields.push({ label: 'By user', value: v, highlight: true })
+  }
+
+  const byAdminMatch = raw.match(/by\s+admin\s+['"]?([^.'"]+)['"]?/i)
+  if (byAdminMatch && !byUserMatch) {
+    const v = byAdminMatch[1].trim()
+    if (v) fields.push({ label: 'By admin', value: v, highlight: true })
+  }
+
+  const descMatch = raw.match(/Description:\s*(.+)$/is)
+  if (descMatch && descMatch[1].trim()) {
+    fields.push({ label: 'Description', value: descMatch[1].trim(), multiline: true })
+  }
+
+  return { fields, raw }
+}
+
+const parsedDetails = computed(() => {
+  const entry = selectedEntry.value
+  if (!entry?.description) return { fields: [], raw: '' }
+  return parseActivityDetails(entry.description)
 })
 </script>
 
@@ -376,12 +458,13 @@ const pageNumbers = computed(() => {
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Time</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Action</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Details</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Role</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">Role</th>
+              <th class="px-6 py-4 text-center text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider w-20">View</th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="entries.length === 0">
-              <td colspan="6" class="px-6 py-12 text-center">
+              <td colspan="7" class="px-6 py-12 text-center">
                 <div class="flex flex-col items-center">
                   <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
                     <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">history</span>
@@ -421,11 +504,21 @@ const pageNumbers = computed(() => {
                 </div>
                 <span v-else class="text-sm text-gray-600 dark:text-gray-400 italic">No details available</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="px-6 py-4 whitespace-nowrap border-r border-gray-300 dark:border-gray-600">
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-900 dark:bg-blue-900 text-blue-300 dark:text-blue-300">
                   <span class="material-icons-outlined text-sm">badge</span>
                   {{ entry.role }}
                 </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-center">
+                <button
+                  type="button"
+                  @click="openDetails(entry)"
+                  class="inline-flex items-center justify-center p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                  title="View details"
+                >
+                  <span class="material-icons-outlined text-xl">visibility</span>
+                </button>
               </td>
             </tr>
           </tbody>
@@ -487,6 +580,111 @@ const pageNumbers = computed(() => {
             >
               <span class="material-icons-outlined text-base align-middle">last_page</span>
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div
+      v-if="showDetailsModal && selectedEntry"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      @click.self="closeDetails"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800 flex-shrink-0 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">visibility</span>
+            <h2 class="text-xl font-bold text-white">Activity Log Details</h2>
+          </div>
+          <button
+            type="button"
+            @click="closeDetails"
+            class="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors"
+            aria-label="Close"
+          >
+            <span class="material-icons-outlined">close</span>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1 space-y-4">
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Name</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ selectedEntry.name }}</p>
+            </div>
+            <div v-if="selectedEntry.email">
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Email</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ selectedEntry.email }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Role</p>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-900 dark:bg-blue-900 text-blue-300 dark:text-blue-300">
+                {{ selectedEntry.role }}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Date</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ selectedEntry.date }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Time</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ selectedEntry.time }}</p>
+              </div>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Action</p>
+              <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-green-500 to-green-600 text-white shadow-sm">
+                {{ selectedEntry.action }}
+              </span>
+            </div>
+            <!-- Structured Details (parsed) -->
+            <div v-if="selectedEntry.description" class="col-span-full">
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Details</p>
+              <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30 overflow-hidden shadow-inner">
+                <div v-if="parsedDetails.fields.length > 0" class="divide-y divide-gray-200 dark:divide-gray-600">
+                  <div
+                    v-for="(f, i) in parsedDetails.fields"
+                    :key="i"
+                    class="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-1 sm:gap-4 px-4 py-3 sm:py-3.5 items-start"
+                  >
+                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ f.label }}</span>
+                    <span
+                      v-if="!f.badge"
+                      :class="[
+                        'text-sm break-words min-w-0',
+                        f.highlight && 'font-semibold text-gray-900 dark:text-white',
+                        f.mono && 'font-mono text-gray-800 dark:text-gray-200',
+                        f.multiline && 'whitespace-pre-wrap'
+                      ]"
+                    >{{ f.value }}</span>
+                    <span
+                      v-else
+                      class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-400/40 dark:border-amber-500/40 w-fit"
+                    >{{ f.value }}</span>
+                  </div>
+                </div>
+                <div v-else class="px-4 py-3">
+                  <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words leading-relaxed">{{ parsedDetails.raw }}</p>
+                </div>
+                <div v-if="parsedDetails.fields.length > 0" class="border-t border-gray-200 dark:border-gray-600 px-4 py-3 bg-gray-100/50 dark:bg-gray-800/50">
+                  <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Full text</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words leading-relaxed max-h-24 overflow-y-auto">{{ parsedDetails.raw }}</p>
+                </div>
+              </div>
+            </div>
+            <div v-if="selectedEntry.location && selectedEntry.location !== 'N/A'">
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Location</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ selectedEntry.location }}</p>
+            </div>
+            <div v-if="selectedEntry.ip_address">
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">IP Address</p>
+              <p class="text-sm font-mono text-gray-700 dark:text-gray-300">{{ selectedEntry.ip_address }}</p>
+            </div>
+            <div v-if="selectedEntry.created_at">
+              <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Recorded At</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">{{ new Date(selectedEntry.created_at).toLocaleString() }}</p>
+            </div>
           </div>
         </div>
       </div>

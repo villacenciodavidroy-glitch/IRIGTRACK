@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\MaintenanceRecordController;
 use App\Http\Controllers\Api\V1\SupplyRequestController;
 use App\Http\Controllers\Api\V1\MemorandumReceiptController;
+use App\Http\Controllers\Api\V1\SettingsController;
 
 Route::get('/', function () {
     return response()->json([
@@ -40,6 +41,12 @@ Route::get('/condition_numbers', [ConditionNumberController::class, 'index']);
 
 // Public QR code scanning endpoint (no auth required for scanning)
 Route::get('/items/check/{uuid}', [ItemController::class, 'checkItem']);
+
+// Public logo URL (no auth required)
+Route::get('/settings/logo', [SettingsController::class, 'logo']);
+
+// Public form labels (no auth required)
+Route::get('/settings/form-labels', [SettingsController::class, 'formLabels']);
 
 // Protected routes - require authentication
 Route::middleware('auth:sanctum')->group(function () {
@@ -100,8 +107,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/items', [ItemController::class, 'store']);
     Route::post('/items/{uuid}/validate-qr', [ItemController::class, 'validateQRCode']);
     
+    // Settings - admin only (logo upload, form labels update)
+    Route::post('/settings/logo', [SettingsController::class, 'uploadLogo'])->middleware('admin');
+    Route::post('/settings/form-labels', [SettingsController::class, 'updateFormLabels'])->middleware('admin');
+
     // Activity logs - admin only
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->middleware('admin');
+    Route::get('/activity-logs/restock-history', [ActivityLogController::class, 'restockHistory'])->middleware('admin_or_supply');
     Route::get('/activity-logs/statistics', [ActivityLogController::class, 'statistics'])->middleware('admin');
     Route::post('/activity-logs', [ActivityLogController::class, 'store']);
     
@@ -182,6 +194,12 @@ Route::group(['prefix'=>'v1', 'namespace' => 'App\Http\Controllers\Api\V1'], fun
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+    // Public logo URL (no auth required)
+    Route::get('settings/logo', [SettingsController::class, 'logo']);
+
+    // Public form labels (no auth required)
+    Route::get('settings/form-labels', [SettingsController::class, 'formLabels']);
 
     // Public QR code scanning endpoints (no auth required)
     Route::get('items/check/{uuid}', [ItemController::class, 'checkItem']);
@@ -282,8 +300,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::apiResource('conditions', ConditionController::class);
         Route::apiResource('condition_numbers', ConditionNumberController::class);
 
+        // SETTINGS - admin only (logo upload, form labels update)
+        Route::post('settings/logo', [SettingsController::class, 'uploadLogo'])->middleware('admin');
+        Route::post('settings/form-labels', [SettingsController::class, 'updateFormLabels'])->middleware('admin');
+
         // ACTIVITY LOGS - admin only
         Route::get('activity-logs', [ActivityLogController::class, 'index'])->middleware('admin');
+        Route::get('activity-logs/restock-history', [ActivityLogController::class, 'restockHistory'])->middleware('admin_or_supply');
         Route::get('activity-logs/statistics', [ActivityLogController::class, 'statistics'])->middleware('admin');
         Route::post('activity-logs', [ActivityLogController::class, 'store']);
 
@@ -336,6 +359,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::post('supply-requests/{id}/fulfill', [SupplyRequestController::class, 'fulfillRequest'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/schedule-pickup', [SupplyRequestController::class, 'schedulePickup'])->middleware('admin_or_supply');
         Route::post('supply-requests/{id}/notify-ready-pickup', [SupplyRequestController::class, 'notifyUserReadyForPickup'])->middleware('admin_or_supply');
+        Route::post('supply-requests/notify-restock', [SupplyRequestController::class, 'notifyAdminRestock'])->middleware('admin_or_supply');
         Route::get('supply-requests/stock-overview', [SupplyRequestController::class, 'getStockOverview'])->middleware('admin_or_supply');
         Route::get('supply-requests/unit-section-statistics', [SupplyRequestController::class, 'getUnitSectionStatistics'])->middleware('admin_or_supply');
         

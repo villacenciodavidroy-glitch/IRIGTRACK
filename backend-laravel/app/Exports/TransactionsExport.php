@@ -187,7 +187,7 @@ class TransactionsExport implements FromCollection, WithHeadings, WithMapping, W
                 $sheet->getStyle('A4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('A4')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 
-                $logoPath = public_path('logo.png');
+                $logoPath = \App\Support\Logo::path();
                 if (file_exists($logoPath)) {
                     try {
                         // Center the logo perfectly in merged cell

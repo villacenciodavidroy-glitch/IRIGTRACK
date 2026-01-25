@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import useAuth from '../composables/useAuth'
 import useNotifications from '../composables/useNotifications'
+import useLogo from '../composables/useLogo'
 import LogoutModal from '../components/LogoutModal.vue'
 import axiosClient from '../axios'
 
@@ -11,6 +12,7 @@ const route = useRoute()
 
 // Use the auth composable to get user data
 const { user, loading: userLoading, error: userError, fetchCurrentUser, getUserDisplayName, logout, isAdmin } = useAuth()
+const { logoUrl, fetchLogo } = useLogo()
 
 // Use the notifications composable
 const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, refreshNotifications, refreshUnreadCount, setupRealtimeListener, approveBorrowRequest, rejectBorrowRequest } = useNotifications()
@@ -420,6 +422,7 @@ const adminNavigation = [
   { name: 'Personnel Management', path: '/personnel-management', icon: 'badge' },
   { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' },
   { name: 'Activity Log', path: '/activity-log', icon: 'history' },
+  { name: 'Settings', path: '/settings', icon: 'settings' },
   {
     name: 'History',
     icon: 'folder',
@@ -1481,7 +1484,8 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
   handleResize() // Initialize on mount
   startClock()
-  
+  fetchLogo()
+
   // Fetch notifications for Admin only
   if (isAdmin()) {
     // Fetch unread count from database immediately (for badge)
@@ -1638,7 +1642,7 @@ onBeforeUnmount(() => {
       <!-- Logo -->
       <div class="flex items-center px-4 xs:px-5 py-4 xs:py-5 h-16 xs:h-20 border-b border-gray-100 dark:border-gray-700">
         <div class="h-8 w-8 xs:h-10 xs:w-10 rounded-full border-2 border-green-600 flex items-center justify-center flex-shrink-0">
-          <img src="../assets/logo.png" alt="IrrigTrack" class="h-5 w-5 xs:h-7 xs:w-7 object-contain" />
+          <img :src="logoUrl" alt="IrrigTrack" class="h-5 w-5 xs:h-7 xs:w-7 object-contain" />
         </div>
         <span class="ml-2 xs:ml-3 text-base xs:text-lg font-semibold text-gray-800 dark:text-gray-100" style="font-weight: 600;">IrrigTrack</span>
       </div>

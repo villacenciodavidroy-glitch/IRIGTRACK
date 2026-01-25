@@ -94,6 +94,11 @@ const routes = [
                 component: Admin
             },
             {
+                path: 'settings',
+                name: 'Settings',
+                component: () => import('./pages/Settings.vue')
+            },
+            {
                 path: 'personnel-management',
                 name: 'PersonnelManagement',
                 component: () => import('./pages/PersonnelManagement.vue')
@@ -236,7 +241,7 @@ const router = createRouter({
 const publicRoutes = ['Login', 'Signup', 'NotFound']
 
 // Define admin-only routes
-const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Transactions', 'AdminSupplyRequests']
+const adminRoutes = ['Admin', 'AddAccount', 'EditAccount', 'ActivityLog', 'Transactions', 'AdminSupplyRequests', 'Settings']
 
 // Define supply-only routes (supply role can access)
 const supplyRoutes = ['SupplyRequestsManagement', 'UnitSectionAnalytics']

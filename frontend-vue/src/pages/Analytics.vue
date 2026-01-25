@@ -22,6 +22,13 @@
           </div>
           <div class="flex flex-wrap gap-3 items-center">
             <button 
+              @click="openRestockHistoryModal"
+              class="flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl font-semibold border border-white/30 shadow-lg transition-all"
+            >
+              <span class="material-icons-outlined text-lg">history</span>
+              <span>Restock History</span>
+            </button>
+            <button 
               @click="openGlobalRestock"
               class="btn-primary-enhanced flex items-center gap-2 shadow-lg"
             >
@@ -93,49 +100,50 @@
     </div>
 
     <!-- Supply Snapshot (Quantity Only) -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border-2 border-gray-300 dark:border-gray-600 overflow-hidden mb-8">
-      <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="material-icons-outlined text-white text-2xl">inventory_2</span>
-            <h2 class="text-xl font-bold text-white">Supply (Quantity)</h2>
-            <span class="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-sm rounded-full font-semibold">Snapshot</span>
-          </div>
+    <div class="bg-gradient-to-br from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-lg sm:rounded-xl shadow-lg border-2 border-slate-600 dark:border-slate-700 overflow-hidden mb-8">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <span class="material-icons-outlined text-white text-xl sm:text-2xl">folder</span>
+          <h2 class="text-base sm:text-lg font-bold text-white">Supply (Quantity)</h2>
         </div>
+        <span class="bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 rounded-md">Snapshot</span>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
-              <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ITEM NAME</th>
-              <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">QUANTITY</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            <tr 
-              v-for="c in consumableQuantities" 
-              :key="c.name"
-              class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-green-500"
-            >
-              <td class="px-6 py-4 font-semibold text-base text-gray-900 dark:text-white border-r border-gray-300 dark:border-gray-600">{{ c.name }}</td>
-              <td class="px-6 py-4">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-base font-bold bg-green-100 text-green-900">
-                  {{ c.quantity }}
-                </span>
-              </td>
-            </tr>
-            <tr v-if="consumableQuantities.length === 0">
-              <td colspan="2" class="px-6 py-12 text-center">
-                <div class="flex flex-col items-center">
-                  <div class="inline-block p-6 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
-                    <span class="material-icons-outlined text-6xl text-gray-600 dark:text-gray-400">inventory_2</span>
-                  </div>
-                  <p class="text-base text-gray-700 dark:text-gray-300">No supply items found</p>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      
+      <!-- Table: scrollable body, sticky header -->
+      <div class="px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
+        <div 
+          class="overflow-x-auto overflow-y-auto max-h-[240px] sm:max-h-[280px] lg:max-h-[360px] rounded-lg border border-slate-600 dark:border-slate-700"
+          style="overscroll-behavior: contain;"
+        >
+          <table class="w-full min-w-[280px]">
+            <thead class="sticky top-0 z-10">
+              <tr class="border-b-2 border-slate-600 dark:border-slate-700 bg-slate-700 dark:bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+                <th class="text-left py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">ITEM NAME</th>
+                <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">QUANTITY</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                v-for="c in consumableQuantities" 
+                :key="c.name"
+                class="border-b border-slate-600/50 dark:border-slate-700/50 hover:bg-slate-600/30 dark:hover:bg-slate-700/30 transition-colors"
+              >
+                <td class="py-3 px-4 text-sm sm:text-base text-white font-medium">{{ c.name }}</td>
+                <td class="py-3 px-4 text-right">
+                  <span class="inline-flex items-center justify-center bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-green-600 dark:border-green-700 min-w-[3rem] sm:min-w-[4rem]">
+                    {{ c.quantity }}
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="consumableQuantities.length === 0">
+                <td colspan="2" class="py-6 px-4 text-center text-sm text-white/70">
+                  No supply items available
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1512,6 +1520,63 @@
         </form>
       </div>
     </div>
+
+    <!-- Restock History Modal -->
+    <div v-if="showRestockHistoryModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showRestockHistoryModal = false">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b border-green-800 flex-shrink-0 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="material-icons-outlined text-white text-2xl">history</span>
+            <h2 class="text-xl font-bold text-white">Restock History</h2>
+          </div>
+          <button @click="showRestockHistoryModal = false" class="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition-colors">
+            <span class="material-icons-outlined">close</span>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1">
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Who restocked, date, and quantity.</p>
+          <div v-if="loadingRestockHistory" class="flex flex-col items-center justify-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 dark:border-green-400 mb-4"></div>
+            <p class="text-gray-600 dark:text-gray-400">Loading restock history…</p>
+          </div>
+          <div v-else-if="restockHistoryError" class="text-center py-12">
+            <span class="material-icons-outlined text-5xl text-red-400 mb-4 block">error</span>
+            <p class="text-red-600 dark:text-red-400 font-medium">{{ restockHistoryError }}</p>
+          </div>
+          <div v-else-if="!restockHistory.length" class="text-center py-12">
+            <span class="material-icons-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4 block">inventory_2</span>
+            <p class="text-gray-600 dark:text-gray-400">No restock history yet.</p>
+          </div>
+          <div v-else class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table class="w-full min-w-[500px]">
+              <thead class="bg-gray-100 dark:bg-gray-700">
+                <tr>
+                  <th class="text-left py-3 px-4 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Person</th>
+                  <th class="text-left py-3 px-4 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Date</th>
+                  <th class="text-left py-3 px-4 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Time</th>
+                  <th class="text-right py-3 px-4 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Quantity</th>
+                  <th class="text-left py-3 px-4 text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider">Item</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr v-for="r in restockHistory" :key="r.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <td class="py-3 px-4 text-sm font-medium text-gray-900 dark:text-white">{{ r.person }}</td>
+                  <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{{ r.date_formatted || r.date }}</td>
+                  <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{{ r.time }}</td>
+                  <td class="py-3 px-4 text-sm text-right">
+                    <span v-if="r.quantity != null" class="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                      {{ r.quantity }}
+                    </span>
+                    <span v-else class="text-gray-400">—</span>
+                  </td>
+                  <td class="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{{ r.item_name || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1651,6 +1716,10 @@ const isConsumableCategory = (category) => {
 }
 
 const showRestockModal = ref(false)
+const showRestockHistoryModal = ref(false)
+const restockHistory = ref([])
+const loadingRestockHistory = ref(false)
+const restockHistoryError = ref(null)
 const showExpiringModal = ref(false)
 const showAccuracyModal = ref(false)
 const showLifespanModal = ref(false)
@@ -2569,6 +2638,25 @@ const openGlobalRestock = () => {
   const n = parseInt(String(first.nextThreeMonths).replace(/[^0-9]/g, ''))
   restockAmount.value = isNaN(n) ? 0 : n
   showRestockModal.value = true
+}
+
+const openRestockHistoryModal = async () => {
+  showRestockHistoryModal.value = true
+  restockHistoryError.value = null
+  restockHistory.value = []
+  loadingRestockHistory.value = true
+  try {
+    const res = await axiosClient.get('/activity-logs/restock-history', { params: { per_page: 50 } })
+    if (res.data?.success && Array.isArray(res.data.data)) {
+      restockHistory.value = res.data.data
+    } else {
+      restockHistoryError.value = res.data?.message || 'Failed to load restock history'
+    }
+  } catch (err) {
+    restockHistoryError.value = err.response?.data?.message || err.message || 'Failed to load restock history'
+  } finally {
+    loadingRestockHistory.value = false
+  }
 }
 
 const handleRestock = async () => {

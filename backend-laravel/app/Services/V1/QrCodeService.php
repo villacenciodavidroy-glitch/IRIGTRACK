@@ -59,7 +59,7 @@ class QrCodeService
         // Generate QR code data with UUID or JSON-encoded details)
         $qrCodeImage = QrCodeGenerator::format('png')
             ->size(250)
-            ->merge(public_path('logo.png'), 0.25, true) // optional logo
+            ->merge(\App\Support\Logo::path(), 0.25, true) // optional logo
             ->generate($item->uuid);
 
         // Save QR code image to storage
@@ -114,7 +114,7 @@ class QrCodeService
         // Generate QR code image
         $qrCodeImage = QrCodeGenerator::format('png')
             ->size(250)
-            ->merge(public_path('logo.png'), 0.25, true)
+            ->merge(\App\Support\Logo::path(), 0.25, true)
             ->generate($item->uuid);
 
         // Save QR code image to storage using NEW UUID

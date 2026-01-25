@@ -53,7 +53,7 @@ class GenerateQRCodeJob implements ShouldQueue
         }
 
         // Generate QR code image in PNG format (assuming using SimpleSoftwareIO\QrCode)
-        $qrCodeImage = QrCodeGenerator::format('png')->size(250)->merge(public_path('logo.png'), 0.3, true)->generate($qrCodeData);
+        $qrCodeImage = QrCodeGenerator::format('png')->size(250)->merge(\App\Support\Logo::path(), 0.3, true)->generate($qrCodeData);
 
         // Save image to file
         $path = $directory . "/{$this->item->uuid}.png";

@@ -568,7 +568,7 @@ class UsageController extends Controller
         
         // Get logo as base64 if it exists
         $logoBase64 = '';
-        $logoPath = public_path('logo.png');
+        $logoPath = \App\Support\Logo::path();
         if (file_exists($logoPath)) {
             $logoData = file_get_contents($logoPath);
             $logoBase64 = 'data:image/png;base64,' . base64_encode($logoData);

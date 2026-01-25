@@ -227,7 +227,7 @@ class ServiceableItemsExport implements FromCollection, WithHeadings, WithMappin
                 $sheet->getStyle('A4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('A4')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 
-                $logoPath = public_path('logo.png');
+                $logoPath = \App\Support\Logo::path();
                 if (file_exists($logoPath)) {
                     try {
                         $widthBeforeF = 15 + 20 + 30 + 25 + 15; // A + B + C + D + E

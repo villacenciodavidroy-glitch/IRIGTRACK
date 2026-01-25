@@ -4,7 +4,7 @@
     <div v-if="showPreloader" class="pre-loader">
       <div class="pre-loader-box">
         <div class="loader-logo">
-          <img src="../assets/logo.png" alt="" class="w-24 h-24" />
+          <img :src="logoUrl" alt="" class="w-24 h-24" />
         </div>
         <div class="loader-progress" id="progress_div">
           <div class="bar" :style="{ width: `${progress}%` }"></div>
@@ -37,7 +37,7 @@
             <div class="w-full max-w-md">
               <!-- Logo and Title -->
               <div class="mb-6 sm:mb-8 flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-0">
-                <img src="../assets/logo.png" alt="IrrigTrack Logo" class="h-8 w-8 sm:h-10 sm:w-10 sm:mr-3" />
+                <img :src="logoUrl" alt="IrrigTrack Logo" class="h-8 w-8 sm:h-10 sm:w-10 sm:mr-3" />
                 <h1 class="text-base sm:text-lg md:text-xl font-semibold text-gray-700 text-center sm:text-left">
                   IrrigTrack - Create Account
                 </h1>
@@ -357,9 +357,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
 import useLocations from '../composables/useLocations'
+import useLogo from '../composables/useLogo'
 import SuccessModal from '../components/SuccessModal.vue'
 
 const router = useRouter()
+const { logoUrl, fetchLogo } = useLogo()
 const { locations, loading: locationsLoading, fetchLocations } = useLocations()
 
 const isLoading = ref(false)
@@ -515,6 +517,7 @@ const goToLogin = () => {
 // Fetch locations on mount
 onMounted(async () => {
   initializeLoader()
+  fetchLogo()
   await fetchLocations(1, 1000) // Fetch all locations
 })
 </script>

@@ -122,6 +122,65 @@ class ActivityLogController extends Controller
     }
 
     /**
+     * Get restock history: who restocked, date, quantity, item.
+     * Admin or Supply only.
+     */
+    public function restockHistory(Request $request): JsonResponse
+    {
+        try {
+            $query = ActivityLog::with('user')
+                ->where('action', 'Restocked Supply')
+                ->orderBy('created_at', 'desc');
+
+            $perPage = (int) $request->get('per_page', 50);
+            $perPage = min(max($perPage, 1), 100);
+            $page = (int) $request->get('page', 1);
+            $page = max($page, 1);
+
+            $logs = $query->paginate($perPage, ['*'], 'page', $page);
+
+            $data = $logs->map(function ($log) {
+                $name = $log->user ? ($log->user->fullname ?? $log->user->username ?? $log->user->email ?? 'Unknown') : 'Unknown';
+                $quantity = null;
+                $itemName = null;
+                if ($log->description && preg_match('/restocked\s+(\d+)\s+quantity\s+of\s+supply\s+item\s+[\'\"]([^\'\"]+)[\'\"]/', $log->description, $m)) {
+                    $quantity = (int) $m[1];
+                    $itemName = $m[2];
+                }
+                return [
+                    'id' => $log->id,
+                    'person' => $name,
+                    'date' => $log->created_at->format('Y-m-d'),
+                    'date_formatted' => $log->created_at->format('M d, Y'),
+                    'time' => $log->created_at->format('h:i A'),
+                    'quantity' => $quantity,
+                    'item_name' => $itemName,
+                    'description' => $log->description,
+                    'created_at' => $log->created_at->toISOString(),
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'pagination' => [
+                    'current_page' => $logs->currentPage(),
+                    'last_page' => $logs->lastPage(),
+                    'per_page' => $logs->perPage(),
+                    'total' => $logs->total(),
+                    'from' => $logs->firstItem(),
+                    'to' => $logs->lastItem(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch restock history: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Get activity log statistics
      */
     public function statistics(): JsonResponse

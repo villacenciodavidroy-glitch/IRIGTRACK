@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../composables/useItems'
+import useFormLabels from '../composables/useFormLabels'
 import axiosClient from '../axios'
 import SuccessModal from '../components/SuccessModal.vue'
 
@@ -12,18 +13,23 @@ const itemsPerPage = ref(8)
 const totalItems = ref(0)
 
 // Get items from the API using the composable
-const { items, fetchitems, loading, error } = useItems()
+const { items, fetchitems, loading, error, totalItems: itemsTotal } = useItems()
+
+// Form labels
+const { fetchLabels, getLabel } = useFormLabels()
 
 // Fetch items when component mounts
 onMounted(async () => {
-  await fetchitems()
+  await fetchLabels()
+  // Fetch all items (or a large number) for proper filtering and counting
+  await fetchitems(false, 10000)
 })
 
 // Refresh data when component becomes active again (e.g., returning from edit page)
 onActivated(async () => {
   // Only refresh if we have items already (to avoid double loading on initial mount)
   if (items.value.length > 0) {
-    await fetchitems()
+    await fetchitems(false, 10000)
   }
 })
 
@@ -112,6 +118,11 @@ const totalFilteredItems = computed(() => {
   return filteredItems.value.length
 })
 
+// Count validated items (items with qrCodeVersion)
+const validatedItemsCount = computed(() => {
+  return filteredItems.value.filter(item => item.qrCodeVersion && item.qrCodeVersion !== null).length
+})
+
 const paginatedItems = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value
   const end = start + itemsPerPage.value
@@ -189,6 +200,20 @@ const openQrPreviewModal = (item) => {
 const closeQrPreviewModal = () => {
   showQrPreviewModal.value = false
   selectedQrItem.value = null
+}
+
+// View Details Modal
+const showViewDetailsModal = ref(false)
+const selectedViewItem = ref(null)
+
+const openViewDetailsModal = (item) => {
+  selectedViewItem.value = item
+  showViewDetailsModal.value = true
+}
+
+const closeViewDetailsModal = () => {
+  showViewDetailsModal.value = false
+  selectedViewItem.value = null
 }
 
 // Print QR code
@@ -591,7 +616,7 @@ const deleteItem = async () => {
     showSuccessModal.value = true
     
     // Refresh the items list
-    await fetchitems()
+    await fetchitems(false, 10000)
   } catch (error) {
     // Log detailed error information
     console.error('Error deleting item:', error)
@@ -718,7 +743,7 @@ const generateNewQrCode = async () => {
       showSuccessModal.value = true
       
       // Refresh the items list to get the updated QR code
-      await fetchitems()
+      await fetchitems(false, 10000)
       
       // Update selectedItem with the latest data from the refreshed items list
       // This ensures we have the most up-to-date version
@@ -750,7 +775,7 @@ const generateNewQrCode = async () => {
       // Update selectedItem to reflect it's already validated
       selectedItem.value.qrCodeVersion = currentYear.value
       // Refresh items to get latest data
-      await fetchitems()
+      await fetchitems(false, 10000)
       const updatedItem = items.value.find(item => item.uuid === selectedItem.value.uuid)
       if (updatedItem) {
         const mappedItem = inventoryItems.value.find(item => item.uuid === updatedItem.uuid)
@@ -804,20 +829,6 @@ const navigateBack = () => {
             </div>
             <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
               <button 
-                @click="router.push('/category-management')"
-                class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
-              >
-                <span class="material-icons-outlined text-lg mr-1.5">category</span>
-                <span>Categories</span>
-              </button>
-              <button 
-                @click="router.push('/location-management')"
-                class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center"
-              >
-                <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
-                <span>Unit/Sections</span>
-              </button>
-              <button 
                 @click="goToAddItem"
                 class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg"
               >
@@ -836,7 +847,7 @@ const navigateBack = () => {
           <div class="flex items-center justify-between">
             <div>
               <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Total Items</p>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ totalFilteredItems }}</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ itemsTotal || totalFilteredItems }}</p>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
               <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">inventory</span>
@@ -857,15 +868,15 @@ const navigateBack = () => {
           </div>
         </div>
 
-        <!-- Current Page Card -->
+        <!-- Validated Items Card -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Current Page</p>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ currentPage }} / {{ totalPages || 1 }}</p>
+              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Validated Items</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ validatedItemsCount }} / {{ totalFilteredItems }}</p>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-              <span class="material-icons-outlined text-purple-400 dark:text-purple-400 text-2xl">description</span>
+              <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">check_circle</span>
             </div>
           </div>
         </div>
@@ -873,30 +884,21 @@ const navigateBack = () => {
 
       <!-- Enhanced Search Bar -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-        <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-          <div class="relative flex-1">
-            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-              <span class="material-icons-outlined text-green-600 text-xl">search</span>
-            </div>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search by article, description, category, PAC, or unit/sections..."
-              class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
-            >
-            <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
-              <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons-outlined text-lg">close</span>
-              </button>
-            </div>
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <span class="material-icons-outlined text-green-600 text-xl">search</span>
           </div>
-          <button 
-            @click="printInventory"
-            class="btn-print flex items-center justify-center gap-2 px-4 py-3 whitespace-nowrap"
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search by article, description, category, PAC, or unit/sections..."
+            class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
           >
-            <span class="material-icons-outlined">print</span>
-            <span>Print Report</span>
-          </button>
+          <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+            <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
+              <span class="material-icons-outlined text-lg">close</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -959,7 +961,7 @@ const navigateBack = () => {
                   <h3 class="text-lg font-medium text-gray-900 dark:text-white truncate">{{ item.article }}</h3>
                   <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{{ item.description }}</p>
                   <div class="flex items-center gap-2 mt-1">
-                    <span class="text-sm font-medium px-2 py-0.5 rounded-full" style="background-color: #01200E; color: #FFFFFF;">{{ item.category }}</span>
+                    <span class="text-sm font-medium px-2 py-0.5 rounded-full bg-gray-800 dark:bg-gray-700 text-white">{{ item.category }}</span>
                     <span class="inline-block h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
                     <span class="text-sm font-medium px-2 py-0.5 rounded-full bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">{{ item.condition }}</span>
                   </div>
@@ -1026,18 +1028,14 @@ const navigateBack = () => {
                   <input type="checkbox" class="w-4 h-4 rounded border-gray-300 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-white dark:bg-gray-600">
                 </th>
                 <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QR CODE</th>
-                <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">IMAGE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ARTICLE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CATEGORY</th>
-                <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DESCRIPTION</th>
-                <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QUANTITY</th>
-                <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">PROPERTY ACCOUNT CODE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
-                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.O. NUMBER</th>
-                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTIONS</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
+                <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('description', 'DESCRIPTION') }}</th>
+                <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('property_account_code', 'PROPERTY ACCOUNT CODE') }}</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
+                <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('po_number', 'P.O. NUMBER') }}</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('unit_sections', 'UNIT/SECTIONS') }}</th>
                 <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
-                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
+                <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('issued_to', 'ISSUED TO') }}</th>
                 <th class="sticky right-0 z-10 bg-gray-100 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
               </tr>
             </thead>
@@ -1062,19 +1060,9 @@ const navigateBack = () => {
                   </div>
                 </td>
                 <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
-                  <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-600 dark:to-gray-700">
-                    <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded">
-                  </div>
-                </td>
-                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[130px]" :title="item.article">
                     {{ item.article }}
                   </div>
-                </td>
-                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">
-                    {{ item.category }}
-                  </span>
                 </td>
                 <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[220px]" :title="item.description">
@@ -1082,18 +1070,8 @@ const navigateBack = () => {
                   </div>
                 </td>
                 <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
-                  <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
-                    {{ item.quantity || '0' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
                   <div class="text-base font-mono text-gray-700 dark:text-gray-300 truncate max-w-[180px]" :title="item.propertyAccountCode">
                     {{ item.propertyAccountCode }}
-                  </div>
-                </td>
-                <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
-                  <div class="text-base font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.unitValue">
-                    {{ item.unitValue }}
                   </div>
                 </td>
                 <td class="px-4 py-3 border-r border-gray-200 dark:border-gray-600">
@@ -1136,8 +1114,15 @@ const navigateBack = () => {
                 <td class="sticky right-0 z-10 px-4 py-3 group-hover:bg-green-50 dark:group-hover:bg-gray-700" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'">
                   <div class="flex justify-center gap-2">
                     <button 
-                      @click="openValidation(item)"
+                      @click="openViewDetailsModal(item)" 
                       class="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
+                      title="View details"
+                    >
+                      <span class="material-icons-outlined text-sm">visibility</span>
+                    </button>
+                    <button 
+                      @click="openValidation(item)"
+                      class="p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg transition-all duration-200"
                       title="Validate"
                     >
                       <span class="material-icons-outlined text-sm">check_circle</span>
@@ -1154,11 +1139,11 @@ const navigateBack = () => {
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
               <div class="flex items-center gap-2">
-                <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-                <span class="text-base font-semibold" style="color: #01200E;">
-                  Showing <span class="font-bold" style="color: #01200E;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
-                  <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
-                  <span class="font-bold" style="color: #01200E;">{{ totalFilteredItems }}</span> items
+                <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+                <span class="text-base font-semibold text-gray-700 dark:text-gray-300">
+                  Showing <span class="font-bold text-gray-900 dark:text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                  <span class="font-bold text-gray-900 dark:text-white">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
+                  <span class="font-bold text-gray-900 dark:text-white">{{ totalFilteredItems }}</span> items
                 </span>
               </div>
               <div class="flex items-center gap-2">
@@ -1609,6 +1594,136 @@ const navigateBack = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Details Modal -->
+    <div v-if="showViewDetailsModal && selectedViewItem" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="closeViewDetailsModal">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5 border-b border-green-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-2xl">info</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-white">Item Details</h3>
+                <p class="text-green-100 text-sm">{{ selectedViewItem.article || 'N/A' }}</p>
+              </div>
+            </div>
+            <button @click="closeViewDetailsModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-6 overflow-y-auto max-h-[70vh]">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Item Image -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Image</label>
+              <div class="flex justify-center">
+                <img :src="selectedViewItem.image" alt="Item Image" class="h-48 w-48 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-600">
+              </div>
+            </div>
+
+            <!-- Article -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('article', 'Article') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.article || 'N/A' }}</p>
+            </div>
+
+            <!-- Category -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('category', 'Category') }}</label>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-800 dark:bg-gray-700 text-white">
+                {{ selectedViewItem.category || 'N/A' }}
+              </span>
+            </div>
+
+            <!-- Description -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('description', 'Description') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.description || 'N/A' }}</p>
+            </div>
+
+            <!-- Quantity -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('quantity', 'Quantity') }}</label>
+              <span class="inline-flex items-center justify-center px-3 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
+                {{ selectedViewItem.quantity || '0' }}
+              </span>
+            </div>
+
+            <!-- Property Account Code -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('property_account_code', 'Property Account Code') }}</label>
+              <p class="text-base font-mono text-gray-900 dark:text-white">{{ selectedViewItem.propertyAccountCode || 'N/A' }}</p>
+            </div>
+
+            <!-- Unit Value -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('unit_value', 'Unit Value') }}</label>
+              <p class="text-base font-medium text-gray-900 dark:text-white">{{ selectedViewItem.unitValue || 'N/A' }}</p>
+            </div>
+
+            <!-- Date Acquired -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('date_acquired', 'Date Acquired') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.dateAcquired || 'N/A' }}</p>
+            </div>
+
+            <!-- P.O. Number -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('po_number', 'P.O. Number') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.poNumber || 'N/A' }}</p>
+            </div>
+
+            <!-- Unit/Sections -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('unit_sections', 'Unit/Sections') }}</label>
+              <p class="text-base text-gray-900 dark:text-white flex items-center gap-1">
+                <span class="material-icons-outlined text-base">location_on</span>
+                {{ selectedViewItem.location || 'N/A' }}
+              </p>
+            </div>
+
+            <!-- Condition -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Condition</label>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
+                {{ selectedViewItem.condition || 'N/A' }}
+              </span>
+            </div>
+
+            <!-- Issued To -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('issued_to', 'Issued To') }}</label>
+              <div v-if="selectedViewItem.issuedTo && selectedViewItem.issuedTo !== 'Not Assigned'">
+                <p class="text-base font-bold text-gray-900 dark:text-white">{{ getIssuedToNamePart(selectedViewItem.issuedTo, 0) }}</p>
+                <p v-if="getIssuedToNamePart(selectedViewItem.issuedTo, 1)" class="text-base font-bold text-gray-900 dark:text-white">
+                  {{ getIssuedToNamePart(selectedViewItem.issuedTo, 1) }}
+                </p>
+                <p v-if="selectedViewItem.issued_to_code" class="text-sm text-gray-500 dark:text-gray-400">
+                  ({{ selectedViewItem.issued_to_code }})
+                </p>
+              </div>
+              <p v-else class="text-base text-gray-500 dark:text-gray-400">Not Assigned</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
+          <button 
+            @click="closeViewDetailsModal"
+            class="px-6 py-2.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

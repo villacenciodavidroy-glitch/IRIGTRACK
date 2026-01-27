@@ -137,8 +137,12 @@ class SupplyRequestController extends Controller
                     });
                 }
             }
-            // Note: All admins can see ALL requests regardless of target_supply_account_id
-            // Only the assigned admin can approve/reject, but all admins can view them
+            // IMPORTANT: All admins can see ALL requests regardless of:
+            // - target_supply_account_id
+            // - assigned_to_admin_id (assignment status)
+            // - Any other assignment field
+            // Only the assigned admin can approve/reject, but ALL admins can VIEW all requests
+            // This ensures transparency and allows admins to see unassigned requests
 
             // Apply filters
             if ($request->has('status') && !empty($request->status)) {
@@ -1748,11 +1752,20 @@ class SupplyRequestController extends Controller
 
                 DB::commit();
 
+                // Delete all existing messages for this request (messages are no longer needed after rejection)
+                try {
+                    $deletedCount = SupplyRequestMessage::where('supply_request_id', $supplyRequest->id)->delete();
+                    Log::info("Deleted {$deletedCount} existing message(s) for rejected supply request ID: {$supplyRequest->id}");
+                } catch (\Exception $e) {
+                    Log::error('Error deleting messages for rejected request: ' . $e->getMessage());
+                    // Continue even if message deletion fails
+                }
+
                 // Load relationships
                 $supplyRequest->load(['requestedBy', 'approver']);
 
-                // Send message and notification to the requesting user with rejection reason
-                // This prevents transaction rollback if message/notification creation fails
+                // Send notification to the requesting user with rejection reason (but no message)
+                // This prevents transaction rollback if notification creation fails
                 $requestingUserId = $supplyRequest->requested_by_user_id;
                 if ($requestingUserId) {
                     try {
@@ -1788,33 +1801,15 @@ class SupplyRequestController extends Controller
                             }
                         }
                         
-                        // Create message in supply request messages
-                        $rejectionMessage = "Your supply request for {$itemName} (Quantity: {$supplyRequest->quantity}) has been rejected.\n\n";
-                        $rejectionMessage .= "Rejection Reason:\n{$rejectionReason}\n\n";
-                        $rejectionMessage .= "Rejected By: {$rejecterName}";
-                        if ($user->role) {
-                            $rejectionMessage .= " (" . ucfirst($user->role) . ")";
-                        }
-                        
-                        $message = SupplyRequestMessage::create([
-                            'supply_request_id' => $supplyRequest->id,
-                            'user_id' => $user->id, // Admin/Supply who rejected (sender)
-                            'message' => $rejectionMessage,
-                            'is_read' => false,
-                        ]);
-                        
-                        if ($message) {
-                            Log::info("Rejection message created successfully for supply request ID: {$supplyRequest->id}, Message ID: {$message->id}, Rejecter User ID: {$user->id}, Requesting User ID: {$requestingUserId}");
-                        } else {
-                            Log::error("Rejection message creation returned null for supply request ID: {$supplyRequest->id}");
-                        }
+                        // Note: No message is created in supply_request_messages - all messages are deleted
+                        Log::info("Rejection processed for supply request ID: {$supplyRequest->id}, Rejecter User ID: {$user->id}, Requesting User ID: {$requestingUserId}");
                     } catch (\Exception $e) {
-                        Log::error('Error creating rejection message/notification: ' . $e->getMessage());
+                        Log::error('Error processing rejection: ' . $e->getMessage());
                         Log::error('Stack trace: ' . $e->getTraceAsString());
-                        // Continue even if message/notification creation fails - transaction already committed
+                        // Continue even if notification creation fails - transaction already committed
                     }
                 } else {
-                    Log::warning("Cannot create rejection message: requesting_user_id is null for supply request ID: {$supplyRequest->id}");
+                    Log::warning("Cannot process rejection: requesting_user_id is null for supply request ID: {$supplyRequest->id}");
                 }
                 
                 // Notify Supply account user if admin rejected a request that was previously approved by Supply
@@ -2692,6 +2687,16 @@ class SupplyRequestController extends Controller
                 $supplyRequest->delivery_location = $validated['delivery_location'] ?? null;
                 $supplyRequest->save();
 
+                // Delete all existing messages for this request (including any that will be created)
+                // Messages are no longer needed after fulfillment
+                try {
+                    $deletedCount = SupplyRequestMessage::where('supply_request_id', $supplyRequest->id)->delete();
+                    Log::info("Deleted {$deletedCount} existing message(s) for fulfilled supply request ID: {$supplyRequest->id}");
+                } catch (\Exception $e) {
+                    Log::error('Error deleting messages for fulfilled request: ' . $e->getMessage());
+                    // Continue even if message deletion fails
+                }
+
                 // Prepare data for transaction record
                 $requestedByUser = $supplyRequest->requestedBy;
                 $requestedByName = $requestedByUser ? ($requestedByUser->fullname ?? $requestedByUser->username ?? $requestedByUser->email ?? 'N/A') : 'N/A';
@@ -2749,92 +2754,8 @@ class SupplyRequestController extends Controller
                 $supplyRequest->refresh();
                 $supplyRequest->load(['requestedBy', 'approver', 'fulfilledBy']);
 
-                // Create messages AFTER transaction commits successfully
-                // This prevents transaction rollback if message creation fails
-                try {
-                    // Get item names for message
-                    if ($hasMultipleItems && $supplyRequest->relationLoaded('items')) {
-                        $itemNames = [];
-                        foreach ($supplyRequest->items as $requestItem) {
-                            $freshItem = $requestItem->item();
-                            if ($freshItem) {
-                                $itemNames[] = ($freshItem->unit ?? $freshItem->description ?? 'N/A') . " ({$requestItem->quantity})";
-                            }
-                        }
-                        $itemNameForMessage = implode(', ', $itemNames);
-                    } else {
-                        $freshItem = $supplyRequest->item();
-                        $itemNameForMessage = $freshItem ? ($freshItem->unit ?? $freshItem->description ?? 'N/A') : 'N/A';
-                    }
-                    
-                    $fulfillerName = $user->fullname ?? $user->username ?? $user->email ?? 'Supply Account';
-                    $requestingUserId = $supplyRequest->requested_by_user_id;
-                    $approverUserId = $supplyRequest->approved_by;
-                    
-                    // Message for the requesting user
-                    if ($requestingUserId) {
-                        try {
-                            $userMessage = "Your supply request has been fulfilled! {$itemNameForMessage} (Total Quantity: {$totalQuantity}) has been delivered.";
-                            if ($supplyRequest->delivery_location) {
-                                $userMessage .= " Delivery location: {$supplyRequest->delivery_location}.";
-                            }
-                            if ($supplyRequest->fulfillment_notes) {
-                                $userMessage .= " Notes: {$supplyRequest->fulfillment_notes}";
-                            }
-                            
-                            $userMsg = SupplyRequestMessage::create([
-                                'supply_request_id' => $supplyRequest->id,
-                                'user_id' => $user->id, // Supply account who fulfilled (sender)
-                                'message' => $userMessage,
-                                'is_read' => false,
-                            ]);
-                            
-                            if ($userMsg) {
-                                Log::info("Fulfillment message created for user - Supply Request ID: {$supplyRequest->id}, Message ID: {$userMsg->id}, User ID: {$requestingUserId}, Fulfiller ID: {$user->id}");
-                                
-                                // Broadcast event for real-time update
-                                event(new SupplyRequestApproved($supplyRequest, $userMessage));
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('Error creating fulfillment message for user: ' . $e->getMessage());
-                            Log::error('Stack trace: ' . $e->getTraceAsString());
-                            // Continue even if message creation fails
-                        }
-                    }
-                    
-                    // Message for the admin who approved (if different from fulfiller)
-                    // Note: Admin can see all messages for requests they approved via getAllMessages endpoint
-                    if ($approverUserId && $approverUserId != $user->id) {
-                        try {
-                            $approver = User::find($approverUserId);
-                            if ($approver) {
-                                $adminMessage = "Supply request has been fulfilled by {$fulfillerName}. {$itemNameForMessage} (Total Quantity: {$totalQuantity}) has been delivered to the requester.";
-                                if ($supplyRequest->delivery_location) {
-                                    $adminMessage .= " Delivery location: {$supplyRequest->delivery_location}.";
-                                }
-                                
-                                $adminMsg = SupplyRequestMessage::create([
-                                    'supply_request_id' => $supplyRequest->id,
-                                    'user_id' => $user->id, // Supply account who fulfilled (sender)
-                                    'message' => $adminMessage,
-                                    'is_read' => false,
-                                ]);
-                                
-                                if ($adminMsg) {
-                                    Log::info("Fulfillment message created for admin - Supply Request ID: {$supplyRequest->id}, Message ID: {$adminMsg->id}, Admin User ID: {$approverUserId}, Fulfiller ID: {$user->id}");
-                                }
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('Error creating fulfillment message for admin: ' . $e->getMessage());
-                            Log::error('Stack trace: ' . $e->getTraceAsString());
-                            // Continue even if message creation fails
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Error creating fulfillment messages: ' . $e->getMessage());
-                    Log::error('Stack trace: ' . $e->getTraceAsString());
-                    // Continue even if message creation fails - transaction already committed
-                }
+                // Note: All messages have been deleted above - no new messages are created after fulfillment
+                // This ensures a clean state where fulfilled requests have no messages in the database
 
                 // Log activity: Supply request fulfilled
                 try {
@@ -3437,15 +3358,28 @@ class SupplyRequestController extends Controller
                 ]);
             }
 
-            $items = Item::with(['category', 'location'])
+            $lowStockThreshold = 50; // Same as CheckLowStockJob
+            
+            // Use database aggregation for summary instead of loading all items
+            $summary = Item::where('category_id', $supplyCategory->id)
+                ->whereNull('deleted_at')
+                ->selectRaw('
+                    COUNT(*) as total_items,
+                    COALESCE(SUM(quantity), 0) as total_quantity,
+                    SUM(CASE WHEN quantity < ? THEN 1 ELSE 0 END) as low_stock_count
+                ', [$lowStockThreshold])
+                ->first();
+
+            // Pagination parameters
+            $perPage = $request->get('per_page', 100); // Default 100 items per page
+            $page = $request->get('page', 1);
+            
+            // Get paginated items with only necessary relationships
+            $items = Item::with(['category:id,category', 'location:id,location as name'])
                 ->where('category_id', $supplyCategory->id)
                 ->whereNull('deleted_at')
-                ->get();
-
-            $lowStockThreshold = 50; // Same as CheckLowStockJob
-            $lowStockItems = $items->filter(function ($item) use ($lowStockThreshold) {
-                return ($item->quantity ?? 0) < $lowStockThreshold;
-            });
+                ->select('id', 'uuid', 'unit', 'description', 'quantity', 'category_id', 'location_id', 'pac')
+                ->paginate($perPage, ['*'], 'page', $page);
 
             $transformedItems = $items->map(function ($item) use ($lowStockThreshold) {
                 return [
@@ -3464,10 +3398,18 @@ class SupplyRequestController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $transformedItems,
+                'pagination' => [
+                    'current_page' => $items->currentPage(),
+                    'last_page' => $items->lastPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                    'from' => $items->firstItem(),
+                    'to' => $items->lastItem(),
+                ],
                 'summary' => [
-                    'total_items' => $items->count(),
-                    'total_quantity' => $items->sum('quantity'),
-                    'low_stock_count' => $lowStockItems->count(),
+                    'total_items' => (int) ($summary->total_items ?? 0),
+                    'total_quantity' => (int) ($summary->total_quantity ?? 0),
+                    'low_stock_count' => (int) ($summary->low_stock_count ?? 0),
                     'low_stock_threshold' => $lowStockThreshold,
                 ]
             ]);
@@ -3746,7 +3688,8 @@ class SupplyRequestController extends Controller
                 $query = SupplyRequestMessage::query()
                     ->join('supply_requests', 'supply_request_messages.supply_request_id', '=', 'supply_requests.id')
                     ->where('supply_request_messages.user_id', '!=', $user->id)
-                    ->where('supply_request_messages.is_read', false);
+                    ->where('supply_request_messages.is_read', false)
+                    ->whereNotIn('supply_requests.status', ['fulfilled', 'rejected', 'cancelled']); // Only count unread messages for pending or in-progress requests
                 
                 if (in_array($role, ['supply', 'admin', 'super_admin'])) {
                     // For supply/admin: count unread messages in all requests (except their own messages)
@@ -3810,44 +3753,53 @@ class SupplyRequestController extends Controller
             }
 
             $role = strtolower($user->role ?? '');
-            $messages = collect();
+            
+            // Pagination parameters
+            $perPage = $request->get('per_page', 30); // Default 30 messages per page
+            $page = $request->get('page', 1);
 
             try {
-                // Use join instead of whereHas for better performance
-                $query = SupplyRequestMessage::query()
-                    ->join('supply_requests', 'supply_request_messages.supply_request_id', '=', 'supply_requests.id')
-                    ->join('users', 'supply_request_messages.user_id', '=', 'users.id')
-                    ->select(
-                        'supply_request_messages.*',
-                        'supply_requests.item_id as request_item_id',
-                        'supply_requests.quantity as request_quantity',
-                        'supply_requests.status as request_status'
-                    )
-                    ->where('supply_request_messages.user_id', '!=', $user->id)
-                    ->orderBy('supply_request_messages.created_at', 'desc')
-                    ->limit(30); // Reduced from 50 to 30 for better performance
-
-                if (in_array($role, ['supply', 'admin', 'super_admin'])) {
-                    // For supply/admin: get all messages in requests they have access to
-                    if ($role === 'supply') {
-                        // Supply accounts can only see messages from requests submitted to them
-                        if (Schema::hasColumn('supply_requests', 'target_supply_account_id')) {
-                            $query->where(function($q) use ($user) {
-                                $q->where('supply_requests.target_supply_account_id', $user->id)
-                                  ->orWhereNull('supply_requests.target_supply_account_id');
-                            });
+                // Build base query with whereHas for proper pagination
+                $query = SupplyRequestMessage::with('user')
+                    ->whereHas('supplyRequest', function($q) use ($user, $role) {
+                        $q->whereNotIn('status', ['fulfilled', 'rejected', 'cancelled']);
+                        
+                        if (in_array($role, ['supply', 'admin', 'super_admin'])) {
+                            if ($role === 'supply') {
+                                if (Schema::hasColumn('supply_requests', 'target_supply_account_id')) {
+                                    $q->where(function($subQ) use ($user) {
+                                        $subQ->where('target_supply_account_id', $user->id)
+                                             ->orWhereNull('target_supply_account_id');
+                                    });
+                                }
+                            }
+                            // Admins can see all messages
+                        } else {
+                            $q->where('requested_by_user_id', $user->id);
                         }
-                    }
-                    // Admins can see all messages (no additional where clause needed)
-                } else {
-                    // For regular users: get all messages in their own requests
-                    $query->where('supply_requests.requested_by_user_id', $user->id);
-                }
+                    })
+                    ->where('user_id', '!=', $user->id) // Exclude own messages
+                    ->orderBy('created_at', 'desc');
 
-                $messages = $query->get();
+                // Paginate the messages
+                $messagesPaginator = $query->paginate($perPage, ['*'], 'page', $page);
+                $messages = $messagesPaginator->getCollection();
                 
-                // Eager load user relationship
-                $messages->load('user');
+                // Get supply request IDs to load related data
+                $supplyRequestIds = $messages->pluck('supply_request_id')->unique();
+                $supplyRequests = SupplyRequest::whereIn('id', $supplyRequestIds)
+                    ->select('id', 'item_id', 'quantity', 'status')
+                    ->get()
+                    ->keyBy('id');
+                
+                // Attach supply request data to messages
+                $messages = $messages->map(function($msg) use ($supplyRequests) {
+                    $sr = $supplyRequests->get($msg->supply_request_id);
+                    $msg->request_item_id = $sr->item_id ?? null;
+                    $msg->request_quantity = $sr->quantity ?? null;
+                    $msg->request_status = $sr->status ?? null;
+                    return $msg;
+                });
                 
                 // Get unique item IDs and batch load items
                 $itemIds = $messages->pluck('request_item_id')->filter()->unique()->values();
@@ -3921,7 +3873,15 @@ class SupplyRequestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $transformedMessages
+                'data' => $transformedMessages,
+                'pagination' => [
+                    'current_page' => $messagesPaginator->currentPage(),
+                    'last_page' => $messagesPaginator->lastPage(),
+                    'per_page' => $messagesPaginator->perPage(),
+                    'total' => $messagesPaginator->total(),
+                    'from' => $messagesPaginator->firstItem(),
+                    'to' => $messagesPaginator->lastItem(),
+                ]
             ]);
 
         } catch (\Exception $e) {

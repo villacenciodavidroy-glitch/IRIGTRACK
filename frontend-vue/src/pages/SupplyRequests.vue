@@ -28,8 +28,7 @@ const showRequestModal = ref(false)
 const selectedSupply = ref(null)
 const requestForm = ref({
   quantity: 1,
-  notes: '',
-  target_supply_account_id: null
+  notes: ''
 })
 
 // Supply accounts for selection
@@ -78,7 +77,7 @@ const requestRealtimeListener = ref(null) // Real-time listener reference
 // Banner state for success/error messages
 const showBanner = ref(false)
 const bannerMessage = ref('')
-const bannerType = ref('success') // 'success' or 'error'
+const bannerType = ref('success') // 'success', 'error', 'warning', or 'info'
 let bannerTimeout = null
 
 // Show banner function
@@ -551,8 +550,7 @@ const openRequestModal = async (supply) => {
   selectedSupply.value = supply
   requestForm.value = {
     quantity: 1,
-    notes: '',
-    target_supply_account_id: null
+    notes: ''
   }
   // Fetch supply accounts when opening modal
   await fetchSupplyAccounts()
@@ -565,8 +563,7 @@ const closeRequestModal = () => {
   selectedSupply.value = null
   requestForm.value = {
     quantity: 1,
-    notes: '',
-    target_supply_account_id: null
+    notes: ''
   }
 }
 
@@ -652,32 +649,37 @@ const submitRequest = async (useCart = false) => {
     
     try {
       loading.value = true
+      
+      // Show "sending" banner immediately
+      showSimpleBanner(`Sending request for ${cart.value.length} item(s)...`, 'info', false)
+      
       const items = cart.value.map(item => ({
         item_id: item.uuid,
         quantity: item.quantity
       }))
       
-      // Validate supply account is selected
-      if (!requestForm.value.target_supply_account_id) {
-        showSimpleBanner('Please select a supply account to submit the request to', 'error', true, 4000)
-        return
-      }
-      
-      const response = await axiosClient.post('/supply-requests', {
-        items: items,
-        notes: requestForm.value.notes,
-        target_supply_account_id: requestForm.value.target_supply_account_id
-      })
-      
-      if (response.data.success) {
-        const successMessage = `Supply request submitted successfully for ${cart.value.length} item(s)!`
-        showSimpleBanner(successMessage, 'success', true, 5000)
-        cart.value = []
-        showCart.value = false
-        fetchSupplies()
-        fetchMyRequests()
-      } else {
-        showSimpleBanner(response.data.message || 'Failed to submit request', 'error', true, 5000)
+      // Create ONE request visible to ALL supply accounts (don't specify target_supply_account_id)
+      try {
+        const response = await axiosClient.post('/supply-requests', {
+          items: items,
+          notes: requestForm.value.notes
+          // Don't include target_supply_account_id - this makes it visible to all supply accounts
+        })
+        
+        if (response.data.success) {
+          const successMessage = `✅ Supply request submitted successfully! All supply accounts have been notified.`
+          showSimpleBanner(successMessage, 'success', true, 6000)
+          cart.value = []
+          showCart.value = false
+          fetchSupplies()
+          fetchMyRequests()
+        } else {
+          showSimpleBanner(response.data.message || 'Failed to submit request', 'error', true, 5000)
+        }
+      } catch (err) {
+        console.error('Error submitting request:', err)
+        const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to submit request'
+        showSimpleBanner(errorMessage, 'error', true, 5000)
       }
     } catch (err) {
       console.error('Error submitting request:', err)
@@ -723,28 +725,34 @@ const submitRequest = async (useCart = false) => {
       return
     }
     
-    // Validate supply account is selected
-    if (!requestForm.value.target_supply_account_id) {
-      showSimpleBanner('Please select a supply account to submit the request to', 'error', true, 4000)
-      return
-    }
-    
     try {
       loading.value = true
-      const response = await axiosClient.post('/supply-requests', {
-        item_id: selectedSupply.value.uuid,
-        quantity: requestForm.value.quantity,
-        notes: requestForm.value.notes,
-        target_supply_account_id: requestForm.value.target_supply_account_id
-      })
       
-      if (response.data.success) {
-        showSimpleBanner('Supply request submitted successfully!', 'success', true, 5000)
-        closeRequestModal()
-        fetchSupplies()
-        fetchMyRequests()
-      } else {
-        showSimpleBanner(response.data.message || 'Failed to submit request', 'error', true, 5000)
+      // Show "sending" banner immediately
+      showSimpleBanner(`Sending request for ${selectedSupply.value.name}...`, 'info', false)
+      
+      // Create ONE request visible to ALL supply accounts (don't specify target_supply_account_id)
+      try {
+        const response = await axiosClient.post('/supply-requests', {
+          item_id: selectedSupply.value.uuid,
+          quantity: requestForm.value.quantity,
+          notes: requestForm.value.notes
+          // Don't include target_supply_account_id - this makes it visible to all supply accounts
+        })
+        
+        if (response.data.success) {
+          const successMessage = `✅ Supply request submitted successfully! All supply accounts have been notified.`
+          showSimpleBanner(successMessage, 'success', true, 6000)
+          closeRequestModal()
+          fetchSupplies()
+          fetchMyRequests()
+        } else {
+          showSimpleBanner(response.data.message || 'Failed to submit request', 'error', true, 5000)
+        }
+      } catch (err) {
+        console.error('Error submitting request:', err)
+        const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to submit request'
+        showSimpleBanner(errorMessage, 'error', true, 5000)
       }
     } catch (err) {
       console.error('Error submitting request:', err)
@@ -1188,36 +1196,42 @@ watch(requestStatusFilter, () => {
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
-    <!-- Success/Error Banner -->
-    <div
-      v-if="showBanner"
-      class="fixed top-4 left-4 z-[10000] max-w-sm w-auto"
-    >
+    <!-- Enhanced Popup Banner -->
+    <Transition name="banner">
       <div
-        class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border-2 animate-banner-in"
-        :class="{
-          'bg-green-50 dark:bg-green-900/30 border-green-500 text-green-800 dark:text-green-200': bannerType === 'success',
-          'bg-red-50 dark:bg-red-900/30 border-red-500 text-red-800 dark:text-red-200': bannerType === 'error'
-        }"
+        v-if="showBanner"
+        class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[10000] max-w-md w-[90%] sm:w-auto"
       >
-        <span
-          class="material-icons-outlined text-xl flex-shrink-0"
+        <div
+          class="flex items-center gap-4 px-6 py-4 rounded-xl shadow-2xl border-2 backdrop-blur-sm"
           :class="{
-            'text-green-600 dark:text-green-400': bannerType === 'success',
-            'text-red-600 dark:text-red-400': bannerType === 'error'
+            'bg-green-50 dark:bg-green-900/40 border-green-500 text-green-800 dark:text-green-200': bannerType === 'success',
+            'bg-red-50 dark:bg-red-900/40 border-red-500 text-red-800 dark:text-red-200': bannerType === 'error',
+            'bg-yellow-50 dark:bg-yellow-900/40 border-yellow-500 text-yellow-800 dark:text-yellow-200': bannerType === 'warning',
+            'bg-blue-50 dark:bg-blue-900/40 border-blue-500 text-blue-800 dark:text-blue-200': bannerType === 'info'
           }"
         >
-          {{ bannerType === 'success' ? 'check_circle' : 'error' }}
-        </span>
-        <p class="text-sm font-semibold flex-1">{{ bannerMessage }}</p>
-        <button
-          @click="closeBanner"
-          class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex-shrink-0"
-        >
-          <span class="material-icons-outlined text-lg">close</span>
-        </button>
+          <span
+            class="material-icons-outlined text-2xl flex-shrink-0"
+            :class="{
+              'text-green-600 dark:text-green-400': bannerType === 'success',
+              'text-red-600 dark:text-red-400': bannerType === 'error',
+              'text-yellow-600 dark:text-yellow-400': bannerType === 'warning',
+              'text-blue-600 dark:text-blue-400 animate-spin': bannerType === 'info'
+            }"
+          >
+            {{ bannerType === 'success' ? 'check_circle' : bannerType === 'error' ? 'error' : bannerType === 'warning' ? 'warning' : 'hourglass_empty' }}
+          </span>
+          <p class="text-base font-semibold flex-1">{{ bannerMessage }}</p>
+          <button
+            @click="closeBanner"
+            class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex-shrink-0 transition-colors"
+          >
+            <span class="material-icons-outlined text-xl">close</span>
+          </button>
+        </div>
       </div>
-    </div>
+    </Transition>
     
     <!-- Enhanced Header Section -->
     <div v-if="!showAllMessagesView" class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-2xl rounded-2xl mt-4 sm:mt-6 overflow-hidden relative">
@@ -1655,44 +1669,6 @@ watch(requestStatusFilter, () => {
             </div>
           </div>
 
-          <!-- Supply Account Selection -->
-          <div class="space-y-2">
-            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-              <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">person</span>
-              <span>Submit To Supply Account <span class="text-red-500">*</span></span>
-            </label>
-            <div class="relative">
-              <select
-                v-model="requestForm.target_supply_account_id"
-                :disabled="loadingSupplyAccounts"
-                class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 font-medium"
-                required
-              >
-                <option :value="null">-- Select Supply Account --</option>
-                <option 
-                  v-for="account in supplyAccounts" 
-                  :key="account.id" 
-                  :value="account.id"
-                >
-                  {{ account.fullname || account.username || account.email }}
-                </option>
-              </select>
-              <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                <span class="material-icons-outlined">account_circle</span>
-              </span>
-              <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                <span class="material-icons-outlined">keyboard_arrow_down</span>
-              </span>
-            </div>
-            <div v-if="loadingSupplyAccounts" class="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-              <span class="material-icons-outlined text-sm animate-spin">refresh</span>
-              <span>Loading supply accounts...</span>
-            </div>
-            <p v-else-if="supplyAccounts.length === 0" class="flex items-center gap-2 text-xs text-red-500 dark:text-red-400">
-              <span class="material-icons-outlined text-sm">error</span>
-              <span>No supply accounts available</span>
-            </p>
-          </div>
 
           <!-- Notes -->
           <div class="space-y-2">
@@ -1734,7 +1710,7 @@ watch(requestStatusFilter, () => {
             </button>
             <button
               @click="submitRequest(false)"
-              :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity || !requestForm.target_supply_account_id"
+              :disabled="loading || requestForm.quantity < 1 || requestForm.quantity > maxQuantity"
               class="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 shadow-lg hover:shadow-xl disabled:transform-none whitespace-nowrap min-w-[150px] flex-shrink-0"
             >
               <span class="material-icons-outlined text-lg leading-none">playlist_add</span>
@@ -1782,7 +1758,7 @@ watch(requestStatusFilter, () => {
             class="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold flex items-center gap-2 mx-auto"
           >
             <span class="material-icons-outlined">arrow_back</span>
-            <span>Continue Shopping</span>
+            <span>Continue Selecting</span>
           </button>
         </div>
 
@@ -1851,44 +1827,6 @@ watch(requestStatusFilter, () => {
               <h4 class="text-lg font-bold text-gray-900 dark:text-white">Request Details</h4>
             </div>
 
-            <!-- Supply Account Selection -->
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">person</span>
-                <span>Submit To Supply Account <span class="text-red-500">*</span></span>
-              </label>
-              <div class="relative">
-                <select
-                  v-model="requestForm.target_supply_account_id"
-                  :disabled="loadingSupplyAccounts"
-                  class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60 font-medium"
-                  required
-                >
-                  <option :value="null">-- Select Supply Account --</option>
-                  <option 
-                    v-for="account in supplyAccounts" 
-                    :key="account.id" 
-                    :value="account.id"
-                  >
-                    {{ account.fullname || account.username || account.email }}
-                  </option>
-                </select>
-                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                  <span class="material-icons-outlined">account_circle</span>
-                </span>
-                <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-                  <span class="material-icons-outlined">keyboard_arrow_down</span>
-                </span>
-              </div>
-              <div v-if="loadingSupplyAccounts" class="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-                <span class="material-icons-outlined text-sm animate-spin">refresh</span>
-                <span>Loading supply accounts...</span>
-              </div>
-              <p v-else-if="supplyAccounts.length === 0" class="flex items-center gap-2 text-xs text-red-500 dark:text-red-400">
-                <span class="material-icons-outlined text-sm">error</span>
-                <span>No supply accounts available</span>
-              </p>
-            </div>
 
             <!-- Notes -->
             <div class="space-y-2">
@@ -1917,11 +1855,11 @@ watch(requestStatusFilter, () => {
               class="px-6 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-semibold transition-all duration-200 flex items-center justify-center gap-2 whitespace-nowrap"
             >
               <span class="material-icons-outlined text-lg">arrow_back</span>
-              <span>Continue Shopping</span>
+              <span>Continue Selecting</span>
             </button>
             <button
               @click="submitRequest(true)"
-              :disabled="loading || cart.length === 0 || !requestForm.target_supply_account_id"
+              :disabled="loading || cart.length === 0"
               class="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none whitespace-nowrap"
             >
               <span class="material-icons-outlined text-lg">send</span>
@@ -2502,16 +2440,35 @@ watch(requestStatusFilter, () => {
 @keyframes banner-in {
   from {
     opacity: 0;
-    transform: translateX(-20px);
+    transform: translateY(-20px) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 .animate-banner-in {
   animation: banner-in 0.3s ease-out;
+}
+
+/* Banner transition */
+.banner-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.banner-leave-active {
+  transition: all 0.25s ease-in;
+}
+
+.banner-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px) scale(0.95);
+}
+
+.banner-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px) scale(0.98);
 }
 
 /* Modal animation */

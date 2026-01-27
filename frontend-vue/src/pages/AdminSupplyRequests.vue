@@ -14,6 +14,7 @@ const error = ref(null)
 const searchQuery = ref('')
 const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const statusFilter = ref('') // Default filter to show all requests (supply_approved and admin_assigned)
+const activeTab = ref('pending') // 'pending', 'completed', 'rejected', 'all'
 const startDate = ref('')
 const endDate = ref('')
 const currentPage = ref(1)
@@ -53,6 +54,20 @@ const unreadCounts = ref({})
 const loadingMessages = ref(false)
 const requestPollingInterval = ref(null) // Polling interval for requests
 const requestRealtimeListener = ref(null) // Real-time listener reference
+
+// View Details Modal
+const showViewDetailsModal = ref(false)
+const selectedViewRequest = ref(null)
+
+const openViewDetailsModal = (request) => {
+  selectedViewRequest.value = request
+  showViewDetailsModal.value = true
+}
+
+const closeViewDetailsModal = () => {
+  showViewDetailsModal.value = false
+  selectedViewRequest.value = null
+}
 
 // Banner state for success/error messages
 const showBanner = ref(false)
@@ -121,6 +136,57 @@ const closeBanner = () => {
   bannerProgress.value = 100
 }
 
+// Helper function to get status filter based on active tab
+const getStatusFilterFromTab = () => {
+  if (activeTab.value === 'pending') {
+    // Return multiple statuses for pending - we'll filter client-side
+    return null // We'll filter client-side for pending
+  } else if (activeTab.value === 'completed') {
+    return null // We'll filter client-side for completed
+  } else if (activeTab.value === 'rejected') {
+    return 'rejected'
+  } else {
+    return '' // All - no filter
+  }
+}
+
+// Computed filtered requests based on active tab
+// Note: All admins can see ALL requests regardless of assignment
+// Only the assigned admin can approve/reject, but all admins can view them
+// Supply accounts should only see requests that are actually pending for them
+const filteredRequests = computed(() => {
+  let filtered = requests.value
+  
+  // Filter by tab status
+  if (activeTab.value === 'pending') {
+    if (isAdmin()) {
+      // Admins see all pending-related statuses
+      filtered = filtered.filter(r => 
+        r.status === 'supply_approved' || 
+        r.status === 'admin_assigned' || 
+        r.status === 'admin_accepted' ||
+        r.status === 'pending'
+      )
+    } else {
+      // Supply accounts only see requests that are actually pending (not yet approved by them)
+      // Once approved, requests move to admin workflow and are no longer "pending" for supply
+      filtered = filtered.filter(r => r.status === 'pending')
+    }
+  } else if (activeTab.value === 'completed') {
+    filtered = filtered.filter(r => 
+      r.status === 'approved' || 
+      r.status === 'fulfilled'
+    )
+  } else if (activeTab.value === 'rejected') {
+    filtered = filtered.filter(r => r.status === 'rejected')
+  }
+  // 'all' tab shows everything - no filtering needed
+  
+  // Return all filtered requests - no assignment filtering
+  // All admins can see all requests, assigned or not
+  return filtered
+})
+
 // Fetch all requests (filtered for admin view)
 const fetchRequests = async (silent = false) => {
   if (!silent) {
@@ -137,7 +203,8 @@ const fetchRequests = async (silent = false) => {
     if (debouncedSearchQuery.value) {
       params.search = debouncedSearchQuery.value
     }
-    if (statusFilter.value) {
+    // Only use statusFilter if not using tabs, or if tab is 'all' or 'rejected'
+    if (statusFilter.value && (activeTab.value === 'all' || activeTab.value === 'rejected')) {
       params.status = statusFilter.value
     }
     if (startDate.value) {
@@ -152,20 +219,21 @@ const fetchRequests = async (silent = false) => {
     if (response.data.success) {
       const previousCount = requests.value.length
       const allRequests = response.data.data || []
-      // Limit to itemsPerPage if backend returns more
-      requests.value = allRequests.slice(0, itemsPerPage.value)
+      // Use all requests returned by backend - don't slice, backend handles pagination
+      // All admins can see ALL requests regardless of assignment
+      requests.value = allRequests
       
-      // Calculate correct pagination values
+      // Calculate correct pagination values from backend response
       const apiPagination = response.data.pagination || pagination.value
       const total = apiPagination.total || allRequests.length
-      const from = (currentPage.value - 1) * itemsPerPage.value + 1
-      const to = Math.min(from + itemsPerPage.value - 1, total)
-      const lastPage = Math.ceil(total / itemsPerPage.value)
+      const from = apiPagination.from || ((currentPage.value - 1) * itemsPerPage.value + 1)
+      const to = apiPagination.to || Math.min(from + itemsPerPage.value - 1, total)
+      const lastPage = apiPagination.last_page || Math.ceil(total / itemsPerPage.value)
       
       pagination.value = {
-        current_page: currentPage.value,
+        current_page: apiPagination.current_page || currentPage.value,
         last_page: lastPage,
-        per_page: itemsPerPage.value,
+        per_page: apiPagination.per_page || itemsPerPage.value,
         total: total,
         from: from,
         to: to
@@ -476,6 +544,24 @@ const openApproveModal = (request) => {
   showApproveModal.value = true
 }
 
+// Handle approve from view modal
+const handleApproveFromView = (request) => {
+  closeViewDetailsModal()
+  // Use nextTick to ensure modal closes before opening approve modal
+  setTimeout(() => {
+    openApproveModal(request)
+  }, 100)
+}
+
+// Handle reject from view modal
+const handleRejectFromView = (request) => {
+  closeViewDetailsModal()
+  // Use nextTick to ensure modal closes before opening reject modal
+  setTimeout(() => {
+    openRejectModal(request)
+  }, 100)
+}
+
 const isMultiItemApprove = () => {
   const r = requestToApprove.value
   return r && ((r.items_count > 1) || (r.items && r.items.length > 1))
@@ -574,18 +660,6 @@ const approveRequest = async () => {
     
     if (response.data.success) {
       const requestDetails = requestToApprove.value
-      showSimpleBanner(
-        'Request Approved Successfully',
-        'success', 
-        true, 
-        7000,
-        {
-          itemName: requestDetails?.item_name || requestDetails?.item?.name || 'N/A',
-          quantity: requestDetails?.quantity,
-          requester: requestDetails?.requested_by_user?.name || requestDetails?.user?.name || 'N/A',
-          receiptGenerated: true
-        }
-      )
       showApproveModal.value = false
       requestToApprove.value = null
       fetchRequests()
@@ -657,6 +731,9 @@ const getStatusBadgeClass = (status) => {
   if (statusLower === 'rejected') {
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
   }
+  if (statusLower === 'ready_for_pickup') {
+    return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+  }
   return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
 }
 
@@ -697,6 +774,104 @@ const getTotalQuantity = (request) => {
 // Check if an item is rejected
 const isItemRejected = (item) => {
   return item && (item.status || 'pending') === 'rejected'
+}
+
+// Check if request needs action
+const needsAction = (request) => {
+  if (!request) return false
+  
+  // For Admin users, only show action if request is assigned to them
+  if (isAdmin()) {
+    // Admin assigned requests need Accept (if assigned to current admin)
+    if (request.status === 'admin_assigned' && isAssignedAdmin(request)) return true
+    // Pending requests need Approve/Reject (if assigned to current admin)
+    if (request.status === 'pending' && isAssignedAdmin(request)) return true
+    // Supply approved requests need Assign to Admin (if assigned to current admin)
+    if (request.status === 'supply_approved' && isAssignedAdmin(request)) return true
+    // Ready for pickup requests need Fulfill
+    if (request.status === 'ready_for_pickup') return true
+  }
+  
+  return false
+}
+
+// Get action required tooltip text
+const getActionRequiredTooltip = (request) => {
+  if (!request) return 'Action required'
+  
+  // For Admin users
+  if (isAdmin()) {
+    if (request.status === 'admin_assigned' && isAssignedAdmin(request)) return 'Action required - Accept Request'
+    if (request.status === 'pending' && isAssignedAdmin(request)) return 'Action required - Approve or Reject'
+    if (request.status === 'supply_approved' && isAssignedAdmin(request)) return 'Action required - Approve or Reject'
+    if (request.status === 'ready_for_pickup') return 'Action required - Fulfill Request'
+  }
+  
+  return 'Action required'
+}
+
+// Action reminder banner state
+const showActionReminderBanner = ref(false)
+const currentReminderRequest = ref(null)
+const reminderBannerIndex = ref(0)
+let reminderBannerInterval = null
+
+// Get requests that need action
+const requestsNeedingAction = computed(() => {
+  return requests.value.filter(request => needsAction(request))
+})
+
+// Start action reminder banner
+const startActionReminderBanner = () => {
+  // Clear any existing interval
+  if (reminderBannerInterval) {
+    clearInterval(reminderBannerInterval)
+  }
+  
+  // Only start if there are requests needing action
+  if (requestsNeedingAction.value.length === 0) {
+    showActionReminderBanner.value = false
+    return
+  }
+  
+  // Show banner immediately
+  updateReminderBanner()
+  
+  // Update every 5 seconds
+  reminderBannerInterval = setInterval(() => {
+    updateReminderBanner()
+  }, 5000)
+}
+
+// Update reminder banner to show next request
+const updateReminderBanner = () => {
+  if (requestsNeedingAction.value.length === 0) {
+    showActionReminderBanner.value = false
+    return
+  }
+  
+  // Cycle through requests
+  currentReminderRequest.value = requestsNeedingAction.value[reminderBannerIndex.value % requestsNeedingAction.value.length]
+  reminderBannerIndex.value = (reminderBannerIndex.value + 1) % requestsNeedingAction.value.length
+  showActionReminderBanner.value = true
+  
+  // Auto-hide after 4 seconds (leaving 1 second gap before next shows)
+  setTimeout(() => {
+    showActionReminderBanner.value = false
+  }, 4000)
+}
+
+// Close reminder banner
+const closeActionReminderBanner = () => {
+  showActionReminderBanner.value = false
+}
+
+// Navigate to request from reminder banner
+const goToRequestFromReminder = () => {
+  if (currentReminderRequest.value) {
+    openViewDetailsModal(currentReminderRequest.value)
+    closeActionReminderBanner()
+  }
 }
 
 // Setup real-time listener for supply requests
@@ -773,6 +948,11 @@ onMounted(async () => {
       await fetchRequests(true) // Silent refresh
     }
   }, 5000) // Poll every 5 seconds
+  
+  // Start action reminder banner after initial load
+  setTimeout(() => {
+    startActionReminderBanner()
+  }, 2000)
 })
 
 // Cleanup on unmount
@@ -781,6 +961,12 @@ onBeforeUnmount(() => {
   if (requestPollingInterval.value) {
     clearInterval(requestPollingInterval.value)
     requestPollingInterval.value = null
+  }
+  
+  // Clean up reminder banner interval
+  if (reminderBannerInterval) {
+    clearInterval(reminderBannerInterval)
+    reminderBannerInterval = null
   }
   
   // Clean up request real-time listener
@@ -799,7 +985,7 @@ watch(debouncedSearchQuery, () => {
   fetchRequests()
 })
 
-watch([statusFilter, startDate, endDate], () => {
+watch([statusFilter, startDate, endDate, activeTab], () => {
   currentPage.value = 1
   fetchRequests()
 })
@@ -813,20 +999,33 @@ watch(itemsPerPage, () => {
   fetchRequests()
 })
 
+// Watch for requests needing action and restart reminder banner
+watch(requestsNeedingAction, () => {
+  startActionReminderBanner()
+}, { deep: true })
+
 // Computed statistics for summary cards
 const statistics = computed(() => {
   const totalRequests = pagination.value.total || 0
   const pendingRequests = requests.value.filter(r => 
-    r.status === 'supply_approved' || r.status === 'pending' || r.status === 'admin_assigned'
+    r.status === 'supply_approved' || 
+    r.status === 'pending' || 
+    r.status === 'admin_assigned' ||
+    r.status === 'admin_accepted'
   ).length
   const approvedRequests = requests.value.filter(r => 
-    r.status === 'approved' || r.status === 'admin_accepted' || r.status === 'fulfilled'
+    r.status === 'approved' || 
+    r.status === 'fulfilled'
+  ).length
+  const rejectedRequests = requests.value.filter(r => 
+    r.status === 'rejected'
   ).length
   
   return {
     total: totalRequests,
     pending: pendingRequests,
     approved: approvedRequests,
+    rejected: rejectedRequests,
     currentPage: currentPage.value,
     lastPage: pagination.value.last_page || 1
   }
@@ -835,6 +1034,44 @@ const statistics = computed(() => {
 
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 md:p-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
+    <!-- Action Reminder Banner -->
+    <Transition name="slide-down">
+      <div
+        v-if="showActionReminderBanner && currentReminderRequest"
+        class="fixed bottom-4 right-4 z-50 max-w-sm w-full sm:w-auto"
+      >
+        <div class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white rounded-lg shadow-2xl border-2 border-orange-600 animate-pulse">
+          <div class="p-3 flex items-center gap-3">
+            <div class="flex-shrink-0 p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <span class="material-icons-outlined text-xl">notification_important</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold mb-0.5">Action Required!</div>
+              <div class="text-[10px] opacity-90 truncate">
+                {{ currentReminderRequest.user?.name || 'N/A' }} - {{ getActionRequiredTooltip(currentReminderRequest) }}
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button
+                @click="goToRequestFromReminder"
+                class="p-1.5 bg-white/20 hover:bg-white/30 rounded transition-all"
+                title="View Request"
+              >
+                <span class="material-icons-outlined text-sm">arrow_forward</span>
+              </button>
+              <button
+                @click="closeActionReminderBanner"
+                class="p-1.5 bg-white/20 hover:bg-white/30 rounded transition-all"
+                title="Dismiss"
+              >
+                <span class="material-icons-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+    
     <!-- Enhanced Professional Banner Notification -->
     <Transition name="banner-slide">
       <div
@@ -919,21 +1156,16 @@ const statistics = computed(() => {
     </Transition>
 
     <!-- Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-600 rounded-xl shadow-xl mb-6 border-b-4 border-emerald-700 dark:border-emerald-800">
-      <!-- Decorative background elements -->
-      <div class="absolute inset-0 opacity-10">
-        <div class="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
-        <div class="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
-      </div>
-      <div class="relative px-6 py-8 sm:px-8 sm:py-10">
+    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 rounded-xl shadow-lg mb-6 border border-emerald-400/20">
+      <div class="relative px-5 py-6 sm:px-6 sm:py-7">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div class="flex items-center gap-4">
-            <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-200">
-              <span class="material-icons-outlined text-4xl text-white">assignment</span>
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-white/25 backdrop-blur-md rounded-xl shadow-md border border-white/30">
+              <span class="material-icons-outlined text-3xl text-white drop-shadow-md">assignment</span>
             </div>
             <div>
-              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 drop-shadow-sm">Supply Requests from Supply Account</h1>
-              <p class="text-emerald-100 text-sm sm:text-base font-medium">View and manage requests approved by Supply Account. Approve or reject requests. Stock will be deducted when you approve.</p>
+              <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1 drop-shadow-sm tracking-tight">Supply Management</h1>
+              <p class="text-emerald-50 text-sm font-normal max-w-2xl">Manage and review supply requests approved by Supply Account.</p>
             </div>
           </div>
         </div>
@@ -942,21 +1174,92 @@ const statistics = computed(() => {
 
     <!-- Main Content -->
     <div>
+      <!-- Tab Navigation -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-1 mb-4">
+        <div class="flex flex-wrap gap-2">
+          <button
+            @click="activeTab = 'pending'; currentPage = 1; fetchRequests()"
+            :class="[
+              'flex-1 sm:flex-initial px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'pending'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            <span class="material-icons-outlined text-lg">pending</span>
+            <span>Pending</span>
+            <span v-if="statistics.pending > 0" class="ml-1 px-2 py-0.5 bg-white/20 dark:bg-gray-800/50 rounded-full text-xs font-bold">
+              {{ statistics.pending }}
+            </span>
+          </button>
+          <button
+            @click="activeTab = 'completed'; currentPage = 1; fetchRequests()"
+            :class="[
+              'flex-1 sm:flex-initial px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'completed'
+                ? 'bg-green-600 text-white shadow-md'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            <span class="material-icons-outlined text-lg">check_circle</span>
+            <span>Completed</span>
+            <span v-if="statistics.approved > 0" class="ml-1 px-2 py-0.5 bg-white/20 dark:bg-gray-800/50 rounded-full text-xs font-bold">
+              {{ statistics.approved }}
+            </span>
+          </button>
+          <button
+            @click="activeTab = 'rejected'; currentPage = 1; fetchRequests()"
+            :class="[
+              'flex-1 sm:flex-initial px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'rejected'
+                ? 'bg-red-600 text-white shadow-md'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            <span class="material-icons-outlined text-lg">cancel</span>
+            <span>Rejected</span>
+            <span v-if="statistics.rejected > 0" class="ml-1 px-2 py-0.5 bg-white/20 dark:bg-gray-800/50 rounded-full text-xs font-bold">
+              {{ statistics.rejected }}
+            </span>
+          </button>
+          <button
+            @click="activeTab = 'all'; currentPage = 1; fetchRequests()"
+            :class="[
+              'flex-1 sm:flex-initial px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'all'
+                ? 'bg-gray-700 dark:bg-gray-600 text-white shadow-md'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            ]"
+          >
+            <span class="material-icons-outlined text-lg">list</span>
+            <span>All</span>
+            <span v-if="statistics.total > 0" class="ml-1 px-2 py-0.5 bg-white/20 dark:bg-gray-800/50 rounded-full text-xs font-bold">
+              {{ statistics.total }}
+            </span>
+          </button>
+        </div>
+      </div>
+
       <!-- Filters -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-6">
-        <div class="flex flex-wrap gap-4 items-center">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-4">
+        <div class="flex flex-wrap gap-3 items-end">
           <div class="flex-1 min-w-[200px]">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search by name, item, or request..."
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
-            />
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Search</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 material-icons-outlined text-gray-400 text-base">search</span>
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search by name, item, or request..."
+                class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white transition-all text-sm"
+              />
+            </div>
           </div>
-          <div>
+          <div class="min-w-[160px] hidden">
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Status</label>
             <select
               v-model="statusFilter"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white transition-all text-sm"
             >
               <option value="">All Status</option>
               <option value="supply_approved">Supply Approved</option>
@@ -967,11 +1270,12 @@ const statistics = computed(() => {
               <option value="fulfilled">Fulfilled</option>
             </select>
           </div>
-          <div>
+          <div class="min-w-[140px]">
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Per Page</label>
             <select
               v-model="itemsPerPage"
               @change="currentPage = 1"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white transition-all"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white transition-all text-sm"
             >
               <option :value="8">8 per page</option>
               <option :value="10">10 per page</option>
@@ -983,135 +1287,122 @@ const statistics = computed(() => {
       </div>
 
       <!-- Loading State -->
-      <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12">
+      <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700/50 p-16">
         <div class="flex flex-col items-center justify-center">
-          <div class="inline-block p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-4">
-            <span class="material-icons-outlined animate-spin text-4xl text-emerald-600 dark:text-emerald-400">refresh</span>
+          <div class="inline-block p-5 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-2xl mb-5 shadow-md">
+            <span class="material-icons-outlined animate-spin text-5xl text-emerald-600 dark:text-emerald-400">refresh</span>
           </div>
-          <p class="text-base font-medium text-gray-700 dark:text-gray-300">Loading requests...</p>
+          <p class="text-lg font-semibold text-gray-700 dark:text-gray-300">Loading requests...</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Please wait a moment</p>
         </div>
       </div>
 
       <!-- Error State -->
-      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-        <p class="text-red-700 dark:text-red-400 text-sm">{{ error }}</p>
+      <div v-else-if="error" class="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-800/50 rounded-xl p-6 mb-6 shadow-lg">
+        <div class="flex items-start gap-4">
+          <div class="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg">
+            <span class="material-icons-outlined text-red-600 dark:text-red-400 text-2xl">error_outline</span>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-base font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Requests</h3>
+            <p class="text-red-700 dark:text-red-400 text-sm">{{ error }}</p>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="requests.length === 0" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12">
+      <div v-else-if="filteredRequests.length === 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700/50 p-16">
         <div class="flex flex-col items-center justify-center">
-          <span class="material-icons-outlined text-5xl text-gray-400 dark:text-gray-500 mb-4">inbox</span>
-          <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No requests found</h3>
-          <p class="text-gray-600 dark:text-gray-400 text-center text-sm">{{ searchQuery || statusFilter ? 'Try adjusting your filters' : 'No supply requests from Supply Account available.' }}</p>
+          <div class="p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/50 dark:to-gray-800/50 rounded-2xl mb-6 shadow-inner">
+            <span class="material-icons-outlined text-6xl text-gray-300 dark:text-gray-600">inbox</span>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">No {{ activeTab }} requests found</h3>
+          <p class="text-gray-500 dark:text-gray-400 text-center max-w-md">{{ searchQuery || statusFilter ? 'Try adjusting your filters to see more results' : `No ${activeTab} supply requests available at this time.` }}</p>
         </div>
       </div>
 
       <!-- Requests Table -->
       <div v-else class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="responsive-table-wrapper">
           <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
+            <thead class="bg-gradient-to-r from-gray-50 via-gray-50 to-gray-100 dark:from-gray-700/80 dark:via-gray-700/80 dark:to-gray-800/80">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Supply Name</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">User</th>
+                <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Supply Name</th>
+                <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider hide-mobile">Date</th>
+                <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="(request, index) in requests" :key="request.id" class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                <td class="px-6 py-4">
-                  <div>
-                    <div class="text-sm font-medium text-gray-900 dark:text-white">{{ request.user?.name || 'N/A' }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ request.user?.email || 'N/A' }}</div>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="text-sm text-gray-900 dark:text-white">{{ request.user?.location || 'N/A' }}</div>
-                </td>
-                <td class="px-6 py-4">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-2">
-                    <div v-for="(item, idx) in request.items" :key="idx" class="border-b border-gray-200 dark:border-gray-600 last:border-b-0 pb-2 last:pb-0">
-                      <div class="text-sm font-medium text-gray-900 dark:text-white">{{ item.item_name }}</div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">Stock: {{ item.item_quantity }}</div>
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700/30">
+              <tr v-for="(request, index) in filteredRequests" :key="request.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors duration-150">
+                <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                      <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm">person</span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">{{ request.user?.name || 'N/A' }}</div>
+                      <div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate">
+                        <span class="material-icons-outlined text-[8px] sm:text-[10px]">location_on</span>
+                        <span class="truncate">{{ request.user?.location || 'N/A' }}</span>
+                      </div>
                     </div>
                   </div>
-                  <div v-else>
-                    <div class="text-sm font-medium text-gray-900 dark:text-white">{{ request.item_name }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Stock: {{ request.item_quantity }}</div>
+                </td>
+                <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm flex-shrink-0">inventory_2</span>
+                    <span class="text-xs sm:text-sm text-gray-900 dark:text-white truncate">{{ request.supply_name || 'N/A' }}</span>
                   </div>
                 </td>
-                <td class="px-6 py-4">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-1">
-                    <div v-for="(item, idx) in request.items" :key="idx" 
-                         :class="['text-sm', isItemRejected(item) 
-                           ? 'text-red-600 dark:text-red-400 line-through' 
-                           : 'text-gray-900 dark:text-white']">
-                      {{ item.quantity }}
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 pt-1 border-t border-gray-200 dark:border-gray-600">
-                      Total: {{ getTotalQuantity(request) }}
-                    </div>
-                  </div>
-                  <div v-else class="text-sm" 
-                       :class="request.items && request.items.length === 1 && isItemRejected(request.items[0])
-                         ? 'text-red-600 dark:text-red-400 line-through'
-                         : 'text-gray-900 dark:text-white'">
-                    {{ getTotalQuantity(request) }}
-                  </div>
-                </td>
-                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">{{ request.supply_name || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', getStatusBadgeClass(request.status)]">
+                <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 whitespace-nowrap">
+                  <span :class="['px-2 sm:px-2.5 py-0.5 sm:py-1 inline-flex items-center text-[10px] sm:text-xs font-semibold rounded-md', getStatusBadgeClass(request.status)]">
                     {{ request.status === 'supply_approved' ? 'Supply Approved' : 
                        request.status === 'admin_assigned' ? 'Assigned to Admin' :
                        request.status === 'admin_accepted' ? 'Admin Accepted' :
+                       request.status === 'ready_for_pickup' ? 'For Pickup' :
                        request.status }}
                   </span>
                 </td>
-                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(request.created_at) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    @click="openMessageModal(request)"
-                    class="relative text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
-                    title="Messages"
-                  >
-                    Messages
-                    <span 
-                      v-if="(unreadCounts[request.id] || 0) > 0"
-                      class="ml-1.5 inline-flex items-center justify-center w-5 h-5 bg-red-600 text-white text-xs rounded-full font-semibold"
-                    >
-                      {{ (unreadCounts[request.id] || 0) > 9 ? '9+' : (unreadCounts[request.id] || 0) }}
-                    </span>
-                  </button>
-                  
-                  <!-- Admin Actions -->
-                  <!-- Only show approve/reject if current admin is the assigned admin -->
-                  <template v-if="(request.status === 'supply_approved' || request.status === 'pending' || request.status === 'admin_assigned') && isAssignedAdmin(request)">
-                    <button
-                      @click="openApproveModal(request)"
-                      class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
-                      title="Approve Request"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      @click="openRejectModal(request)"
-                      class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 font-medium transition-colors duration-200 hover:underline"
-                      title="Reject Request"
-                    >
-                      Reject
-                    </button>
-                  </template>
-                  <div v-else-if="request.status === 'supply_approved' || request.status === 'pending' || request.status === 'admin_assigned'" class="text-xs text-gray-500 dark:text-gray-400">
-                    <span v-if="request.assigned_to_admin">Assigned to: {{ request.assigned_to_admin.name }}</span>
-                    <span v-else>Not assigned</span>
+                <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 hide-mobile">
+                  <div class="flex items-center gap-1.5">
+                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs">schedule</span>
+                    <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{{ formatDate(request.created_at) }}</span>
                   </div>
-                  <span v-else class="text-gray-400 dark:text-gray-500">-</span>
+                </td>
+                <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 whitespace-nowrap">
+                  <div class="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                      @click="openViewDetailsModal(request)"
+                      class="relative p-1.5 sm:p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg transition-all duration-200 hover:shadow-sm flex items-center justify-center border-2 border-blue-400 dark:border-blue-500 w-8 h-8 sm:w-10 sm:h-10"
+                      title="View details"
+                    >
+                      <span class="material-icons-outlined text-sm sm:text-lg">visibility</span>
+                      <!-- New Assignment Indicator -->
+                      <span 
+                        v-if="(request.status === 'supply_approved' || request.status === 'pending' || request.status === 'admin_assigned') && isAssignedAdmin(request)"
+                        class="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 inline-flex items-center justify-center w-3 h-3 sm:w-4 sm:h-4 bg-red-500 text-white text-[8px] sm:text-[9px] rounded-full font-bold animate-pulse shadow-md border border-white dark:border-gray-800"
+                        title="New assignment - Action required"
+                      >
+                        !
+                      </span>
+                    </button>
+                    
+                    <button
+                      @click="openMessageModal(request)"
+                      class="relative p-1.5 sm:p-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg transition-all duration-200 hover:shadow-sm flex items-center justify-center border-2 border-emerald-400 dark:border-emerald-500 w-8 h-8 sm:w-10 sm:h-10"
+                      title="Messages"
+                    >
+                      <span class="material-icons-outlined text-sm sm:text-lg">message</span>
+                      <span 
+                        v-if="(unreadCounts[request.id] || 0) > 0"
+                        class="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 inline-flex items-center justify-center min-w-[14px] sm:min-w-[16px] h-3 sm:h-4 px-0.5 sm:px-1 bg-red-500 text-white text-[9px] sm:text-[10px] rounded-full font-bold"
+                      >
+                        {{ (unreadCounts[request.id] || 0) > 9 ? '9+' : (unreadCounts[request.id] || 0) }}
+                      </span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1119,35 +1410,38 @@ const statistics = computed(() => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="pagination.last_page > 1" class="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6">
+        <div v-if="filteredRequests.length > 0 || pagination.last_page > 1" class="bg-gray-50 dark:bg-gray-800/50 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
           <div class="flex-1 flex justify-between sm:hidden">
             <button
               @click="currentPage = Math.max(1, currentPage - 1)"
               :disabled="currentPage === 1"
-              class="relative inline-flex items-center px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
+              class="relative inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
+              <span class="material-icons-outlined text-sm">chevron_left</span>
               Previous
             </button>
             <button
               @click="currentPage = Math.min(pagination.last_page, currentPage + 1)"
               :disabled="currentPage >= pagination.last_page"
-              class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="relative inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Next
+              <span class="material-icons-outlined text-sm">chevron_right</span>
             </button>
           </div>
           <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                Showing <span class="font-medium">{{ pagination.from || 0 }}</span> to <span class="font-medium">{{ pagination.to || 0 }}</span> of <span class="font-medium">{{ pagination.total || 0 }}</span> results
+              <p class="text-xs text-gray-600 dark:text-gray-400">
+                Showing <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ filteredRequests.length > 0 ? 1 : 0 }}</span> to <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ filteredRequests.length }}</span> of <span class="font-semibold text-gray-900 dark:text-white">{{ filteredRequests.length }}</span> {{ activeTab }} results
+                <span v-if="activeTab !== 'all'" class="text-gray-500 dark:text-gray-500">({{ pagination.total || 0 }} total)</span>
               </p>
             </div>
             <div>
-              <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+              <nav class="relative z-0 inline-flex rounded-lg -space-x-px" aria-label="Pagination">
                 <button
                   @click="currentPage = Math.max(1, currentPage - 1)"
                   :disabled="currentPage === 1"
-                  class="relative inline-flex items-center px-2 py-2 rounded-l-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
+                  class="relative inline-flex items-center px-2 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all rounded-l-lg"
                 >
                   <span class="material-icons-outlined text-sm">chevron_left</span>
                 </button>
@@ -1156,16 +1450,16 @@ const statistics = computed(() => {
                     v-if="page === 1 || page === pagination.last_page || (page >= currentPage - 1 && page <= currentPage + 1)"
                     @click="currentPage = page"
                     :class="{
-                      'z-10 bg-emerald-50 dark:bg-emerald-900 border-emerald-500 dark:border-emerald-400 text-emerald-600 dark:text-emerald-300': currentPage === page,
-                      'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600': currentPage !== page
+                      'z-10 bg-emerald-500 border-emerald-500 text-white': currentPage === page,
+                      'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20': currentPage !== page
                     }"
-                    class="relative inline-flex items-center px-4 py-2 border-2 text-sm font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
+                    class="relative inline-flex items-center px-3 py-1.5 border text-xs font-semibold transition-all"
                   >
                     {{ page }}
                   </button>
                   <span
                     v-else-if="page === currentPage - 2 || page === currentPage + 2"
-                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300"
+                    class="relative inline-flex items-center px-2 py-1.5 border border-transparent bg-white dark:bg-gray-700 text-xs text-gray-500 dark:text-gray-400"
                   >
                     ...
                   </span>
@@ -1173,7 +1467,7 @@ const statistics = computed(() => {
                 <button
                   @click="currentPage = Math.min(pagination.last_page, currentPage + 1)"
                   :disabled="currentPage >= pagination.last_page"
-                  class="relative inline-flex items-center px-2 py-2 rounded-r-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 dark:hover:border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
+                  class="relative inline-flex items-center px-2 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all rounded-r-lg"
                 >
                   <span class="material-icons-outlined text-sm">chevron_right</span>
                 </button>
@@ -1265,7 +1559,7 @@ const statistics = computed(() => {
                             <button
                               type="button"
                               @click="unrejectItem(it)"
-                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
+                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-all duration-200 shadow-sm hover:shadow-md border-2 border-emerald-400 dark:border-emerald-500"
                             >
                               Undo
                             </button>
@@ -1274,7 +1568,7 @@ const statistics = computed(() => {
                             <button
                               type="button"
                               @click="openRejectItemModal(it)"
-                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
+                              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center gap-1 transition-all duration-200 shadow-sm hover:shadow-md border-2 border-red-400 dark:border-red-500"
                             >
                               <span class="material-icons-outlined text-sm">report_problem</span>
                               Reject (defective)
@@ -1301,7 +1595,7 @@ const statistics = computed(() => {
             <button
               @click="closeApproveModal"
               :disabled="approvingRequest"
-              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md border-2 border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span class="material-icons-outlined text-lg">close</span>
               <span>Cancel</span>
@@ -1309,7 +1603,7 @@ const statistics = computed(() => {
             <button
               @click="approveRequest"
               :disabled="approvingRequest || allItemsRejectedInApproveModal()"
-              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-md"
+              class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md border-2 border-emerald-400 dark:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span v-if="!approvingRequest" class="material-icons-outlined text-lg">check_circle</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
@@ -1340,7 +1634,7 @@ const statistics = computed(() => {
               type="button"
               @click="closeRejectItemModal"
               :disabled="rejectingItem"
-              class="px-4 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 font-semibold disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:hover:scale-100"
+              class="px-4 py-2 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 font-semibold disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md"
             >
               Cancel
             </button>
@@ -1348,7 +1642,7 @@ const statistics = computed(() => {
               type="button"
               @click="rejectItem"
               :disabled="rejectingItem || !rejectItemReason.trim()"
-              class="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md"
+              class="px-4 py-2 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md border-2 border-red-400 dark:border-red-500"
             >
               <span v-if="rejectingItem" class="material-icons-outlined text-lg animate-spin">refresh</span>
               <span>{{ rejectingItem ? 'Rejecting...' : 'Reject item' }}</span>
@@ -1386,14 +1680,14 @@ const statistics = computed(() => {
         <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
             @click="closeRejectModal"
-            class="px-4 py-2 text-sm font-medium rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
+            class="px-4 py-2 text-sm font-medium rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md"
           >
             Cancel
           </button>
           <button
             @click="rejectRequest"
             :disabled="loading || !rejectForm.reason.trim()"
-            class="px-4 py-2 text-sm font-semibold rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md"
+            class="px-4 py-2 text-sm font-semibold rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md border-2 border-red-400 dark:border-red-500"
           >
             Reject Request
           </button>
@@ -1525,7 +1819,7 @@ const statistics = computed(() => {
                         </div>
                         <button
                           @click="downloadReceiptPDF(extractReceiptUrl(msg.message), $event, msg)"
-                          class="px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-700 flex-shrink-0 whitespace-nowrap shadow-sm hover:shadow-md transform hover:scale-105"
+                          class="px-3 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all duration-200 flex items-center gap-1.5 border-2 border-emerald-400 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 flex-shrink-0 whitespace-nowrap shadow-sm hover:shadow-md"
                           title="Download PDF receipt"
                         >
                           <span class="material-icons-outlined text-sm">download</span>
@@ -1553,10 +1847,247 @@ const statistics = computed(() => {
             <button
               @click="sendMessage"
               :disabled="!newMessage.trim()"
-              class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:hover:scale-100 disabled:hover:shadow-md font-semibold"
+              class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md border-2 border-emerald-400 dark:border-emerald-500 font-semibold"
             >
               <span class="material-icons-outlined text-sm">send</span>
               <span>Send</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Details Modal -->
+    <div v-if="showViewDetailsModal && selectedViewRequest" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="closeViewDetailsModal">
+      <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 px-8 py-6 border-b border-emerald-400/20">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-white/25 backdrop-blur-md rounded-2xl shadow-lg border border-white/30">
+                <span class="material-icons-outlined text-white text-3xl drop-shadow-lg">info</span>
+              </div>
+              <div>
+                <h3 class="text-2xl font-extrabold text-white drop-shadow-md">Request Details</h3>
+                <p class="text-emerald-50 text-base font-medium mt-1">{{ selectedViewRequest.user?.name || 'N/A' }}</p>
+              </div>
+            </div>
+            <button @click="closeViewDetailsModal" class="text-white/90 hover:text-white hover:bg-white/20 rounded-xl p-2 transition-all duration-200 hover:scale-110">
+              <span class="material-icons-outlined text-2xl">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-8 overflow-y-auto max-h-[70vh] bg-gradient-to-br from-gray-50/50 to-white dark:from-gray-800 dark:to-gray-900">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- User Information -->
+            <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-blue-600 dark:text-blue-400">person</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">User</label>
+              </div>
+              <p class="text-lg font-bold text-gray-900 dark:text-white mb-1">{{ selectedViewRequest.user?.name || 'N/A' }}</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <span class="material-icons-outlined text-xs">badge</span>
+                {{ selectedViewRequest.user?.role || 'N/A' }}
+              </p>
+            </div>
+
+            <!-- Unit/Sections -->
+            <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400">location_on</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Unit/Sections</label>
+              </div>
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.user?.location || 'N/A' }}</p>
+            </div>
+
+            <!-- Supply Name -->
+            <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-purple-600 dark:text-purple-400">inventory_2</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Supply Name</label>
+              </div>
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.supply_name || 'N/A' }}</p>
+            </div>
+
+            <!-- Status -->
+            <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-amber-600 dark:text-amber-400">flag</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</label>
+              </div>
+              <span :class="['px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center shadow-sm', getStatusBadgeClass(selectedViewRequest.status)]">
+                {{ selectedViewRequest.status === 'supply_approved' ? 'Supply Approved' : 
+                   selectedViewRequest.status === 'admin_assigned' ? 'Assigned to Admin' :
+                   selectedViewRequest.status === 'admin_accepted' ? 'Admin Accepted' :
+                   selectedViewRequest.status === 'ready_for_pickup' ? 'For Pickup' :
+                   selectedViewRequest.status }}
+              </span>
+            </div>
+
+            <!-- Date -->
+            <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-indigo-600 dark:text-indigo-400">schedule</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Date</label>
+              </div>
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatDate(selectedViewRequest.created_at) }}</p>
+            </div>
+
+            <!-- Assigned Admin -->
+            <div v-if="selectedViewRequest.assigned_to_admin" class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-lg">
+                  <span class="material-icons-outlined text-teal-600 dark:text-teal-400">admin_panel_settings</span>
+                </div>
+                <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Assigned To</label>
+              </div>
+              <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.assigned_to_admin.name || 'N/A' }}</p>
+            </div>
+
+            <!-- Items Section -->
+            <div class="md:col-span-2">
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-6 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-5">
+                  <div class="p-2 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-purple-600 dark:text-purple-400">shopping_cart</span>
+                  </div>
+                  <label class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Requested Items</label>
+                </div>
+                <div v-if="selectedViewRequest.items && selectedViewRequest.items.length > 1" class="space-y-4">
+                  <div v-for="(item, idx) in selectedViewRequest.items" :key="idx" 
+                       :class="['p-5 rounded-xl border-2 shadow-sm transition-all', isItemRejected(item) 
+                         ? 'border-red-200 dark:border-red-800/50 bg-gradient-to-br from-red-50/50 to-rose-50/50 dark:from-red-900/10 dark:to-rose-900/10' 
+                         : 'border-gray-200 dark:border-gray-600/50 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 hover:shadow-md']">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-3">
+                          <div class="p-2 bg-white dark:bg-gray-800/50 rounded-lg shadow-sm">
+                            <span class="material-icons-outlined text-gray-600 dark:text-gray-400">inventory_2</span>
+                          </div>
+                          <div class="flex-1">
+                            <span class="text-lg font-bold text-gray-900 dark:text-white">{{ item.item_name }}</span>
+                            <span v-if="isItemRejected(item)" class="ml-3 px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg shadow-sm">
+                              Rejected
+                            </span>
+                          </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                          <div class="bg-white dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700/50">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
+                            <span :class="['text-lg font-bold', isItemRejected(item) 
+                              ? 'text-red-600 dark:text-red-400 line-through' 
+                              : 'text-gray-900 dark:text-white']">
+                              {{ item.quantity }}
+                            </span>
+                          </div>
+                          <div class="bg-white dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700/50">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Stock</div>
+                            <span class="text-lg font-bold text-gray-900 dark:text-white">{{ item.item_quantity || 'N/A' }}</span>
+                          </div>
+                        </div>
+                        <div v-if="isItemRejected(item) && item.rejection_reason" class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50">
+                          <div class="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1">Rejection Reason</div>
+                          <p class="text-sm text-red-600 dark:text-red-400 font-medium">{{ item.rejection_reason }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-5 pt-5 border-t-2 border-gray-200 dark:border-gray-700 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/10 dark:to-green-900/10 rounded-xl p-4">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400">calculate</span>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Total Quantity</span>
+                      </div>
+                      <span class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{{ getTotalQuantity(selectedViewRequest) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="p-5 rounded-xl border-2 border-gray-200 dark:border-gray-600/50 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 shadow-sm">
+                  <div class="flex items-center gap-3 mb-4">
+                    <div class="p-2 bg-white dark:bg-gray-800/50 rounded-lg shadow-sm">
+                      <span class="material-icons-outlined text-gray-600 dark:text-gray-400">inventory_2</span>
+                    </div>
+                    <div class="flex-1">
+                      <span class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedViewRequest.item_name || 'N/A' }}</span>
+                      <span v-if="selectedViewRequest.items && selectedViewRequest.items.length === 1 && isItemRejected(selectedViewRequest.items[0])" 
+                            class="ml-3 px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg shadow-sm">
+                        Rejected
+                      </span>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700/50">
+                      <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Quantity</div>
+                      <span :class="['text-lg font-bold', selectedViewRequest.items && selectedViewRequest.items.length === 1 && isItemRejected(selectedViewRequest.items[0])
+                        ? 'text-red-600 dark:text-red-400 line-through'
+                        : 'text-gray-900 dark:text-white']">
+                        {{ getTotalQuantity(selectedViewRequest) }}
+                      </span>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700/50">
+                      <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Stock</div>
+                      <span class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedViewRequest.item_quantity || 'N/A' }}</span>
+                    </div>
+                  </div>
+                  <div v-if="selectedViewRequest.items && selectedViewRequest.items.length === 1 && isItemRejected(selectedViewRequest.items[0]) && selectedViewRequest.items[0].rejection_reason" 
+                       class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50">
+                    <div class="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1">Rejection Reason</div>
+                    <p class="text-sm text-red-600 dark:text-red-400 font-medium">{{ selectedViewRequest.items[0].rejection_reason }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-700/50 px-8 py-5 border-t-2 border-gray-200 dark:border-gray-700/50 flex justify-between items-center gap-4 backdrop-blur-sm">
+          <div class="flex-1">
+            <!-- Show assignment info if not assigned to current admin -->
+            <div v-if="(selectedViewRequest.status === 'supply_approved' || selectedViewRequest.status === 'pending' || selectedViewRequest.status === 'admin_assigned') && !isAssignedAdmin(selectedViewRequest)" class="flex items-center gap-2 text-sm">
+              <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-base">info</span>
+              <span class="text-gray-600 dark:text-gray-400">
+                <span v-if="selectedViewRequest.assigned_to_admin">Assigned to: <span class="font-bold text-gray-900 dark:text-white">{{ selectedViewRequest.assigned_to_admin.name }}</span></span>
+                <span v-else class="text-gray-500 dark:text-gray-400">Not assigned</span>
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- Admin Actions - Only show if current admin is the assigned admin -->
+            <template v-if="(selectedViewRequest.status === 'supply_approved' || selectedViewRequest.status === 'pending' || selectedViewRequest.status === 'admin_assigned') && isAssignedAdmin(selectedViewRequest)">
+            <button
+              @click="handleRejectFromView(selectedViewRequest)"
+              class="px-5 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-red-400 dark:border-red-500"
+              >
+                <span class="material-icons-outlined text-lg">cancel</span>
+                Reject
+              </button>
+              <button
+                @click="handleApproveFromView(selectedViewRequest)"
+                class="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-emerald-400 dark:border-emerald-500"
+              >
+                <span class="material-icons-outlined text-lg">check_circle</span>
+                Approve
+              </button>
+            </template>
+            <button 
+              @click="closeViewDetailsModal"
+              class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+            >
+              Close
             </button>
           </div>
         </div>
@@ -1617,6 +2148,25 @@ const statistics = computed(() => {
 </template>
 
 <style scoped>
+/* Slide down transition for action reminder banner */
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+}
+
 .material-icons-outlined {
   font-family: 'Material Icons Outlined';
   font-weight: normal;

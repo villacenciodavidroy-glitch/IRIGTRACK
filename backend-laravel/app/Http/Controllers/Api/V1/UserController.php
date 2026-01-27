@@ -19,10 +19,26 @@ class UserController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with('location')->get();
-        return new UserCollection($users);
+        // Pagination parameters
+        $perPage = $request->get('per_page', 50); // Default 50 users per page
+        $page = $request->get('page', 1);
+        
+        $users = User::with('location')->paginate($perPage, ['*'], 'page', $page);
+        
+        return response()->json([
+            'success' => true,
+            'data' => new UserCollection($users->items()),
+            'pagination' => [
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+            ]
+        ]);
     }
 
     /**

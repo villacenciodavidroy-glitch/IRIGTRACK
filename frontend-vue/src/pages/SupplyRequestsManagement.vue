@@ -23,6 +23,7 @@ const debouncedSearchQuery = useDebouncedRef(searchQuery, 300)
 const statusFilter = ref('')
 const startDate = ref('')
 const endDate = ref('')
+const activeTab = ref('active') // 'active' or 'completed'
 const currentPage = ref(1)
 const itemsPerPage = ref(8)
 const pagination = ref({
@@ -41,6 +42,8 @@ const showRejectModal = ref(false)
 const showApproveModal = ref(false)
 const showFulfillModal = ref(false)
 const showPickupScheduleModal = ref(false)
+const showViewDetailsModal = ref(false)
+const selectedViewRequest = ref(null)
 const selectedRequest = ref(null)
 const requestToApprove = ref(null)
 const requestToFulfill = ref(null)
@@ -181,7 +184,9 @@ const fetchRequests = async (silent = false) => {
     if (debouncedSearchQuery.value) {
       params.search = debouncedSearchQuery.value
     }
-    if (statusFilter.value) {
+    // Only apply status filter if activeTab is 'completed' or if explicitly set
+    // For 'active' tab, we want to see all non-completed statuses, so don't filter by status
+    if (statusFilter.value && activeTab.value !== 'active') {
       params.status = statusFilter.value
     }
     if (startDate.value) {
@@ -215,15 +220,10 @@ const fetchRequests = async (silent = false) => {
         to: to
       }
       
-      // Initialize unread counts for all requests
+      // Initialize unread counts for all requests from API response
       requests.value.forEach(request => {
-        if (!unreadCounts.value.hasOwnProperty(request.id)) {
-          unreadCounts.value[request.id] = request.unread_messages_count || 0
-        }
+        unreadCounts.value[request.id] = request.unread_messages_count || 0
       })
-      
-      // Fetch unread message counts for each request
-      fetchUnreadCounts()
       
       // Show notification if new requests arrived (only if not silent and on first page)
       if (!silent && currentPage.value === 1 && requests.value.length > previousCount) {
@@ -242,8 +242,10 @@ const fetchRequests = async (silent = false) => {
     requests.value = []
   } finally {
     if (!silent) {
-    loading.value = false
+      loading.value = false
     }
+    // Fetch unread counts in background (non-blocking) after loading is done
+    fetchUnreadCounts().catch(err => console.error('Error fetching unread counts:', err))
   }
 }
 
@@ -301,30 +303,37 @@ const notifyAdminRestock = async (item) => {
   }
 }
 
-// Fetch unread message counts
+// Fetch unread message counts (non-blocking, runs in background)
 const fetchUnreadCounts = async () => {
   try {
-    // Use unread_messages_count from API response if available
-    for (const request of requests.value) {
-      if (request.unread_messages_count !== undefined && request.unread_messages_count !== null) {
-        unreadCounts.value[request.id] = request.unread_messages_count || 0
-      } else {
-        // Fallback: fetch messages if count not in response
-        try {
-          const response = await axiosClient.get(`/supply-requests/${request.id}/messages`)
-          if (response.data.success) {
-            const currentUserId = getCurrentUserId()
-            const unread = response.data.data.filter(msg => !msg.is_read && msg.user.id !== currentUserId).length
-            unreadCounts.value[request.id] = unread || 0
-          } else {
-            unreadCounts.value[request.id] = 0
-          }
-        } catch (err) {
-          console.error(`Error fetching unread count for request ${request.id}:`, err)
+    // Only fetch for requests that don't have unread_messages_count from API
+    const requestsNeedingFetch = requests.value.filter(request => 
+      request.unread_messages_count === undefined || request.unread_messages_count === null
+    )
+    
+    if (requestsNeedingFetch.length === 0) {
+      return // All counts already available from API
+    }
+    
+    // Fetch all unread counts in parallel (much faster than sequential)
+    const fetchPromises = requestsNeedingFetch.map(async (request) => {
+      try {
+        const response = await axiosClient.get(`/supply-requests/${request.id}/messages`)
+        if (response.data.success) {
+          const currentUserId = getCurrentUserId()
+          const unread = response.data.data.filter(msg => !msg.is_read && msg.user.id !== currentUserId).length
+          unreadCounts.value[request.id] = unread || 0
+        } else {
           unreadCounts.value[request.id] = 0
         }
+      } catch (err) {
+        console.error(`Error fetching unread count for request ${request.id}:`, err)
+        unreadCounts.value[request.id] = 0
       }
-    }
+    })
+    
+    // Wait for all requests to complete in parallel
+    await Promise.all(fetchPromises)
   } catch (err) {
     console.error('Error fetching unread counts:', err)
   }
@@ -594,6 +603,67 @@ const closeMessageModal = () => {
   newMessage.value = ''
 }
 
+// View Details Modal
+const openViewDetailsModal = (request) => {
+  selectedViewRequest.value = request
+  showViewDetailsModal.value = true
+}
+
+const closeViewDetailsModal = () => {
+  showViewDetailsModal.value = false
+  selectedViewRequest.value = null
+}
+
+// Helper functions to open modals from View Details Modal
+const handleApproveFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openApproveModal(request)
+  }, 200)
+}
+
+const handleRejectFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openRejectModal(request)
+  }, 200)
+}
+
+const handleForwardFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openForwardModal(request)
+  }, 200)
+}
+
+const handleNotifyUserFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    notifyUserReadyForPickup(request)
+  }, 200)
+}
+
+const handleSchedulePickupFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openPickupScheduleModal(request)
+  }, 200)
+}
+
+const handleFulfillFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openFulfillModal(request)
+  }, 200)
+}
+
+const handleAssignFromView = (request) => {
+  closeViewDetailsModal()
+  setTimeout(() => {
+    openAssignModal(request)
+  }, 200)
+}
+
 // View approval proof
 const viewApprovalProof = (request) => {
   selectedRequestForProof.value = request
@@ -814,21 +884,32 @@ const approveRequest = async () => {
     
     if (response.data.success) {
       const requestDetails = requestToApprove.value
-      showSimpleBanner(
-        'Request Approved Successfully',
-        'success', 
-        true, 
-        6000,
-        {
-          itemName: requestDetails?.item_name || requestDetails?.item?.name || 'N/A',
-          quantity: requestDetails?.quantity,
-          requester: requestDetails?.requested_by_user?.name || requestDetails?.user?.name || 'N/A'
-        }
-      )
+      const requestId = requestToApprove.value.id
+      
+      // Close approve modal
       showApproveModal.value = false
+      const savedRequest = { ...requestToApprove.value }
       requestToApprove.value = null
-      fetchRequests()
-      fetchStockOverview()
+      
+      // Clear status filter if it's set to 'pending' so approved requests will show up
+      if (statusFilter.value === 'pending') {
+        statusFilter.value = ''
+      }
+      // Fetch updated requests
+      await fetchRequests()
+      await fetchStockOverview()
+      
+      // Automatically open assign modal after approval
+      setTimeout(() => {
+        // Find the updated request from the fetched requests
+        const updatedRequest = requests.value.find(r => r.id === requestId)
+        if (updatedRequest && updatedRequest.status === 'supply_approved') {
+          openAssignModal(updatedRequest)
+        } else if (savedRequest) {
+          // Fallback: use saved request data if updated request not found
+          openAssignModal({ ...savedRequest, status: 'supply_approved' })
+        }
+      }, 300)
     } else {
       showSimpleBanner(response.data.message || 'Failed to approve request', 'error', true, 5000)
     }
@@ -964,7 +1045,6 @@ const assignToAdmin = async () => {
     })
     
     if (response.data.success) {
-      showSimpleBanner('Request assigned to admin successfully!', 'success', true, 5000)
       closeAssignModal()
       fetchRequests()
     } else {
@@ -987,6 +1067,10 @@ const acceptByAdmin = async (requestId) => {
     const response = await axiosClient.post(`/supply-requests/${requestId}/accept-admin`)
     
     if (response.data.success) {
+      // Clear status filter if it's set to 'pending' so accepted requests will show up
+      if (statusFilter.value === 'pending') {
+        statusFilter.value = ''
+      }
       showSimpleBanner('Request accepted successfully!', 'success', true, 5000)
       fetchRequests()
       fetchStockOverview()
@@ -1138,7 +1222,6 @@ const notifyUserReadyForPickup = async (request) => {
     const response = await axiosClient.post(`/supply-requests/${request.id}/notify-ready-pickup`)
     
     if (response.data.success) {
-      showSimpleBanner('User notified successfully! They will receive a message and notification that their items are ready for pickup.', 'success', true, 6000)
       fetchRequests()
     } else {
       showSimpleBanner(response.data.message || 'Failed to notify user', 'error', true, 5000)
@@ -1232,21 +1315,14 @@ const fulfillRequest = async () => {
     const response = await axiosClient.post(`/supply-requests/${requestToFulfill.value.id}/fulfill`)
     
     if (response.data.success) {
-      const requestDetails = requestToFulfill.value
-      showSimpleBanner(
-        'Request Marked as Fulfilled',
-        'success', 
-        true, 
-        6000,
-        {
-          itemName: requestDetails?.item_name || requestDetails?.item?.name || 'N/A',
-          quantity: requestDetails?.quantity,
-          requester: requestDetails?.requested_by_user?.name || requestDetails?.user?.name || 'N/A'
-        }
-      )
       showFulfillModal.value = false
       requestToFulfill.value = null
       fetchRequests()
+      
+      // Refresh messages if messages view is open
+      if (showAllMessagesView.value) {
+        fetchAllMessages()
+      }
     } else {
       showSimpleBanner(response.data.message || 'Failed to fulfill request', 'error', true, 5000)
     }
@@ -1258,6 +1334,140 @@ const fulfillRequest = async () => {
     loading.value = false
     fulfillingRequest.value = false
   }
+}
+
+// Check if request needs action
+const needsAction = (request) => {
+  if (!request) return false
+  
+  // For Supply Account users
+  if (!isAdmin()) {
+    // Pending requests need Approve/Reject
+    if (request.status === 'pending') return true
+    // Supply approved requests need Assign to Admin
+    if (request.status === 'supply_approved') return true
+    // Ready for pickup requests need Notify User, Schedule Pickup, or Fulfill
+    if (request.status === 'ready_for_pickup') return true
+  }
+  
+  // For Admin users
+  if (isAdmin()) {
+    // Supply approved requests need Assign to Admin
+    if (request.status === 'supply_approved') return true
+    // Admin assigned requests need Accept
+    if (request.status === 'admin_assigned') return true
+    // Ready for pickup requests need Fulfill
+    if (request.status === 'ready_for_pickup') return true
+  }
+  
+  return false
+}
+
+// Action reminder banner state
+const showActionReminderBanner = ref(false)
+const currentReminderRequest = ref(null)
+const reminderBannerIndex = ref(0)
+let reminderBannerInterval = null
+
+// Get requests that need action
+const requestsNeedingAction = computed(() => {
+  return requests.value.filter(request => needsAction(request))
+})
+
+// Separate active/pending requests from completed ones
+const activeRequests = computed(() => {
+  const completedStatuses = ['fulfilled', 'rejected', 'cancelled']
+  return requests.value.filter(request => {
+    const status = request.status?.toLowerCase()
+    return !completedStatuses.includes(status)
+  })
+})
+
+const completedRequests = computed(() => {
+  const completedStatuses = ['fulfilled', 'rejected', 'cancelled']
+  return requests.value.filter(request => {
+    const status = request.status?.toLowerCase()
+    return completedStatuses.includes(status)
+  })
+})
+
+// Get the requests to display based on active tab
+const displayedRequests = computed(() => {
+  return activeTab.value === 'active' ? activeRequests.value : completedRequests.value
+})
+
+// Start action reminder banner
+const startActionReminderBanner = () => {
+  // Clear any existing interval
+  if (reminderBannerInterval) {
+    clearInterval(reminderBannerInterval)
+  }
+  
+  // Only start if there are requests needing action
+  if (requestsNeedingAction.value.length === 0) {
+    showActionReminderBanner.value = false
+    return
+  }
+  
+  // Show banner immediately
+  updateReminderBanner()
+  
+  // Update every 5 seconds
+  reminderBannerInterval = setInterval(() => {
+    updateReminderBanner()
+  }, 5000)
+}
+
+// Update reminder banner to show next request
+const updateReminderBanner = () => {
+  if (requestsNeedingAction.value.length === 0) {
+    showActionReminderBanner.value = false
+    return
+  }
+  
+  // Cycle through requests
+  currentReminderRequest.value = requestsNeedingAction.value[reminderBannerIndex.value % requestsNeedingAction.value.length]
+  reminderBannerIndex.value = (reminderBannerIndex.value + 1) % requestsNeedingAction.value.length
+  showActionReminderBanner.value = true
+  
+  // Auto-hide after 4 seconds (leaving 1 second gap before next shows)
+  setTimeout(() => {
+    showActionReminderBanner.value = false
+  }, 4000)
+}
+
+// Close reminder banner
+const closeActionReminderBanner = () => {
+  showActionReminderBanner.value = false
+}
+
+// Navigate to request from reminder banner
+const goToRequestFromReminder = () => {
+  if (currentReminderRequest.value) {
+    openViewDetailsModal(currentReminderRequest.value)
+    closeActionReminderBanner()
+  }
+}
+
+// Get action required tooltip text
+const getActionRequiredTooltip = (request) => {
+  if (!request) return 'Action required'
+  
+  // For Supply Account users
+  if (!isAdmin()) {
+    if (request.status === 'pending') return 'Action required - Approve or Reject'
+    if (request.status === 'supply_approved') return 'Action required - Assign to Admin'
+    if (request.status === 'ready_for_pickup') return 'Action required - Notify User, Schedule Pickup, or Fulfill'
+  }
+  
+  // For Admin users
+  if (isAdmin()) {
+    if (request.status === 'supply_approved') return 'Action required - Assign to Admin'
+    if (request.status === 'admin_assigned') return 'Action required - Accept Request'
+    if (request.status === 'ready_for_pickup') return 'Action required - Fulfill Request'
+  }
+  
+  return 'Action required'
 }
 
 // Get status badge class
@@ -1307,9 +1517,18 @@ const fetchAllMessages = async () => {
 
 // Grouped messages by sender
 const groupedMessages = computed(() => {
+  // Filter out messages for fulfilled, rejected, or cancelled requests
+  // Only show messages for pending or in-progress requests
+  const activeMessages = allMessages.value.filter(msg => {
+    const requestStatus = msg.supply_request?.status?.toLowerCase()
+    // Hide messages for completed or rejected requests
+    const excludedStatuses = ['fulfilled', 'rejected', 'cancelled']
+    return !excludedStatuses.includes(requestStatus)
+  })
+  
   // Group messages by sender (user.id)
   const groupedBySender = {}
-  allMessages.value.forEach(msg => {
+  activeMessages.forEach(msg => {
     const senderId = msg.user?.id
     if (!senderId) return
     
@@ -1500,6 +1719,11 @@ const setupRequestRealtimeListener = () => {
       // Refresh requests list silently
       fetchRequests(true)
       fetchStockOverview()
+      
+      // Refresh messages if messages view is open
+      if (showAllMessagesView.value) {
+        fetchAllMessages()
+      }
     })
     
     requestRealtimeListener.value = requestsChannel
@@ -1522,6 +1746,11 @@ onMounted(async () => {
         low_stock_count: 0
       }
     }
+    
+    // Start action reminder banner after initial load
+    setTimeout(() => {
+      startActionReminderBanner()
+    }, 2000)
   await fetchRequests()
   await fetchStockOverview()
   } catch (err) {
@@ -1587,6 +1816,12 @@ onBeforeUnmount(() => {
     requestPollingInterval.value = null
   }
   
+  // Clean up reminder banner interval
+  if (reminderBannerInterval) {
+    clearInterval(reminderBannerInterval)
+    reminderBannerInterval = null
+  }
+  
   // Clean up resize listener
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler)
@@ -1624,6 +1859,19 @@ watch([statusFilter, startDate, endDate], () => {
   fetchRequests()
 })
 
+watch(activeTab, () => {
+  currentPage.value = 1
+  // Clear status filter when switching tabs to ensure all relevant requests are shown
+  // Active tab should show all active requests (pending, approved, admin_assigned, etc.)
+  // Completed tab should show all completed requests (fulfilled, rejected, cancelled)
+  if (activeTab.value === 'active') {
+    // Clear status filter so we can see all active statuses (pending, approved, admin_assigned, etc.)
+    statusFilter.value = ''
+  }
+  // Refetch requests after clearing filter
+  fetchRequests()
+})
+
 watch(currentPage, () => {
   fetchRequests()
 })
@@ -1632,10 +1880,53 @@ watch(itemsPerPage, () => {
   currentPage.value = 1
   fetchRequests()
 })
+
+// Watch for requests needing action and restart reminder banner
+watch(requestsNeedingAction, () => {
+  startActionReminderBanner()
+}, { deep: true })
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-100 dark:bg-gray-900 pb-8" :class="{ 'pt-20 sm:pt-24': showBanner }">
+    <!-- Action Reminder Banner -->
+    <Transition name="slide-down">
+      <div
+        v-if="showActionReminderBanner && currentReminderRequest"
+        class="fixed bottom-4 right-4 z-50 max-w-sm w-full sm:w-auto"
+      >
+        <div class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white rounded-lg shadow-2xl border-2 border-orange-600 animate-pulse">
+          <div class="p-3 flex items-center gap-3">
+            <div class="flex-shrink-0 p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <span class="material-icons-outlined text-xl">notification_important</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold mb-0.5">Action Required!</div>
+              <div class="text-[10px] opacity-90 truncate">
+                {{ currentReminderRequest.user?.name || 'N/A' }} - {{ getActionRequiredTooltip(currentReminderRequest) }}
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button
+                @click="goToRequestFromReminder"
+                class="p-1.5 bg-white/20 hover:bg-white/30 rounded transition-all"
+                title="View Request"
+              >
+                <span class="material-icons-outlined text-sm">arrow_forward</span>
+              </button>
+              <button
+                @click="closeActionReminderBanner"
+                class="p-1.5 bg-white/20 hover:bg-white/30 rounded transition-all"
+                title="Dismiss"
+              >
+                <span class="material-icons-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+    
     <!-- Enhanced Professional Banner Notification -->
     <Transition name="banner-slide">
       <div
@@ -1792,69 +2083,6 @@ watch(itemsPerPage, () => {
         <div>
           <p class="text-xs sm:text-sm font-bold text-red-100 dark:text-red-200 uppercase tracking-wider mb-1">Low Stock Alert</p>
           <p class="text-xs text-red-200 dark:text-red-300">Requires attention</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Supply (Quantity) Snapshot -->
-    <div class="p-3 sm:p-4 lg:p-6">
-      <div class="bg-gradient-to-br from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-lg sm:rounded-xl shadow-lg border-2 border-slate-600 dark:border-slate-700 overflow-hidden">
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
-          <div class="flex items-center gap-2 sm:gap-3">
-            <span class="material-icons-outlined text-white text-xl sm:text-2xl">folder</span>
-            <h2 class="text-base sm:text-lg font-bold text-white">Supply (Quantity)</h2>
-          </div>
-          <span class="bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 rounded-md">Snapshot</span>
-        </div>
-        
-        <!-- Table: scrollable body, sticky header -->
-        <div class="px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
-          <div 
-            class="supply-snapshot-scroll relative rounded-lg border border-slate-600 dark:border-slate-700 max-h-[240px] sm:max-h-[280px] lg:max-h-[360px] overflow-y-auto overflow-x-auto"
-            style="overscroll-behavior: contain;"
-          >
-            <table class="w-full min-w-[320px]">
-              <thead class="sticky top-0 z-10 bg-slate-700 dark:bg-slate-800">
-                <tr class="border-b-2 border-slate-600 dark:border-slate-700 shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
-                  <th class="text-left py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">ITEM NAME</th>
-                  <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">QUANTITY</th>
-                  <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider w-36 sm:w-44">ACTION</th>
-                </tr>
-              </thead>
-              <tbody class="bg-slate-700/50 dark:bg-slate-800/50">
-                <tr 
-                  v-for="item in stockOverview" 
-                  :key="item.id"
-                  class="border-b border-slate-600/50 dark:border-slate-700/50 hover:bg-slate-600/30 dark:hover:bg-slate-700/30 transition-colors"
-                >
-                  <td class="py-3 px-4 text-sm sm:text-base text-white font-medium">{{ item.unit || item.description || 'N/A' }}</td>
-                  <td class="py-3 px-4 text-right">
-                    <span class="inline-flex items-center justify-center bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-green-600 dark:border-green-700 min-w-[3rem] sm:min-w-[4rem]">
-                      {{ item.quantity || 0 }}
-                    </span>
-                  </td>
-                  <td class="py-3 px-4 text-right">
-                    <button
-                      type="button"
-                      :disabled="notifyingRestockItemId !== null"
-                      @click="notifyAdminRestock(item)"
-                      class="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 text-white border-2 border-amber-600 dark:border-amber-700 shadow-sm"
-                      :title="'Notify admin to restock ' + (item.unit || item.description || 'this item')"
-                    >
-                      <span class="material-icons-outlined text-sm sm:text-base" :class="{ 'animate-spin': notifyingRestockItemId === item.id }">{{ notifyingRestockItemId === item.id ? 'hourglass_empty' : 'inventory_2' }}</span>
-                      <span class="hidden sm:inline">{{ notifyingRestockItemId === item.id ? 'Sending…' : 'Notify restock' }}</span>
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="stockOverview.length === 0">
-                  <td colspan="3" class="py-6 px-4 text-center text-sm text-white/70">
-                    No supply items available
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </div>
@@ -2030,6 +2258,42 @@ watch(itemsPerPage, () => {
         </div>
       </div>
 
+      <!-- Tabs to separate Active/Pending from Completed requests -->
+      <div v-if="!loading && !error" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 mb-4">
+        <div class="flex border-b border-gray-200 dark:border-gray-700">
+          <button
+            @click="activeTab = 'active'"
+            :class="[
+              'flex-1 px-4 py-3 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'active'
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-b-2 border-blue-800 dark:border-blue-500'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            ]"
+          >
+            <span class="material-icons-outlined text-base">{{ activeTab === 'active' ? 'pending_actions' : 'schedule' }}</span>
+            <span>Active/Pending</span>
+            <span v-if="activeRequests.length > 0" class="px-2 py-0.5 bg-white/20 dark:bg-gray-800/20 rounded-full text-xs font-bold">
+              {{ activeRequests.length }}
+            </span>
+          </button>
+          <button
+            @click="activeTab = 'completed'"
+            :class="[
+              'flex-1 px-4 py-3 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2',
+              activeTab === 'completed'
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-b-2 border-indigo-800 dark:border-indigo-500'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            ]"
+          >
+            <span class="material-icons-outlined text-base">{{ activeTab === 'completed' ? 'check_circle' : 'done_all' }}</span>
+            <span>Completed</span>
+            <span v-if="completedRequests.length > 0" class="px-2 py-0.5 bg-white/20 dark:bg-gray-800/20 rounded-full text-xs font-bold">
+              {{ completedRequests.length }}
+            </span>
+          </button>
+        </div>
+      </div>
+
           <!-- Enhanced Loading State -->
       <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 p-12">
         <div class="flex flex-col items-center justify-center">
@@ -2061,20 +2325,20 @@ watch(itemsPerPage, () => {
           </div>
 
           <!-- Enhanced Empty State -->
-      <div v-else-if="requests.length === 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 p-12">
+      <div v-else-if="displayedRequests.length === 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 p-12">
         <div class="flex flex-col items-center justify-center">
           <div class="p-6 bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-800 rounded-full mb-6">
             <span class="material-icons-outlined text-6xl text-gray-400 dark:text-gray-500">inbox</span>
           </div>
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">No Requests Found</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">{{ searchQuery || statusFilter ? 'No records match your current filter criteria. Please adjust your search parameters.' : 'No supply requests are currently available in the system.' }}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">{{ searchQuery || statusFilter ? 'No records match your current filter criteria. Please adjust your search parameters.' : (activeTab === 'active' ? 'No active or pending requests are currently available.' : 'No completed requests are currently available.') }}</p>
         </div>
       </div>
 
           <!-- Enhanced Requests - Mobile Card View -->
-      <div v-if="!loading && !error && requests.length > 0" class="block lg:hidden space-y-4">
+      <div v-if="!loading && !error && displayedRequests.length > 0" class="block lg:hidden space-y-4">
         <div
-          v-for="request in requests"
+          v-for="request in displayedRequests"
           :key="request.id"
           class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 p-4 space-y-4"
         >
@@ -2087,7 +2351,10 @@ watch(itemsPerPage, () => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ request.user?.name || 'N/A' }}</div>
-                  <div class="text-xs text-gray-600 dark:text-gray-400 truncate">{{ request.user?.email || 'N/A' }}</div>
+                  <div class="text-xs text-gray-600 dark:text-gray-400 truncate flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">location_on</span>
+                    {{ request.user?.location || 'N/A' }}
+                  </div>
                 </div>
               </div>
               <div v-if="isAdmin()" class="flex items-center gap-2 mt-2">
@@ -2186,15 +2453,31 @@ watch(itemsPerPage, () => {
           <!-- Actions -->
           <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
             <div class="flex items-center gap-2 flex-wrap">
+              <!-- View Details Button -->
+              <button
+                @click="openViewDetailsModal(request)"
+                class="relative p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded transition-all duration-200 hover:shadow-sm flex items-center justify-center border-2 border-blue-400 dark:border-blue-500"
+                title="View details"
+              >
+                <span class="material-icons-outlined text-sm">visibility</span>
+                <!-- Action Required Indicator -->
+                <span 
+                  v-if="needsAction(request)"
+                  class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 bg-red-500 text-white text-[8px] rounded-full font-bold animate-pulse shadow-md border border-white dark:border-gray-800"
+                  :title="getActionRequiredTooltip(request)"
+                >
+                  !
+                </span>
+              </button>
               <button
                 @click="openMessageModal(request)"
-                class="relative p-2.5 text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-blue-300 dark:border-blue-700 rounded-lg transition-all flex items-center justify-center shadow-sm hover:shadow-md flex-shrink-0"
+                class="relative p-1.5 text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-blue-300 dark:border-blue-700 rounded transition-all flex items-center justify-center shadow-sm hover:shadow-md flex-shrink-0"
                 title="View Messages"
               >
-                <span class="material-icons-outlined text-lg">message</span>
+                <span class="material-icons-outlined text-sm">message</span>
                 <span 
                   v-if="(unreadCounts[request.id] || 0) > 0"
-                  class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg animate-pulse"
+                  class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold shadow-lg animate-pulse"
                 >
                   {{ (unreadCounts[request.id] || 0) > 9 ? '9+' : (unreadCounts[request.id] || 0) }}
                 </span>
@@ -2202,79 +2485,19 @@ watch(itemsPerPage, () => {
               <!-- Supply Account Actions -->
               <template v-if="!isAdmin()">
                 <button
-                  v-if="request.status === 'pending'"
-                  @click="openApproveModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Approve Request"
-                >
-                  <span class="material-icons-outlined text-sm">check_circle</span>
-                  <span class="hidden sm:inline">Approve</span>
-                  <span class="sm:hidden">OK</span>
-                </button>
-                <button
-                  v-if="request.status === 'pending'"
-                  @click="openRejectModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 border-2 border-red-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Reject Request"
-                >
-                  <span class="material-icons-outlined text-sm">cancel</span>
-                  <span class="hidden sm:inline">Reject</span>
-                  <span class="sm:hidden">X</span>
-                </button>
-                <button
-                  v-if="request.status === 'pending'"
-                  @click="openForwardModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Forward to Another Supply Account"
-                >
-                  <span class="material-icons-outlined text-sm">forward</span>
-                  <span class="hidden sm:inline">Forward</span>
-                  <span class="sm:hidden">→</span>
-                </button>
-                <button
                   v-if="request.status === 'supply_approved'"
                   @click="openAssignModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 border-2 border-purple-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
+                  class="px-2 py-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 border-2 border-purple-800 rounded text-[10px] font-semibold uppercase transition-all shadow-sm hover:shadow-md flex items-center gap-1 whitespace-nowrap"
                   title="Assign to Administrator"
                 >
-                  <span class="material-icons-outlined text-sm">person_add</span>
+                  <span class="material-icons-outlined text-xs">person_add</span>
                   <span class="hidden sm:inline">Assign</span>
                   <span class="sm:hidden">+</span>
                 </button>
-                <button
-                  v-if="request.status === 'ready_for_pickup'"
-                  @click="notifyUserReadyForPickup(request)"
-                  :disabled="notifyingUser"
-                  class="px-3 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Notify User That Items Are Ready for Pickup"
-                >
-                  <span class="material-icons-outlined text-sm">{{ notifyingUser ? 'hourglass_empty' : 'notifications' }}</span>
-                  <span class="hidden sm:inline">{{ notifyingUser ? 'Notifying...' : 'Notify User' }}</span>
-                  <span class="sm:hidden">{{ notifyingUser ? '...' : 'Notify' }}</span>
-                </button>
-                <button
-                  v-if="request.status === 'ready_for_pickup'"
-                  @click="openPickupScheduleModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800 border-2 border-cyan-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Schedule Pickup Time"
-                >
-                  <span class="material-icons-outlined text-sm">schedule</span>
-                  <span class="hidden sm:inline">Schedule Pickup</span>
-                  <span class="sm:hidden">Pickup</span>
-                </button>
-                <button
-                  v-if="request.status === 'admin_accepted' || request.status === 'approved' || request.status === 'ready_for_pickup'"
-                  @click="openFulfillModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Mark Request as Fulfilled"
-                >
-                  <span class="material-icons-outlined text-sm">done_all</span>
-                  <span class="hidden sm:inline">Fulfill</span>
-                  <span class="sm:hidden">✓</span>
-                </button>
-                <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1.5 px-3 py-2 text-gray-500 dark:text-gray-400 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded-lg">
-                  <span class="material-icons-outlined text-sm">block</span>
-                  No Action
+                <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
+                  <span class="material-icons-outlined text-xs">block</span>
+                  <span class="hidden sm:inline">No Action</span>
+                  <span class="sm:hidden">-</span>
                 </span>
               </template>
               
@@ -2283,36 +2506,27 @@ watch(itemsPerPage, () => {
                 <button
                   v-if="request.status === 'supply_approved'"
                   @click="openAssignModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 border-2 border-purple-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
+                  class="px-2 py-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 border-2 border-purple-800 rounded text-[10px] font-semibold uppercase transition-all shadow-sm hover:shadow-md flex items-center gap-1 whitespace-nowrap"
                   title="Assign to Administrator"
                 >
-                  <span class="material-icons-outlined text-sm">person_add</span>
+                  <span class="material-icons-outlined text-xs">person_add</span>
                   <span class="hidden sm:inline">Assign</span>
                   <span class="sm:hidden">+</span>
                 </button>
                 <button
                   v-if="request.status === 'admin_assigned'"
                   @click="acceptByAdmin(request.id)"
-                  class="px-3 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
+                  class="px-2 py-1 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded text-[10px] font-semibold uppercase transition-all shadow-sm hover:shadow-md flex items-center gap-1 whitespace-nowrap"
                   title="Accept Request"
                 >
-                  <span class="material-icons-outlined text-sm">check_circle</span>
+                  <span class="material-icons-outlined text-xs">check_circle</span>
                   <span class="hidden sm:inline">Accept</span>
                   <span class="sm:hidden">OK</span>
                 </button>
-                <button
-                  v-if="request.status === 'admin_accepted' || request.status === 'approved' || request.status === 'ready_for_pickup'"
-                  @click="openFulfillModal(request)"
-                  class="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1.5 whitespace-nowrap"
-                  title="Mark Request as Fulfilled"
-                >
-                  <span class="material-icons-outlined text-sm">done_all</span>
-                  <span class="hidden sm:inline">Fulfill</span>
-                  <span class="sm:hidden">✓</span>
-                </button>
-                <span v-if="isAdmin() && request.status !== 'supply_approved' && request.status !== 'admin_assigned' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1.5 px-3 py-2 text-gray-500 dark:text-gray-400 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded-lg">
-                  <span class="material-icons-outlined text-sm">block</span>
-                  No Action
+                <span v-if="isAdmin() && request.status !== 'supply_approved' && request.status !== 'admin_assigned' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
+                  <span class="material-icons-outlined text-xs">block</span>
+                  <span class="hidden sm:inline">No Action</span>
+                  <span class="sm:hidden">-</span>
                 </span>
               </template>
             </div>
@@ -2321,62 +2535,48 @@ watch(itemsPerPage, () => {
       </div>
 
           <!-- Enhanced Requests Table - Desktop View -->
-      <div v-if="!loading && !error && requests.length > 0" class="hidden lg:block bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div v-if="!loading && !error && displayedRequests.length > 0" class="hidden lg:block bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full border-collapse">
               <thead>
                 <tr class="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600">
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">person</span>
+                <th class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">person</span>
                     <span class="hidden sm:inline">Requestor</span>
                     <span class="sm:hidden">User</span>
                   </div>
                 </th>
-                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">location_on</span>
+                <th v-if="isAdmin()" class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">location_on</span>
                     <span class="hidden sm:inline">Location</span>
                     <span class="sm:hidden">Loc</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">description</span>
-                    <span class="hidden xl:inline">Item Description</span>
-                    <span class="xl:hidden">Item</span>
-                  </div>
-                </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">inventory</span>
-                    <span class="hidden sm:inline">Quantity</span>
-                    <span class="sm:hidden">Qty</span>
-                  </div>
-                </th>
-                <th v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">business</span>
+                <th v-if="isAdmin()" class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">business</span>
                     <span class="hidden xl:inline">Supply Unit</span>
                     <span class="xl:hidden">Unit</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">flag</span>
+                <th class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">flag</span>
                     <span>Status</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">calendar_today</span>
+                <th class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">calendar_today</span>
                     <span class="hidden xl:inline">Date Submitted</span>
                     <span class="xl:hidden">Date</span>
                   </div>
                 </th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-white uppercase tracking-wide">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-sm">settings</span>
+                <th class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-xs">settings</span>
                     <span class="hidden sm:inline">Actions</span>
                     <span class="sm:hidden">Act</span>
                   </div>
@@ -2384,150 +2584,80 @@ watch(itemsPerPage, () => {
                 </tr>
               </thead>
               <tbody class="bg-white dark:bg-gray-800">
-              <tr v-for="(request, index) in requests" :key="request.id" class="border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50/50 dark:hover:bg-gray-700/50 transition-colors" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'">
-                  <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                    <div class="flex items-start gap-2 sm:gap-3">
-                      <div class="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
-                        <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-xs sm:text-sm">person</span>
+              <tr v-for="(request, index) in displayedRequests" :key="request.id" class="border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50/50 dark:hover:bg-gray-700/50 transition-colors" :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'">
+                  <td class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
+                    <div class="flex items-start gap-1.5">
+                      <div class="p-1 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+                        <span class="material-icons-outlined text-blue-600 dark:text-blue-400 text-xs">person</span>
                       </div>
                       <div class="min-w-0 flex-1">
-                        <div class="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">{{ request.user?.name || 'N/A' }}</div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400 mt-0.5 flex items-center gap-1 truncate">
-                          <span class="material-icons-outlined text-xs hidden sm:inline">email</span>
-                          <span class="truncate">{{ request.user?.email || 'N/A' }}</span>
+                        <div class="text-xs font-semibold text-gray-900 dark:text-white truncate">{{ request.user?.name || 'N/A' }}</div>
+                        <div class="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 flex items-center gap-0.5 truncate">
+                          <span class="material-icons-outlined text-[10px] hidden sm:inline">location_on</span>
+                          <span class="truncate">{{ request.user?.location || 'N/A' }}</span>
                         </div>
                       </div>
                     </div>
                   </td>
-                <td v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm">location_on</span>
-                    <div class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">{{ request.user?.location || 'N/A' }}</div>
+                <td v-if="isAdmin()" class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs">location_on</span>
+                    <div class="text-xs font-medium text-gray-900 dark:text-white truncate">{{ request.user?.location || 'N/A' }}</div>
                   </div>
                 </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-2 sm:space-y-3">
-                    <div v-for="(item, idx) in request.items" :key="idx" class="border-b border-gray-200 dark:border-gray-600 last:border-b-0 pb-1.5 sm:pb-2 last:pb-0">
-                      <div class="flex items-start gap-1.5 sm:gap-2">
-                        <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm mt-0.5 flex-shrink-0">inventory_2</span>
-                        <div class="flex-1 min-w-0">
-                          <div class="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">{{ item.item_name }}</div>
-                          <div class="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
-                            <span class="material-icons-outlined text-xs hidden sm:inline">storage</span>
-                            <span class="hidden sm:inline">Available Stock: </span>
-                            <span class="font-bold text-blue-600 dark:text-blue-400">{{ item.item_quantity }}</span>
-                    </div>
-                  </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="flex items-start gap-1.5 sm:gap-2">
-                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm mt-0.5 flex-shrink-0">inventory_2</span>
-                    <div class="flex-1 min-w-0">
-                      <div class="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate">{{ request.item_name }}</div>
-                      <div class="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
-                        <span class="material-icons-outlined text-xs hidden sm:inline">storage</span>
-                        <span class="hidden sm:inline">Available Stock: </span>
-                        <span class="font-bold text-blue-600 dark:text-blue-400">{{ request.item_quantity }}</span>
-                      </div>
-                    </div>
+                <td v-if="isAdmin()" class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs">business</span>
+                    <span class="text-xs font-medium text-gray-900 dark:text-white truncate">{{ request.supply_name || 'N/A' }}</span>
                   </div>
                 </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-1.5 sm:space-y-2">
-                    <div v-for="(item, idx) in request.items" :key="idx" class="flex items-center gap-1.5 sm:gap-2">
-                      <span v-if="isItemRejected(item)" 
-                            class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-xs sm:text-sm font-bold line-through"
-                            :title="'Rejected: ' + (item.rejection_reason || 'Defective')">
-                        {{ item.quantity }}
-                      </span>
-                      <span v-else 
-                            class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-sm font-bold">
-                        {{ item.quantity }}
-                      </span>
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-200 dark:border-gray-600 flex items-center gap-1">
-                      <span class="material-icons-outlined text-xs hidden sm:inline">summarize</span>
-                      <span class="hidden sm:inline">Total: </span>
-                      <span class="font-bold text-gray-900 dark:text-white">{{ getTotalQuantity(request) }}</span>
-                    </div>
-                  </div>
-                  <div v-else>
-                    <span v-if="request.items && request.items.length === 1 && isItemRejected(request.items[0])"
-                          class="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-xs sm:text-base font-bold line-through"
-                          :title="'Rejected: ' + (request.items[0].rejection_reason || 'Defective')">
-                      {{ request.items[0].quantity }}
-                    </span>
-                    <span v-else
-                          class="inline-flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs sm:text-base font-bold">
-                      {{ getTotalQuantity(request) }}
-                    </span>
-                  </div>
-                </td>
-                <td v-if="isAdmin()" class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm">business</span>
-                    <span class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">{{ request.supply_name || 'N/A' }}</span>
-                  </div>
-                </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <span :class="['inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-bold uppercase tracking-wide rounded-lg shadow-sm', getStatusBadgeClass(request.status)]">
-                    <span class="material-icons-outlined text-xs">flag</span>
+                <td class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
+                  <span :class="['inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wide rounded shadow-sm', getStatusBadgeClass(request.status)]">
+                    <span class="material-icons-outlined text-[10px]">flag</span>
                     <span class="hidden xl:inline">{{ request.status === 'supply_approved' ? 'Supply Approved' : request.status === 'admin_assigned' ? 'Assigned to Admin' : request.status === 'admin_accepted' ? 'Admin Accepted' : request.status === 'ready_for_pickup' ? 'Ready for Pickup' : request.status }}</span>
                     <span class="xl:hidden">{{ request.status === 'supply_approved' ? 'Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status === 'ready_for_pickup' ? 'Pickup' : request.status.substring(0, 6) }}</span>
                     </span>
                   </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4 border-r border-gray-200 dark:border-gray-700">
-                  <div class="flex items-center gap-1 sm:gap-2">
-                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs sm:text-sm hidden sm:inline">calendar_today</span>
-                    <span class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{{ formatDate(request.created_at) }}</span>
+                <td class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center gap-1">
+                    <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-xs hidden sm:inline">calendar_today</span>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{{ formatDate(request.created_at) }}</span>
                   </div>
                 </td>
-                <td class="px-3 sm:px-6 py-3 sm:py-4">
-                  <div class="flex items-center gap-1 sm:gap-2 flex-wrap">
+                <td class="px-2 sm:px-3 py-2">
+                  <div class="flex items-center gap-1 flex-wrap">
+                    <!-- View Details Button -->
+                    <button
+                      @click="openViewDetailsModal(request)"
+                      class="relative p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg transition-all duration-200 hover:shadow-sm flex items-center justify-center border-2 border-blue-400 dark:border-blue-500 w-8 h-8"
+                      title="View details"
+                    >
+                      <span class="material-icons-outlined text-sm">visibility</span>
+                      <!-- Action Required Indicator -->
+                      <span 
+                        v-if="needsAction(request)"
+                        class="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3.5 h-3.5 bg-red-500 text-white text-[8px] rounded-full font-bold animate-pulse shadow-md border border-white dark:border-gray-800"
+                        :title="getActionRequiredTooltip(request)"
+                      >
+                        !
+                      </span>
+                    </button>
                     <!-- Enhanced Message Icon Button -->
                     <button
                       @click="openMessageModal(request)"
-                      class="relative p-2 sm:p-2.5 text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-blue-300 dark:border-blue-700 rounded-lg transition-all flex items-center justify-center shadow-sm hover:shadow-md flex-shrink-0"
+                      class="relative p-1.5 text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-2 border-blue-300 dark:border-blue-700 rounded-lg transition-all flex items-center justify-center shadow-sm hover:shadow-md flex-shrink-0 w-8 h-8"
                       title="View Messages"
                     >
-                      <span class="material-icons-outlined text-base sm:text-lg">message</span>
+                      <span class="material-icons-outlined text-sm">message</span>
                       <span 
                         v-if="(unreadCounts[request.id] || 0) > 0"
-                        class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-bold shadow-lg animate-pulse text-[10px] sm:text-xs"
+                        class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold shadow-lg animate-pulse"
                       >
                         {{ (unreadCounts[request.id] || 0) > 9 ? '9+' : (unreadCounts[request.id] || 0) }}
                       </span>
                     </button>
                     <!-- Enhanced Supply Account Actions -->
                     <template v-if="!isAdmin()">
-                      <button
-                        v-if="request.status === 'pending'"
-                        @click="openApproveModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Approve Request"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">check_circle</span>
-                        <span class="hidden sm:inline">Approve</span>
-                      </button>
-                      <button
-                        v-if="request.status === 'pending'"
-                        @click="openRejectModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 border-2 border-red-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Reject Request"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">cancel</span>
-                        <span class="hidden sm:inline">Reject</span>
-                      </button>
-                      <button
-                        v-if="request.status === 'pending'"
-                        @click="openForwardModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Forward to Another Supply Account"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">forward</span>
-                        <span class="hidden sm:inline">Forward</span>
-                      </button>
                       <!-- Assign to Admin button for Supply Account when request is supply_approved -->
                       <button
                         v-if="request.status === 'supply_approved'"
@@ -2537,36 +2667,6 @@ watch(itemsPerPage, () => {
                       >
                         <span class="material-icons-outlined text-xs sm:text-sm">person_add</span>
                         <span class="hidden sm:inline">Assign</span>
-                      </button>
-                      <!-- Notify User button for Supply Account when request is ready_for_pickup -->
-                      <button
-                        v-if="request.status === 'ready_for_pickup'"
-                        @click="notifyUserReadyForPickup(request)"
-                        :disabled="notifyingUser"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-2 border-green-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Notify User That Items Are Ready for Pickup"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">{{ notifyingUser ? 'hourglass_empty' : 'notifications' }}</span>
-                        <span class="hidden sm:inline">{{ notifyingUser ? 'Notifying...' : 'Notify User' }}</span>
-                      </button>
-                      <!-- Schedule Pickup button for Supply Account when request is ready_for_pickup -->
-                      <button
-                        v-if="request.status === 'ready_for_pickup'"
-                        @click="openPickupScheduleModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white hover:from-cyan-700 hover:to-cyan-800 border-2 border-cyan-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Schedule Pickup Time"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">schedule</span>
-                        <span class="hidden sm:inline">Schedule Pickup</span>
-                      </button>
-                      <button
-                        v-if="request.status === 'admin_accepted' || request.status === 'approved' || request.status === 'ready_for_pickup'"
-                        @click="openFulfillModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Mark Request as Fulfilled"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">done_all</span>
-                        <span class="hidden sm:inline">Fulfill</span>
                       </button>
                     </template>
                     
@@ -2589,15 +2689,6 @@ watch(itemsPerPage, () => {
                       >
                         <span class="material-icons-outlined text-xs sm:text-sm">check_circle</span>
                         <span class="hidden sm:inline">Accept</span>
-                      </button>
-                      <button
-                        v-if="request.status === 'admin_accepted' || request.status === 'approved' || request.status === 'ready_for_pickup'"
-                        @click="openFulfillModal(request)"
-                        class="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-800 rounded-lg text-xs font-bold uppercase transition-all shadow-md hover:shadow-lg flex items-center gap-1 whitespace-nowrap"
-                        title="Mark Request as Fulfilled"
-                      >
-                        <span class="material-icons-outlined text-xs sm:text-sm">done_all</span>
-                        <span class="hidden sm:inline">Fulfill</span>
                       </button>
                     </template>
                     
@@ -3752,10 +3843,256 @@ watch(itemsPerPage, () => {
         </div>
       </div>
     </div>
+
+    <!-- View Details Modal -->
+    <Transition name="modal-fade">
+      <div v-if="showViewDetailsModal && selectedViewRequest" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeViewDetailsModal">
+        <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          <!-- Modal Header -->
+          <div class="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 dark:from-gray-700 dark:via-gray-800 dark:to-gray-900 px-6 py-5 border-b-2 border-blue-800 dark:border-gray-600">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                  <span class="material-icons-outlined text-white text-2xl">info</span>
+                </div>
+                <div>
+                  <h3 class="text-2xl font-extrabold text-white drop-shadow-md">Request Details</h3>
+                  <p class="text-blue-50 text-base font-medium mt-1">{{ selectedViewRequest.user?.name || 'N/A' }}</p>
+                </div>
+              </div>
+              <button @click="closeViewDetailsModal" class="text-white/90 hover:text-white hover:bg-white/20 rounded-xl p-2 transition-all duration-200 hover:scale-110">
+                <span class="material-icons-outlined text-2xl">close</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-8 overflow-y-auto max-h-[70vh] bg-gradient-to-br from-gray-50/50 to-white dark:from-gray-800 dark:to-gray-900">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- User Information -->
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-blue-600 dark:text-blue-400">person</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Requestor</label>
+                </div>
+                <p class="text-lg font-bold text-gray-900 dark:text-white mb-1">{{ selectedViewRequest.user?.name || 'N/A' }}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <span class="material-icons-outlined text-xs">location_on</span>
+                  {{ selectedViewRequest.user?.location || 'N/A' }}
+                </p>
+              </div>
+
+              <!-- Location -->
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400">location_on</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Location</label>
+                </div>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.user?.location || 'N/A' }}</p>
+              </div>
+
+              <!-- Item Description -->
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50 md:col-span-2">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-purple-600 dark:text-purple-400">inventory_2</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Item Description</label>
+                </div>
+                <div v-if="selectedViewRequest.items && selectedViewRequest.items.length > 1" class="space-y-3">
+                  <div v-for="(item, idx) in selectedViewRequest.items" :key="idx" 
+                       class="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
+                    <div class="flex items-start justify-between">
+                      <div class="flex-1">
+                        <p class="text-base font-bold text-gray-900 dark:text-white mb-2">{{ item.item_name || 'N/A' }}</p>
+                        <div class="flex items-center gap-4 text-sm">
+                          <div class="flex items-center gap-1">
+                            <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">inventory</span>
+                            <span class="text-gray-600 dark:text-gray-400">Quantity: <span class="font-bold text-gray-900 dark:text-white">{{ item.quantity || 0 }}</span></span>
+                          </div>
+                          <div class="flex items-center gap-1">
+                            <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">storage</span>
+                            <span class="text-gray-600 dark:text-gray-400">Stock: <span class="font-bold text-blue-600 dark:text-blue-400">{{ item.item_quantity || 'N/A' }}</span></span>
+                          </div>
+                        </div>
+                        <div v-if="isItemRejected(item)" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                          <p class="text-xs font-semibold text-red-700 dark:text-red-300 uppercase">Rejected</p>
+                          <p class="text-sm text-red-600 dark:text-red-400">{{ item.rejection_reason || 'Defective' }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">Total Quantity (Non-Rejected):</span>
+                      <span class="text-lg font-bold text-blue-700 dark:text-blue-300">{{ getTotalQuantity(selectedViewRequest) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else>
+                  <p class="text-lg font-semibold text-gray-900 dark:text-white mb-2">{{ selectedViewRequest.item_name || 'N/A' }}</p>
+                  <div class="flex items-center gap-4 text-sm">
+                    <div class="flex items-center gap-1">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">inventory</span>
+                      <span class="text-gray-600 dark:text-gray-400">Quantity: <span class="font-bold text-gray-900 dark:text-white">{{ getTotalQuantity(selectedViewRequest) }}</span></span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">storage</span>
+                      <span class="text-gray-600 dark:text-gray-400">Stock: <span class="font-bold text-blue-600 dark:text-blue-400">{{ selectedViewRequest.item_quantity || 'N/A' }}</span></span>
+                    </div>
+                  </div>
+                  <div v-if="selectedViewRequest.items && selectedViewRequest.items.length === 1 && isItemRejected(selectedViewRequest.items[0])" 
+                       class="mt-3 p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                    <p class="text-xs font-semibold text-red-700 dark:text-red-300 uppercase">Rejected</p>
+                    <p class="text-sm text-red-600 dark:text-red-400">{{ selectedViewRequest.items[0].rejection_reason || 'Defective' }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status -->
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-amber-600 dark:text-amber-400">flag</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</label>
+                </div>
+                <span :class="['px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center shadow-sm', getStatusBadgeClass(selectedViewRequest.status)]">
+                  {{ selectedViewRequest.status === 'supply_approved' ? 'Supply Approved' : 
+                     selectedViewRequest.status === 'admin_assigned' ? 'Assigned to Admin' :
+                     selectedViewRequest.status === 'admin_accepted' ? 'Admin Accepted' :
+                     selectedViewRequest.status === 'ready_for_pickup' ? 'For Pickup' :
+                     selectedViewRequest.status }}
+                </span>
+              </div>
+
+              <!-- Date -->
+              <div class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-indigo-600 dark:text-indigo-400">schedule</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Date Submitted</label>
+                </div>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatDate(selectedViewRequest.created_at) }}</p>
+              </div>
+
+              <!-- Supply Unit (if admin) -->
+              <div v-if="isAdmin() && selectedViewRequest.supply_name" class="bg-white dark:bg-gray-800/50 rounded-xl p-5 shadow-md border border-gray-100 dark:border-gray-700/50">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-lg">
+                    <span class="material-icons-outlined text-teal-600 dark:text-teal-400">business</span>
+                  </div>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Supply Unit</label>
+                </div>
+                <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.supply_name }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-700/50 px-8 py-5 border-t-2 border-gray-200 dark:border-gray-700/50">
+            <div class="flex flex-col gap-4">
+              <!-- Action Buttons Row -->
+              <div class="flex items-center justify-end gap-3 flex-wrap">
+                <!-- Supply Account Actions (for pending requests) -->
+                <template v-if="!isAdmin() && selectedViewRequest.status === 'pending'">
+                  <button
+                    @click="handleApproveFromView(selectedViewRequest)"
+                    class="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-emerald-400 dark:border-emerald-500"
+                  >
+                    <span class="material-icons-outlined text-lg">check_circle</span>
+                    <span>Approve</span>
+                  </button>
+                  <button
+                    @click="handleRejectFromView(selectedViewRequest)"
+                    class="px-5 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-red-400 dark:border-red-500"
+                  >
+                    <span class="material-icons-outlined text-lg">cancel</span>
+                    <span>Reject</span>
+                  </button>
+                </template>
+                
+                <!-- Assign to Admin (for supply_approved status) -->
+                <template v-if="selectedViewRequest.status === 'supply_approved'">
+                  <button
+                    @click="handleAssignFromView(selectedViewRequest)"
+                    class="px-5 py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-purple-400 dark:border-purple-500"
+                  >
+                    <span class="material-icons-outlined text-lg">person_add</span>
+                    <span>Assign to Admin</span>
+                  </button>
+                </template>
+                
+                <!-- Notify User and Schedule Pickup (for ready_for_pickup status) -->
+                <template v-if="!isAdmin() && selectedViewRequest.status === 'ready_for_pickup'">
+                  <button
+                    @click="handleNotifyUserFromView(selectedViewRequest)"
+                    :disabled="notifyingUser"
+                    class="px-5 py-2.5 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-green-400 dark:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span class="material-icons-outlined text-lg">{{ notifyingUser ? 'hourglass_empty' : 'notifications' }}</span>
+                    <span>{{ notifyingUser ? 'Notifying...' : 'Notify User' }}</span>
+                  </button>
+                  <button
+                    @click="handleSchedulePickupFromView(selectedViewRequest)"
+                    class="px-5 py-2.5 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-900/20 dark:hover:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-cyan-400 dark:border-cyan-500"
+                  >
+                    <span class="material-icons-outlined text-lg">schedule</span>
+                    <span>Schedule Pickup</span>
+                  </button>
+                </template>
+                
+                <!-- Fulfill button (for admin_accepted, approved, or ready_for_pickup) -->
+                <template v-if="selectedViewRequest.status === 'admin_accepted' || selectedViewRequest.status === 'approved' || selectedViewRequest.status === 'ready_for_pickup'">
+                  <button
+                    @click="handleFulfillFromView(selectedViewRequest)"
+                    class="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-blue-400 dark:border-blue-500"
+                  >
+                    <span class="material-icons-outlined text-lg">done_all</span>
+                    <span>Fulfill</span>
+                  </button>
+                </template>
+                
+                <button 
+                  @click="closeViewDetailsModal"
+                  class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
+/* Slide down transition for action reminder banner */
+.slide-down-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-down-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+}
+
 /* Modal fade transition */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
@@ -3813,28 +4150,4 @@ watch(itemsPerPage, () => {
   direction: ltr;
 }
 
-/* Supply Snapshot Scrollbar Styling */
-.supply-snapshot-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.5) rgba(30, 41, 59, 0.3);
-}
-
-.supply-snapshot-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.supply-snapshot-scroll::-webkit-scrollbar-track {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 4px;
-}
-
-.supply-snapshot-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
-  border-radius: 4px;
-}
-
-.supply-snapshot-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.7);
-}
 </style>

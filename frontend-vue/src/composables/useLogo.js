@@ -13,9 +13,15 @@ export default function useLogo() {
     loading.value = true
     error.value = null
     try {
-      const res = await axiosClient.get('/settings/logo')
+      // Add timestamp to prevent caching
+      const res = await axiosClient.get('/settings/logo', {
+        params: { t: Date.now() }
+      })
       if (res.data?.success && res.data?.url) {
-        cachedUrl = res.data.url
+        // Add cache-busting parameter to URL
+        const url = res.data.url
+        const separator = url.includes('?') ? '&' : '?'
+        cachedUrl = `${url}${separator}t=${Date.now()}`
         logoUrl.value = cachedUrl
       }
     } catch (e) {

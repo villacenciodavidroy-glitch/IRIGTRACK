@@ -1,12 +1,15 @@
 import { ref, readonly, computed } from 'vue'
 import axiosClient from '../axios'
 
-let cachedLabels = null
+// Shared reactive state for all instances
+const sharedLabels = ref({})
+const sharedLoading = ref(false)
+const sharedError = ref(null)
 
 export default function useFormLabels() {
-  const labels = ref(cachedLabels || {})
-  const loading = ref(false)
-  const error = ref(null)
+  const labels = sharedLabels
+  const loading = sharedLoading
+  const error = sharedError
 
   const fetchLabels = async () => {
     loading.value = true
@@ -30,8 +33,8 @@ export default function useFormLabels() {
             }
           })
         }
-        cachedLabels = labelsObj
-        labels.value = cachedLabels
+        // Update shared reactive state - all instances will see the change
+        labels.value = labelsObj
       }
     } catch (e) {
       error.value = e.response?.data?.message || 'Failed to load form labels'
@@ -67,7 +70,8 @@ export default function useFormLabels() {
   }
 
   const refetch = () => {
-    cachedLabels = null
+    // Clear the shared state and refetch - all instances will get updated
+    labels.value = {}
     return fetchLabels()
   }
 

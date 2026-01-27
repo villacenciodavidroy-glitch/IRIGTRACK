@@ -32,28 +32,22 @@ class MemorandumReceiptController extends Controller
             $directItems = [];
             
             // Get pending items assigned to locations where this user is CURRENTLY the personnel
-            // Use a safer approach: get items first, then filter
+            // Optimize: Use join to filter in database instead of PHP
             try {
                 $pendingForPersonnel = MemorandumReceipt::where('issued_to_type', 'PERSONNEL')
-                ->where('status', 'ISSUED')
-                    ->whereHas('item', function($query) {
-                        $query->whereNotNull('location_id');
+                    ->where('status', 'ISSUED')
+                    ->whereHas('item.location', function($query) use ($userFullname) {
+                        $query->whereNotNull('location_id')
+                              ->where('personnel', $userFullname);
                     })
-                ->with(['item.category', 'item.location', 'item.condition'])
-                ->get();
+                    ->with(['item:id,uuid,unit,description,category_id,location_id,condition_id,user_id,created_at', 
+                            'item.category:id,category',
+                            'item.location:id,location,personnel',
+                            'item.condition:id,condition'])
+                    ->get();
                 
-                // Filter in PHP to avoid query issues
                 foreach ($pendingForPersonnel as $mr) {
-                    try {
-                        if ($mr->item && 
-                            $mr->item->location && 
-                            trim($mr->item->location->personnel ?? '') === trim($userFullname)) {
-                            $pendingItems[] = $mr;
-                        }
-                    } catch (\Exception $e) {
-                        \Log::error("Error processing MR {$mr->id}: " . $e->getMessage());
-                        continue;
-                    }
+                    $pendingItems[] = $mr;
                 }
             } catch (\Exception $e) {
                 \Log::error("Error fetching pendingForPersonnel: " . $e->getMessage());
@@ -69,7 +63,10 @@ class MemorandumReceiptController extends Controller
                         $query->where('user_id', $userId)
                               ->whereNull('location_id'); // Only items NOT assigned to any location
                     })
-                    ->with(['item.category', 'item.location', 'item.condition'])
+                    ->with(['item:id,uuid,unit,description,category_id,location_id,condition_id,user_id,created_at',
+                            'item.category:id,category',
+                            'item.location:id,location,personnel',
+                            'item.condition:id,condition'])
                     ->get();
                 
                 // Add to pending items array
@@ -82,11 +79,12 @@ class MemorandumReceiptController extends Controller
             }
             
             // Also get items directly assigned to user but WITHOUT MR records (items assigned before MR system)
-            // These also need clearance
+            // These also need clearance - optimize by selecting only necessary fields
             try {
                 $directItemsForUser = \App\Models\Item::where('user_id', $userId)
                     ->whereNull('location_id') // Only items directly assigned to user, not via location
-                    ->with(['category', 'location', 'condition'])
+                    ->select('id', 'uuid', 'unit', 'description', 'category_id', 'location_id', 'condition_id', 'user_id', 'created_at')
+                    ->with(['category:id,category', 'location:id,location,personnel', 'condition:id,condition'])
                     ->get();
                 
                 foreach ($directItemsForUser as $item) {
@@ -97,20 +95,18 @@ class MemorandumReceiptController extends Controller
             }
             
             // Also get items assigned to locations where this user is currently the personnel (without MR)
-            // Only get items where the location actually exists and matches
+            // Optimize: Filter in database instead of PHP
             try {
                 $directItemsForPersonnel = \App\Models\Item::whereNotNull('location_id')
                     ->whereHas('location', function($query) use ($userFullname) {
                         $query->where('personnel', $userFullname); // Only locations where this user is current personnel
                     })
-                    ->with(['category', 'location', 'condition'])
+                    ->select('id', 'uuid', 'unit', 'description', 'category_id', 'location_id', 'condition_id', 'user_id', 'created_at')
+                    ->with(['category:id,category', 'location:id,location,personnel', 'condition:id,condition'])
                     ->get();
                 
                 foreach ($directItemsForPersonnel as $item) {
-                    // Filter out items where location relationship failed to load
-                    if ($item->location !== null) {
-                        $directItems[] = $item;
-                    }
+                    $directItems[] = $item;
                 }
             } catch (\Exception $e) {
                 \Log::error("Error fetching directItemsForPersonnel: " . $e->getMessage());
@@ -2207,6 +2203,187 @@ class MemorandumReceiptController extends Controller
         }
     }
     
+    /**
+     * Get accountability report for personnel (without account)
+     * Shows all equipment with serial numbers, models, MR details for clearance
+     */
+    public function getAccountabilityReportForPersonnel($locationId)
+    {
+        try {
+            $location = \App\Models\Location::findOrFail($locationId);
+            $personnelName = trim($location->personnel ?? '');
+            $personnelCode = $location->personnel_code ?? 'N/A';
+            
+            if (empty($personnelName)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Location does not have assigned personnel'
+                ], 404);
+            }
+            
+            // Get all MR records for this personnel (location-based)
+            // Include ISSUED, RETURNED, LOST, and DAMAGED items
+            $mrItemsForPersonnel = MemorandumReceipt::where('issued_to_type', 'PERSONNEL')
+                ->where(function($query) use ($personnelName) {
+                    // Include ISSUED items that are still assigned to locations with this personnel
+                    $query->where(function($q) use ($personnelName) {
+                        $q->where('status', 'ISSUED')
+                          ->whereHas('item.location', function($locQuery) use ($personnelName) {
+                              $locQuery->where('personnel', $personnelName);
+                          })
+                          ->whereHas('item', function($itemQuery) {
+                              $itemQuery->whereNotNull('location_id');
+                          });
+                    })
+                    // Include RETURNED, LOST, and DAMAGED items for locations where this personnel was/is assigned (for audit trail)
+                    ->orWhere(function($q) use ($personnelName) {
+                        $q->whereIn('status', ['RETURNED', 'LOST', 'DAMAGED'])
+                          ->whereHas('item.location', function($locQuery) use ($personnelName) {
+                              $locQuery->where('personnel', $personnelName);
+                          });
+                    });
+                })
+                ->with(['item.category', 'item.location', 'item.condition', 'processedByUser'])
+                ->get();
+            
+            // Also get items assigned to locations where this personnel is assigned (without MR)
+            $directItemsForPersonnel = \App\Models\Item::whereNotNull('location_id')
+                ->whereHas('location', function($query) use ($personnelName) {
+                    $query->where('personnel', $personnelName);
+                })
+                ->with(['category', 'location', 'condition'])
+                ->get()
+                ->filter(function($item) use ($mrItemsForPersonnel) {
+                    // Only include items that don't have an MR record
+                    return !$mrItemsForPersonnel->contains(function($mr) use ($item) {
+                        return $mr->item_id === $item->id;
+                    });
+                });
+            
+            // Create virtual MR records for items without MR records
+            $virtualMRs = [];
+            foreach ($directItemsForPersonnel as $item) {
+                $itemLocation = $item->location;
+                $virtualMRs[] = (object)[
+                    'id' => null, // No MR number
+                    'item_id' => $item->id,
+                    'item' => $item,
+                    'issued_at' => $item->created_at ?? now(),
+                    'issued_by_user_code' => 'SYSTEM',
+                    'issued_to_code' => $itemLocation->personnel_code ?? 'N/A',
+                    'issued_to_type' => 'PERSONNEL',
+                    'status' => 'ISSUED',
+                    'returned_at' => null,
+                    'remarks' => 'Item assigned before MR system was implemented. This item was directly assigned to the personnel and does not have a Memorandum Receipt record.',
+                    'processedByUser' => null
+                ];
+            }
+            
+            // Convert Eloquent Collection to plain array of objects and combine with virtual MRs
+            $allMRsArray = [];
+            foreach ($mrItemsForPersonnel as $mr) {
+                $allMRsArray[] = $mr; // Keep as Eloquent model object
+            }
+            $allMRsArray = array_merge($allMRsArray, $virtualMRs);
+            
+            // Sort by issued_at descending
+            usort($allMRsArray, function($a, $b) {
+                $dateA = is_object($a) ? ($a->issued_at ?? '1970-01-01') : ($a['issued_at'] ?? '1970-01-01');
+                $dateB = is_object($b) ? ($b->issued_at ?? '1970-01-01') : ($b['issued_at'] ?? '1970-01-01');
+                return strtotime($dateB) - strtotime($dateA);
+            });
+            
+            // Convert to Support Collection (not Eloquent Collection) for easier manipulation
+            $allMRs = collect($allMRsArray);
+            
+            $report = [
+                'personnel' => [
+                    'id' => $location->id,
+                    'name' => $personnelName,
+                    'user_code' => $personnelCode,
+                    'status' => 'ACTIVE', // Personnel are always active
+                    'location' => $location->location ?? 'N/A'
+                ],
+                'items' => $allMRs->map(function($mr) {
+                    $item = $mr->item;
+                    if (!$item) {
+                        return null;
+                    }
+                    
+                    // Handle both Eloquent models and plain objects
+                    $itemObj = is_object($item) ? $item : (object)$item;
+                    $category = is_object($itemObj->category ?? null) ? $itemObj->category : (object)($itemObj->category ?? []);
+                    $condition = is_object($itemObj->condition ?? null) ? $itemObj->condition : (object)($itemObj->condition ?? []);
+                    
+                    $remarksData = null;
+                    if ($mr->remarks) {
+                        $remarksData = is_string($mr->remarks) ? json_decode($mr->remarks, true) : $mr->remarks;
+                    }
+                    
+                    return [
+                        'mr_number' => $mr->id ?? 'N/A',
+                        'item_id' => $itemObj->id ?? null,
+                        'item_uuid' => $itemObj->uuid ?? null,
+                        'unit' => $itemObj->unit ?? 'N/A',
+                        'description' => $itemObj->description ?? 'N/A',
+                        'serial_number' => $itemObj->serial_number ?? 'N/A',
+                        'model' => $itemObj->model ?? 'N/A',
+                        'category' => ($category->category ?? $category->name ?? 'N/A'),
+                        'pac' => $itemObj->pac ?? 'N/A',
+                        'unit_value' => $itemObj->unit_value ?? 0,
+                        'condition' => ($condition->condition ?? $condition->name ?? 'N/A'),
+                        'issued_date' => $mr->issued_at ?? ($itemObj->created_at ?? now()),
+                        'issued_by' => $mr->issued_by_user_code ?? 'SYSTEM',
+                        'issued_to_code' => $mr->issued_to_code ?? 'N/A',
+                        'issued_to_type' => $mr->issued_to_type ?? 'PERSONNEL',
+                        'status' => $mr->status ?? 'ISSUED', // ISSUED, RETURNED, LOST, DAMAGED
+                        'returned_date' => $mr->returned_at ?? null,
+                        'remarks' => $remarksData,
+                        'processed_by' => (is_object($mr->processedByUser ?? null) ? ($mr->processedByUser->user_code ?? 'N/A') : 'N/A')
+                    ];
+                })->filter()->values(), // Filter out null items
+                'summary' => [
+                    'total_items' => $allMRs->count(),
+                    'issued' => $allMRs->where('status', 'ISSUED')->count(),
+                    'returned' => $allMRs->where('status', 'RETURNED')->count(),
+                    'lost' => $allMRs->where('status', 'LOST')->count(),
+                    'damaged' => $allMRs->where('status', 'DAMAGED')->count(),
+                    'total_value' => $allMRs->sum(function($mr) {
+                        $item = is_object($mr->item) ? $mr->item : (is_array($mr->item) ? (object)$mr->item : null);
+                        return $item && isset($item->unit_value) ? $item->unit_value : 0;
+                    }),
+                    'lost_damaged_value' => $allMRs->whereIn('status', ['LOST', 'DAMAGED'])
+                        ->sum(function($mr) {
+                            $item = is_object($mr->item) ? $mr->item : (is_array($mr->item) ? (object)$mr->item : null);
+                            return $item && isset($item->unit_value) ? $item->unit_value : 0;
+                        }),
+                    'issued_value' => $allMRs->where('status', 'ISSUED')
+                        ->sum(function($mr) {
+                            $item = is_object($mr->item) ? $mr->item : (is_array($mr->item) ? (object)$mr->item : null);
+                            return $item && isset($item->unit_value) ? $item->unit_value : 0;
+                        })
+                ]
+            ];
+            
+            // Check if PDF format is requested
+            if (request()->has('format') && request()->input('format') === 'pdf') {
+                return $this->generateAccountabilityReportPDF($report);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => $report,
+                'generated_at' => now()->toDateTimeString()
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Error generating accountability report for personnel: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate accountability report: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     /**
      * Generate PDF accountability report using Dompdf
      */

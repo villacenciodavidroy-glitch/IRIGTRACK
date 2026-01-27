@@ -986,8 +986,8 @@ const goBack = () => {
         <div v-if="!loading && filteredItems.length > 0" class="bg-gradient-to-r from-green-50 to-green-100 dark:from-gray-700 dark:to-gray-700 px-6 py-4 border-t border-green-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div class="text-sm font-medium" style="color: #01200E;">
-                Result <span style="color: #01200E; font-weight: bold;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>-<span style="color: #01200E; font-weight: bold;">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of <span style="color: #01200E; font-weight: bold;">{{ filteredItems.length }}</span>
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Result <span class="font-bold text-gray-900 dark:text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>-<span class="font-bold text-gray-900 dark:text-white">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of <span class="font-bold text-gray-900 dark:text-white">{{ filteredItems.length }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <label class="text-sm font-medium text-gray-700 dark:text-white">Items per page:</label>

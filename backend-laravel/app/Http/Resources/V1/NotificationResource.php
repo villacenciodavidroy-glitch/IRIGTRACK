@@ -45,9 +45,11 @@ class NotificationResource extends JsonResource
             'supply_request_ready_for_pickup' => 'Ready for Pickup',
             'item_lost_damaged_report' => 'Item Lost/Damaged Report',
             'item_recovered' => 'Item Recovered',
+            'item_lost_returned' => 'Lost Item Returned',
+            'item_misplaced' => 'Report Misplaced Item',
             default => 'Low Stock Alert'
         };
-        $priority = in_array($type, ['borrow_request', 'item_lost_damaged_report', 'item_recovered']) ? 'high' : 'high';
+        $priority = in_array($type, ['borrow_request', 'item_lost_damaged_report', 'item_recovered', 'item_misplaced', 'item_lost_returned']) ? 'high' : 'high';
         
         $data = [
             'id' => $this->notification_id,

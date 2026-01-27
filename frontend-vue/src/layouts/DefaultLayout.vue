@@ -396,7 +396,8 @@ const baseNavigation = [
   { name: 'Inventory', path: '/inventory', icon: 'inventory' },
   { name: 'Supply Requests', path: '/supply-requests', icon: 'shopping_cart' },
   { name: 'Analytics', path: '/analytics', icon: 'analytics' },
-  { name: 'Profile', path: '/profile', icon: 'person' }
+  { name: 'QR Generation', path: '/QRGeneration', icon: 'qr_code_2' },
+  { name: 'Reporting', path: '/reporting', icon: 'assessment' }
 ]
 
 // Admin-only base navigation (without Supply Requests for regular users)
@@ -404,25 +405,49 @@ const adminBaseNavigation = [
   { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
   { name: 'Inventory', path: '/inventory', icon: 'inventory' },
   { name: 'Analytics', path: '/analytics', icon: 'analytics' },
-  { name: 'Profile', path: '/profile', icon: 'person' }
+  { name: 'QR Generation', path: '/QRGeneration', icon: 'qr_code_2' },
+  { name: 'Reporting', path: '/reporting', icon: 'assessment' }
 ]
 
 // User role only navigation (simplified)
 const userOnlyNavigation = [
-  { name: 'Supply Requests', path: '/supply-requests', icon: 'shopping_cart' },
-  { name: 'Profile', path: '/profile', icon: 'person' }
+  { name: 'Supply Requests', path: '/supply-requests', icon: 'shopping_cart' }
 ]
 
 // Admin-only navigation items
 const adminNavigation = [
-  { name: 'Supply Requests from Supply Account', path: '/admin/supply-requests', icon: 'inventory_2' },
-  { name: 'Categories', path: '/categories', icon: 'category' },
-  { name: 'Units/Sections', path: '/locations', icon: 'location_on' },
-  { name: 'Admins', path: '/admin', icon: 'people' },
-  { name: 'Personnel Management', path: '/personnel-management', icon: 'badge' },
-  { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' },
-  { name: 'Activity Log', path: '/activity-log', icon: 'history' },
-  { name: 'Settings', path: '/settings', icon: 'settings' },
+  { name: 'Supply Management', path: '/admin/supply-requests', icon: 'inventory_2' },
+  {
+    name: 'Organization',
+    icon: 'business',
+    hasSubmenu: true,
+    id: 'organization',
+    submenu: [
+      { name: 'Categories', path: '/categories', icon: 'category' },
+      { name: 'Units/Sections', path: '/locations', icon: 'location_on' }
+    ]
+  },
+  {
+    name: 'Manage Account',
+    icon: 'manage_accounts',
+    hasSubmenu: true,
+    id: 'manage-account',
+    submenu: [
+      { name: 'Admins', path: '/admin', icon: 'people' },
+      { name: 'Personnel Management', path: '/personnel-management', icon: 'badge' }
+    ]
+  },
+  {
+    name: 'Settings',
+    icon: 'settings',
+    hasSubmenu: true,
+    id: 'settings',
+    submenu: [
+      { name: 'Change Logo', path: '/settings/logo', icon: 'image' },
+      { name: 'Form Labels', path: '/settings/form-labels', icon: 'label' },
+      { name: 'Activity Log', path: '/settings/activity-log', icon: 'history' }
+    ]
+  },
   {
     name: 'History',
     icon: 'folder',
@@ -430,14 +455,24 @@ const adminNavigation = [
     id: 'history',
     submenu: [
       { name: 'Deleted Items', path: '/history/deleted-items', icon: 'delete' },
-      { name: 'Maintenance Records', path: '/history/maintenance-records', icon: 'build' }
+      { name: 'Maintenance Records', path: '/history/maintenance-records', icon: 'build' },
+      { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' }
     ]
   }
 ]
 
 // Supply role navigation items
 const supplyNavigation = [
-  { name: 'Supply Requests Management', path: '/supply-requests-management', icon: 'inventory_2' },
+  {
+    name: 'Request Management',
+    icon: 'inventory_2',
+    hasSubmenu: true,
+    id: 'supply-requests-management',
+    submenu: [
+      { name: 'Requests', path: '/supply-requests-management', icon: 'assignment' },
+      { name: 'Supply (Quantity)', path: '/supply-requests-management/quantity', icon: 'inventory' }
+    ]
+  },
   { name: 'Unit/Section Analytics', path: '/unit-section-analytics', icon: 'analytics' }
 ]
 
@@ -462,11 +497,10 @@ const navigation = computed(() => {
     return [...userOnlyNavigation]
   }
   
-  // For supply role, show filtered navigation (Inventory, Supply Requests Management, Profile)
+  // For supply role, show filtered navigation (Inventory, Request Management)
   if (isSupply.value) {
     const supplyNav = [
-      { name: 'Inventory', path: '/inventory', icon: 'inventory' },
-      { name: 'Profile', path: '/profile', icon: 'person' }
+      { name: 'Inventory', path: '/inventory', icon: 'inventory' }
     ]
     supplyNav.push(...supplyNavigation)
     return supplyNav
@@ -1190,28 +1224,50 @@ const cancelLogout = () => {
 // Auto-open submenus when their items are active
 watch(() => route.path, (newPath) => {
   // Check if any submenu item is active and auto-open the parent
-  const adminNav = adminNavigation.find(item => item.hasSubmenu)
-  if (adminNav && adminNav.submenu) {
-    const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
-    if (isActive && !isSubmenuOpen(adminNav.id)) {
-      submenuStates.value[adminNav.id] = true
+  adminNavigation.forEach(adminNav => {
+    if (adminNav.hasSubmenu && adminNav.submenu) {
+      const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
+      if (isActive && !isSubmenuOpen(adminNav.id)) {
+        submenuStates.value[adminNav.id] = true
+      }
     }
-  }
+  })
 }, { immediate: true })
 
-// Setup global real-time notification listener
-const setupGlobalNotificationListener = () => {
-  if (!window.Echo) {
-    console.warn('⚠️ Laravel Echo not available. Will retry...')
-    setTimeout(setupGlobalNotificationListener, 2000)
-    return
-  }
+// Store channel reference for cleanup
+let notificationsChannel = null
 
+// Setup global real-time notification listener (simplified like message listener)
+const setupGlobalNotificationListener = () => {
   try {
-    const channel = window.Echo.channel('notifications')
+    if (!window.Echo) {
+      console.log('⏳ Echo not ready for notifications, retrying...')
+      setTimeout(setupGlobalNotificationListener, 2000)
+      return
+    }
     
+    // Clean up existing listener if any
+    if (notificationsChannel) {
+      try {
+        window.Echo.leave('notifications')
+        notificationsChannel = null
+      } catch (e) {
+        console.log('No existing notifications channel to clean up')
+      }
+    }
+    
+    // Listen on notifications channel (same pattern as messages)
+    const channel = window.Echo.channel('notifications')
+    notificationsChannel = channel
+    
+    console.log('📡 Setting up notifications channel listener...')
+    console.log('📡 Channel object:', channel)
+    
+    // Listen for new notifications
     channel.listen('.NotificationCreated', (data) => {
-      console.log('📬 Global: New notification received:', data)
+      console.log('📬 New notification received via WebSocket:', data)
+
+      // Handle the notification data
       
       if (data.notification) {
         // Determine title based on notification type if not provided
@@ -1235,6 +1291,18 @@ const setupGlobalNotificationListener = () => {
               break
             case 'borrow_request':
               notificationTitle = 'Borrow Request'
+              break
+            case 'item_lost_damaged_report':
+              notificationTitle = 'Item Lost/Damaged Report'
+              break
+            case 'item_recovered':
+              notificationTitle = 'Item Recovered'
+              break
+            case 'item_lost_returned':
+              notificationTitle = 'Lost Item Returned'
+              break
+            case 'item_misplaced':
+              notificationTitle = 'Report Misplaced Item'
               break
             default:
               notificationTitle = 'Low Stock Alert'
@@ -1346,9 +1414,10 @@ const setupGlobalNotificationListener = () => {
       }
     })
     
-    console.log('✅ Global real-time notifications listener active')
+    console.log('✅ Real-time notifications listener active')
+    console.log('✅ Channel subscribed:', channel.subscribed)
   } catch (error) {
-    console.error('❌ Error setting up global notifications listener:', error)
+    console.error('❌ Error setting up notifications listener:', error)
     // Retry after delay
     setTimeout(setupGlobalNotificationListener, 3000)
   }
@@ -1514,21 +1583,37 @@ onMounted(async () => {
   }, 500)
   
   // Setup global real-time listener for notifications (Admin only)
-  if (isAdmin()) {
+  // Use same pattern as message listener - simple and direct
+  const isAdminUser = isAdmin()
+  console.log('🔍 Checking admin status for notifications...', 'isAdmin:', isAdminUser, 'user:', user.value?.role)
+  if (isAdminUser) {
+    console.log('👤 Admin user detected, setting up notification listeners...')
     setTimeout(() => {
-      setupGlobalNotificationListener()
-      // Also use the composable's listener as backup
-      setupRealtimeListener()
-    }, 500) // Wait a bit for Echo to initialize
+      console.log('🚀 Initializing notification listeners at', new Date().toISOString())
+      try {
+        setupGlobalNotificationListener()
+        console.log('✅ setupGlobalNotificationListener called')
+      } catch (err) {
+        console.error('❌ Error calling setupGlobalNotificationListener:', err)
+      }
+      try {
+        // Also use the composable's listener as backup
+        setupRealtimeListener()
+        console.log('✅ setupRealtimeListener called')
+      } catch (err) {
+        console.error('❌ Error calling setupRealtimeListener:', err)
+      }
+    }, 1000) // Wait for Echo to initialize (same as messages)
     
     // Set up periodic banner check (every 2 seconds)
     bannerCheckInterval = setInterval(() => {
       checkAndShowPendingRequestsBanner()
     }, 2000) // Check every 2 seconds to ensure banner always shows
     
-    // Refresh notifications periodically to ensure we have latest data
+    // Refresh notifications periodically as fallback (less frequent now with real-time)
+    // Real-time updates should handle most cases, but this ensures we don't miss anything
     const notificationRefreshInterval = setInterval(async () => {
-      console.log('🔄 Periodic notification refresh...')
+      console.log('🔄 Periodic notification refresh (fallback)...')
       await fetchNotifications(5)
       // Check banner multiple times after refresh
       checkAndShowPendingRequestsBanner()
@@ -1541,7 +1626,7 @@ onMounted(async () => {
       setTimeout(() => {
         checkAndShowPendingRequestsBanner()
       }, 300)
-    }, 10000) // Refresh every 10 seconds
+    }, 60000) // Refresh every 60 seconds (reduced from 10s since real-time handles most updates)
     
     // Refresh unread count periodically (every 30 seconds) to keep badge updated
     // Note: Real-time updates will handle most cases, but this is a backup
@@ -1553,6 +1638,8 @@ onMounted(async () => {
     // Store intervals for cleanup
     window.notificationRefreshInterval = notificationRefreshInterval
     window.unreadCountInterval = unreadCountInterval
+  } else {
+    console.log('⚠️ Not an admin user, skipping notification listener setup')
   }
   
   // Setup real-time listener for messages (all authenticated users)
@@ -1583,13 +1670,14 @@ onMounted(async () => {
   }
   
   // Auto-open submenus on mount if their items are active
-  const adminNav = adminNavigation.find(item => item.hasSubmenu)
-  if (adminNav && adminNav.submenu) {
-    const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
-    if (isActive) {
-      submenuStates.value[adminNav.id] = true
+  adminNavigation.forEach(adminNav => {
+    if (adminNav.hasSubmenu && adminNav.submenu) {
+      const isActive = adminNav.submenu.some(subItem => isActiveRoute(subItem.path))
+      if (isActive) {
+        submenuStates.value[adminNav.id] = true
+      }
     }
-  }
+  })
 })
 
 onBeforeUnmount(() => {
@@ -1598,6 +1686,17 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', closeMessages)
   document.removeEventListener('click', closeSidebarOnOutsideClick)
   window.removeEventListener('resize', handleResize)
+  
+  // Clean up notifications channel
+  if (notificationsChannel && window.Echo) {
+    try {
+      window.Echo.leave('notifications')
+      notificationsChannel = null
+      console.log('🧹 Cleaned up notifications channel')
+    } catch (error) {
+      console.error('Error cleaning up notifications channel:', error)
+    }
+  }
   
   // Clear all intervals
   if (bannerCheckInterval) {
@@ -1630,6 +1729,17 @@ onBeforeUnmount(() => {
       messageRealtimeListener.value = null
     } catch (e) {
       console.error('Error cleaning up message listener:', e)
+    }
+  }
+  
+  // Clean up notifications channel
+  if (notificationsChannel && window.Echo) {
+    try {
+      window.Echo.leave('notifications')
+      notificationsChannel = null
+      console.log('🧹 Cleaned up notifications channel')
+    } catch (e) {
+      console.error('Error cleaning up notifications channel:', e)
     }
   }
 })
@@ -2116,6 +2226,7 @@ onBeforeUnmount(() => {
                 <span class="font-medium">Profile</span>
               </router-link>
               <router-link
+                v-if="isAdmin()"
                 to="/activity-log"
                 class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="isProfileDropdownOpen = false"
@@ -2124,6 +2235,7 @@ onBeforeUnmount(() => {
                 <span class="font-medium">Activity Log</span>
               </router-link>
               <router-link
+                v-if="isAdmin()"
                 to="/history/deleted-items"
                 class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
                 @click="isProfileDropdownOpen = false"

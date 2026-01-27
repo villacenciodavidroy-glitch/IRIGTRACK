@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../../composables/useItems'
+import useFormLabels from '../../composables/useFormLabels'
 import useAuth from '../../composables/useAuth'
 import axiosClient from '../../axios'
 import logoImage from '../../assets/logo.png'
@@ -16,6 +17,9 @@ const selectedCategory = ref(null)
 
 // Get items from the API using the composable
 const { items, fetchitems, loading, error } = useItems()
+
+// Form labels
+const { fetchLabels, getLabel } = useFormLabels()
 
 // Get user data from auth composable
 const { user, getUserDisplayName } = useAuth()
@@ -40,6 +44,7 @@ const signatureData = ref({
 // Fetch items when component mounts
 // Force refresh to ensure we get the latest data matching Inventory.vue
 onMounted(async () => {
+  await fetchLabels()
   // Force a fresh fetch to ensure data matches Inventory.vue
   await fetchitems()
   // Log to verify we're getting the same data structure
@@ -895,13 +900,13 @@ const exportToExcel = () => {
             <tr class="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">QR CODE</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">IMAGE</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ARTICLE</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CATEGORY</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DESCRIPTION</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">P.A.C.</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT VALUE</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">DATE ACQUIRED</th>
-              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">UNIT/SECTIONS</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('category', 'CATEGORY') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('description', 'DESCRIPTION') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('property_account_code', 'P.A.C.') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('unit_value', 'UNIT VALUE') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
+              <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">{{ getLabel('unit_sections', 'UNIT/SECTIONS') }}</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">CONDITION</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">ISSUED TO</th>
               <th class="px-4 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider">QUANTITY</th>
@@ -967,11 +972,11 @@ const exportToExcel = () => {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-              <span class="text-sm font-semibold" style="color: #01200E;">
-                Showing <span class="font-bold" style="color: #01200E;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
-                <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of 
-                <span class="font-bold" style="color: #01200E;">{{ filteredItems.length }}</span> items
+              <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+              <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Showing <span class="font-bold text-gray-900 dark:text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                <span class="font-bold text-gray-900 dark:text-white">{{ Math.min(currentPage * itemsPerPage, filteredItems.length) }}</span> of 
+                <span class="font-bold text-gray-900 dark:text-white">{{ filteredItems.length }}</span> items
               </span>
             </div>
             <div class="flex items-center gap-2">

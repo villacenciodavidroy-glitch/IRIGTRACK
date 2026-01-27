@@ -3,8 +3,7 @@ import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 import { Bar } from 'vue-chartjs'
 import useAuth from '../composables/useAuth'
 import useItems from '../composables/useItems'
-import useCategories from '../composables/useCategories'
-import useUsers from '../composables/useUsers'
+import axiosClient from '../axios'
 
 import {
   Chart as ChartJS,
@@ -29,20 +28,115 @@ ChartJS.register(
 const { user, loading: userLoading, error: userError, getUserDisplayName } = useAuth()
 
 // Initialize data composables
-const { items, fetchitems, loading: itemsLoading } = useItems()
-const { categories, fetchcategories } = useCategories()
-const { users, fetchusers } = useUsers()
+const { items, fetchitems, loading: itemsLoading, totalItems: itemsTotal } = useItems()
 
 // Stats data
 const stats = ref({
   totalItems: 0,
-  category: 0,
-  admins: 0
+  lowStock: 0,
+  totalSendRequest: 0
 })
 
 const statsLoading = ref(true)
 const statsError = ref(null)
 const lastUpdated = ref(null)
+
+// Low stock count
+const lowStockCount = ref(0)
+
+// Active supply requests count (pending, in-process, newest)
+const activeSupplyRequests = ref(0)
+
+// Fetch active supply requests count (pending, in-process, or newest)
+const fetchActiveSupplyRequests = async () => {
+  try {
+    // Statuses that indicate requests are pending or in process (not completed/rejected/cancelled)
+    const activeStatuses = ['pending', 'supply_approved', 'admin_assigned', 'admin_accepted', 'approved', 'ready_for_pickup']
+    
+    // Fetch requests - we'll get a reasonable sample and count active ones
+    // For dashboard, we don't need exact count, just a good approximation
+    const response = await axiosClient.get('/supply-requests/all', {
+      params: {
+        page: 1,
+        per_page: 500 // Get enough to get a good count of active requests
+      }
+    })
+    
+    if (response.data.success) {
+      const requests = response.data.data || []
+      
+      // Filter to only active/in-process requests
+      const activeRequests = requests.filter(request => 
+        activeStatuses.includes(request.status)
+      )
+      
+      // Use the filtered count
+      // If pagination shows we got all requests, use exact count
+      // Otherwise, this is an approximation (which is fine for dashboard)
+      if (response.data.pagination) {
+        const totalInResponse = requests.length
+        const totalInDatabase = response.data.pagination.total || 0
+        
+        // If we got all requests (or close to it), use exact filtered count
+        if (totalInResponse >= totalInDatabase || totalInResponse >= 500) {
+          // We got a good sample or all requests, use filtered count
+          activeSupplyRequests.value = activeRequests.length
+        } else {
+          // Estimate: calculate ratio and apply to total
+          const activeRatio = activeRequests.length / totalInResponse
+          activeSupplyRequests.value = Math.round(totalInDatabase * activeRatio)
+        }
+      } else {
+        // No pagination info, use filtered count
+        activeSupplyRequests.value = activeRequests.length
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching active supply requests:', error)
+    activeSupplyRequests.value = 0
+  }
+}
+
+// Low stock items list
+const lowStockItemsList = ref([])
+
+// Calculate low stock count from items (Supply category only)
+const calculateLowStockCount = () => {
+  try {
+    // Get Supply category items with quantity < 50 (low stock threshold)
+    const lowStockItems = items.value.filter(item => {
+      const category = (item.category || '').toLowerCase().trim()
+      const quantity = Number(item.quantity || 0)
+      // Only count items in Supply category
+      return (category === 'supply' || category === 'supplies') && quantity < 50 && quantity >= 0
+    })
+    lowStockItemsList.value = lowStockItems.map(item => ({
+      name: item.unit || item.article || 'Unknown Item',
+      quantity: item.quantity || 0,
+      category: item.category || 'N/A'
+    }))
+    lowStockCount.value = lowStockItems.length
+    
+    // Show popup if there are low stock items and it hasn't been shown yet
+    if (lowStockItems.length > 0 && !hasShownLowStockPopup.value) {
+      showLowStockModal.value = true
+      hasShownLowStockPopup.value = true
+    }
+  } catch (error) {
+    console.error('Error calculating low stock count:', error)
+    lowStockCount.value = 0
+    lowStockItemsList.value = []
+  }
+}
+
+// Low stock modal state
+const showLowStockModal = ref(false)
+const hasShownLowStockPopup = ref(false)
+
+// Close low stock modal
+const closeLowStockModal = () => {
+  showLowStockModal.value = false
+}
 
 // Fetch all dashboard data
 const fetchDashboardData = async () => {
@@ -50,18 +144,21 @@ const fetchDashboardData = async () => {
     statsLoading.value = true
     statsError.value = null
     
-    // Fetch all data in parallel
-    await Promise.all([
-      fetchitems(),
-      fetchcategories(),
-      fetchusers()
-    ])
+    // Reset popup flag when refreshing data
+    hasShownLowStockPopup.value = false
+    
+    // Fetch items first, then calculate low stock, and fetch active supply requests in parallel
+    // Fetch with high per_page to get accurate total count (up to 1000 items for dashboard stats)
+    await fetchitems(false, 1000)
+    calculateLowStockCount()
+    await fetchActiveSupplyRequests()
     
     // Update stats with real data
+    // Use totalItems from pagination instead of items.length to get the actual total count
     stats.value = {
-      totalItems: items.value?.length || 0,
-      category: categories.value?.length || 0,
-      admins: users.value?.filter(user => user.role === 'admin' || user.role === 'super_admin')?.length || 0
+      totalItems: itemsTotal.value || items.value?.length || 0,
+      lowStock: lowStockCount.value || 0,
+      totalSendRequest: activeSupplyRequests.value || 0
     }
     
     // Update last updated time
@@ -257,62 +354,46 @@ const chartOptions = computed(() => {
         </div>
       </div>
 
-      <!-- Categories -->
+      <!-- Low Stock -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 p-6 overflow-hidden relative group">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-green-500/10 dark:bg-green-500/20 rounded-bl-full"></div>
+        <div class="absolute top-0 right-0 w-24 h-24 bg-red-500/10 dark:bg-red-500/20 rounded-bl-full"></div>
         <div class="relative flex items-center justify-between">
           <div class="flex-1">
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Categories</p>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Low Stock</p>
             <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-1">
               <span v-if="statsLoading" class="inline-block w-12 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
-              <span v-else>{{ stats.category }}</span>
+              <span v-else>{{ stats.lowStock }}</span>
             </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400">Active categories</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Items needing restock</p>
           </div>
-          <div class="p-4 bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
-            <span class="material-icons-outlined text-white text-3xl">category</span>
+          <div class="p-4 bg-gradient-to-br from-red-500 to-red-600 dark:from-red-600 dark:to-red-700 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
+            <span class="material-icons-outlined text-white text-3xl">warning</span>
           </div>
         </div>
       </div>
 
-      <!-- Admins -->
+      <!-- Active Requests -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 p-6 overflow-hidden relative group">
         <div class="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 dark:bg-blue-500/20 rounded-bl-full"></div>
         <div class="relative flex items-center justify-between">
           <div class="flex-1">
-            <p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Admins</p>
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">Active Requests</p>
             <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-1">
               <span v-if="statsLoading" class="inline-block w-12 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></span>
-              <span v-else>{{ stats.admins }}</span>
+              <span v-else>{{ stats.totalSendRequest }}</span>
             </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400">System administrators</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Pending or in process</p>
           </div>
           <div class="p-4 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
-            <span class="material-icons-outlined text-white text-3xl">people</span>
+            <span class="material-icons-outlined text-white text-3xl">pending_actions</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Enhanced Action Buttons -->
+    <!-- Refresh Button -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-100 dark:border-gray-700 p-4 mb-6">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex flex-wrap gap-3">
-          <router-link 
-            to="/QRGeneration" 
-            class="btn-action-primary flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
-          >
-            <span class="material-icons-outlined text-xl">qr_code_2</span>
-            <span class="whitespace-nowrap">QR Generation</span>
-          </router-link>
-          <router-link 
-            to="/reporting" 
-            class="btn-action-primary flex items-center gap-2 px-5 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
-          >
-            <span class="material-icons-outlined text-xl">assessment</span>
-            <span class="whitespace-nowrap">Reporting</span>
-          </router-link>
-        </div>
+      <div class="flex justify-end">
         <button 
           @click="fetchDashboardData" 
           :disabled="statsLoading"
@@ -354,6 +435,59 @@ const chartOptions = computed(() => {
             :data="chartData" 
             :options="chartOptions"
           />
+        </div>
+      </div>
+    </div>
+
+    <!-- Low Stock Popup Modal -->
+    <div v-if="showLowStockModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn" @click.self="closeLowStockModal">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-red-200 dark:border-red-700 max-w-2xl w-full max-h-[90vh] overflow-hidden animate-fadeIn">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-5 border-b border-red-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-2xl">warning</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-white">Low Stock Alert</h3>
+                <p class="text-red-100 text-sm">{{ lowStockItemsList.length }} item{{ lowStockItemsList.length !== 1 ? 's' : '' }} need restocking</p>
+              </div>
+            </div>
+            <button @click="closeLowStockModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-6 overflow-y-auto max-h-[60vh]">
+          <div class="space-y-3">
+            <div 
+              v-for="(item, index) in lowStockItemsList" 
+              :key="index"
+              class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <div class="flex-1">
+                <p class="text-base font-semibold text-gray-900 dark:text-white">{{ item.name }}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">{{ item.category }}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-lg font-bold text-red-600 dark:text-red-400">{{ item.quantity }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">units</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
+          <button 
+            @click="closeLowStockModal"
+            class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

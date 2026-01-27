@@ -7,8 +7,11 @@ export default function useItems() {
   const error = ref(null)
   const retryCount = ref(0)
   const maxRetries = 3
+  const totalItems = ref(0) // Store total items count from pagination
 
-  const fetchitems = async (retry = false) => {
+  // Default to fetching more items (10000) to ensure we get accurate totals
+  // Pages that need accurate counts should use a high perPage value
+  const fetchitems = async (retry = false, perPage = 10000) => {
     if (retry) {
       retryCount.value++
     } else {
@@ -20,15 +23,29 @@ export default function useItems() {
     
     try {
       console.log(`Fetching active items... (Attempt ${retryCount.value + 1})`)
-      const response = await axiosClient.get('/items')
+      const response = await axiosClient.get('/items', {
+        params: {
+          per_page: perPage,
+          page: 1
+        }
+      })
       console.log('Items response:', response)
       
       if (response.data && response.data.data) {
         items.value = response.data.data
+        // Store total from pagination if available
+        if (response.data.pagination && response.data.pagination.total !== undefined) {
+          totalItems.value = response.data.pagination.total
+        } else {
+          // Fallback to items length if pagination not available
+          totalItems.value = items.value.length
+        }
         console.log('Available items:', items.value)
+        console.log('Total items:', totalItems.value)
       } else {
         console.warn('Unexpected response format:', response.data)
         items.value = []
+        totalItems.value = 0
       }
       
       // Reset retry count on success
@@ -40,11 +57,12 @@ export default function useItems() {
       // Auto-retry if we haven't exceeded max retries
       if (retryCount.value < maxRetries) {
         console.log(`Retrying... (${retryCount.value + 1}/${maxRetries})`)
-        setTimeout(() => fetchitems(true), 1000) // Wait 1 second before retrying
+        setTimeout(() => fetchitems(true, perPage), 1000) // Wait 1 second before retrying
         return
       }
       
       error.value = err.response?.data?.message || 'Failed to load items. Please try again.'
+      totalItems.value = 0
     } finally {
       if (retryCount.value === 0 || retryCount.value >= maxRetries) {
         loading.value = false
@@ -66,6 +84,7 @@ export default function useItems() {
     items,
     loading,
     error,
+    totalItems,
     fetchitems
   }
 }

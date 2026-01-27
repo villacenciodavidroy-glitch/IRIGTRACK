@@ -24,9 +24,31 @@
     }
   }
   
-  /* Ensure tables scroll on mobile */
+  /* Enhanced responsive table wrapper */
+  .table-responsive-wrapper {
+    @apply overflow-x-auto -mx-4 sm:-mx-6 md:mx-0;
+    @apply -webkit-overflow-scrolling-touch;
+    @apply scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100;
+    @apply dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800;
+  }
+  
+  /* Responsive table container */
   .table-responsive {
-    @apply overflow-x-auto -mx-2 sm:mx-0;
+    @apply min-w-full divide-y divide-gray-200 dark:divide-gray-700;
+    @apply w-full;
+  }
+  
+  /* Responsive table cells - smaller padding on mobile */
+  .table-responsive th,
+  .table-responsive td {
+    @apply px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4;
+    @apply text-xs sm:text-sm;
+    @apply whitespace-nowrap;
+  }
+  
+  /* Allow text wrapping in specific cells on mobile */
+  .table-responsive .cell-wrap {
+    @apply whitespace-normal break-words;
   }
   
   /* Mobile-friendly spacing */
@@ -42,6 +64,18 @@
   /* Responsive heading */
   .responsive-heading {
     @apply text-lg xs:text-xl sm:text-2xl md:text-3xl;
+  }
+  
+  /* Responsive container */
+  .responsive-container {
+    @apply w-full px-4 sm:px-6 md:px-8;
+    @apply max-w-7xl mx-auto;
+  }
+  
+  /* Responsive grid that adapts to screen size */
+  .responsive-grid-auto {
+    @apply grid gap-4;
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
   }
 }
 

@@ -176,6 +176,72 @@ class LocationController extends Controller
     }
 
     /**
+     * Mark personnel as resigned (clear personnel from location)
+     */
+    public function markPersonnelAsResigned(Request $request, string $id)
+    {
+        $location = Location::find($id);
+        
+        if (!$location) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Location not found'
+            ], 404);
+        }
+
+        if (empty(trim($location->personnel ?? ''))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Location does not have assigned personnel'
+            ], 422);
+        }
+
+        // Check if personnel has pending items
+        // Get items assigned to this specific location
+        $pendingItems = \App\Models\Item::where('location_id', $location->id)
+            ->whereHas('memorandumReceipts', function($query) {
+                $query->where('status', 'ISSUED');
+            })
+            ->count();
+
+        // Also check for items without MR records assigned to this location
+        $itemsWithoutMr = \App\Models\Item::where('location_id', $location->id)
+            ->whereDoesntHave('memorandumReceipts')
+            ->count();
+
+        $totalPending = $pendingItems + $itemsWithoutMr;
+
+        if ($totalPending > 0) {
+            return response()->json([
+                'success' => false,
+                'error' => 'PENDING_ITEMS',
+                'message' => "Personnel has {$totalPending} pending item(s). Please complete clearance first.",
+                'pending_items_count' => $totalPending
+            ], 422);
+        }
+
+        try {
+            // Clear personnel from location
+            $oldPersonnel = $location->personnel;
+            $location->update([
+                'personnel' => null,
+                'personnel_code' => null
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Personnel '{$oldPersonnel}' marked as resigned successfully"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark personnel as resigned',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(string $id)

@@ -806,11 +806,11 @@ onMounted(() => {
         <div v-if="!loading && paginatedAdminAccounts.length > 0" class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-              <span class="text-sm font-semibold" style="color: #01200E;">
-                Showing <span class="font-bold" style="color: #01200E;">{{ adminStartIndex }}</span> to 
-                <span class="font-bold" style="color: #01200E;">{{ adminEndIndex }}</span> of 
-                <span class="font-bold" style="color: #01200E;">{{ filteredAdminAccounts.length }}</span> entries
+              <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+              <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Showing <span class="font-bold text-gray-900 dark:text-white">{{ adminStartIndex }}</span> to 
+                <span class="font-bold text-gray-900 dark:text-white">{{ adminEndIndex }}</span> of 
+                <span class="font-bold text-gray-900 dark:text-white">{{ filteredAdminAccounts.length }}</span> entries
               </span>
             </div>
             <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">
@@ -1013,11 +1013,11 @@ onMounted(() => {
         <div v-if="!loading && paginatedUserAccounts.length > 0" class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-              <span class="text-sm font-semibold" style="color: #01200E;">
-                Showing <span class="font-bold" style="color: #01200E;">{{ userStartIndex }}</span> to 
-                <span class="font-bold" style="color: #01200E;">{{ userEndIndex }}</span> of 
-                <span class="font-bold" style="color: #01200E;">{{ filteredUserAccounts.length }}</span> entries
+              <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+              <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Showing <span class="font-bold text-gray-900 dark:text-white">{{ userStartIndex }}</span> to 
+                <span class="font-bold text-gray-900 dark:text-white">{{ userEndIndex }}</span> of 
+                <span class="font-bold text-gray-900 dark:text-white">{{ filteredUserAccounts.length }}</span> entries
               </span>
             </div>
             <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">
@@ -1203,11 +1203,11 @@ onMounted(() => {
         <div v-if="!loading && paginatedSupplyAccounts.length > 0" class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-              <span class="text-sm font-semibold" style="color: #01200E;">
-                Showing <span class="font-bold" style="color: #01200E;">{{ supplyStartIndex }}</span> to 
-                <span class="font-bold" style="color: #01200E;">{{ supplyEndIndex }}</span> of 
-                <span class="font-bold" style="color: #01200E;">{{ filteredSupplyAccounts.length }}</span> entries
+              <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+              <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Showing <span class="font-bold text-gray-900 dark:text-white">{{ supplyStartIndex }}</span> to 
+                <span class="font-bold text-gray-900 dark:text-white">{{ supplyEndIndex }}</span> of 
+                <span class="font-bold text-gray-900 dark:text-white">{{ filteredSupplyAccounts.length }}</span> entries
               </span>
             </div>
             <div class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">

@@ -55,18 +55,73 @@
   }
 }
 
-/* Responsive table wrapper */
+/* Enhanced responsive table wrapper */
 .responsive-table-wrapper {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 0 -1rem;
   padding: 0 1rem;
+  position: relative;
 }
 
 @media (min-width: 1024px) {
   .responsive-table-wrapper {
     margin: 0;
     padding: 0;
+  }
+}
+
+/* Table scrollbar styling */
+.responsive-table-wrapper::-webkit-scrollbar {
+  height: 8px;
+}
+
+.responsive-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.dark .responsive-table-wrapper::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.responsive-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.responsive-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark .responsive-table-wrapper::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark .responsive-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Responsive table cells */
+@media (max-width: 640px) {
+  .responsive-table-wrapper table th,
+  .responsive-table-wrapper table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  
+  /* Hide less important columns on very small screens */
+  .responsive-table-wrapper table th.hide-mobile,
+  .responsive-table-wrapper table td.hide-mobile {
+    display: none;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+  .responsive-table-wrapper table th,
+  .responsive-table-wrapper table td {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
   }
 }
 

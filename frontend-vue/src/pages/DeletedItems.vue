@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import axiosClient from '../axios'
+import useFormLabels from '../composables/useFormLabels'
 import SuccessModal from '../components/SuccessModal.vue'
 import { useDebouncedRef } from '../composables/useDebounce'
+
+const { fetchLabels, getLabel } = useFormLabels()
 
 const items = ref([])
 const loading = ref(false)
@@ -45,7 +48,8 @@ const fetchDeletedItems = async () => {
 }
 
 // Fetch deleted items when component mounts
-onMounted(() => {
+onMounted(async () => {
+  await fetchLabels()
   fetchDeletedItems()
 })
 
@@ -346,12 +350,12 @@ const closeSuccessModal = () => {
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 min-w-[1000px]">
           <thead>
             <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ARTICLE</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden md:table-cell">DESCRIPTION</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden lg:table-cell">PAC</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden lg:table-cell">UNIT VALUE</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden xl:table-cell">DATE ACQUIRED</th>
-              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden xl:table-cell">P.O. NUMBER</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden md:table-cell">{{ getLabel('description', 'DESCRIPTION') }}</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden lg:table-cell">{{ getLabel('property_account_code', 'PAC') }}</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden lg:table-cell">{{ getLabel('unit_value', 'UNIT VALUE') }}</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden xl:table-cell">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
+              <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden xl:table-cell">{{ getLabel('po_number', 'P.O. NUMBER') }}</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden md:table-cell">LOCATION</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DELETED AT</th>
               <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hidden lg:table-cell">REASON</th>

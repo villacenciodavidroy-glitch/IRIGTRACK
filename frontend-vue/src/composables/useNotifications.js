@@ -53,6 +53,18 @@ export default function useNotifications() {
               case 'borrow_request':
                 title = 'Borrow Request'
                 break
+              case 'item_lost_damaged_report':
+                title = 'Item Lost/Damaged Report'
+                break
+              case 'item_recovered':
+                title = 'Item Recovered'
+                break
+              case 'item_lost_returned':
+                title = 'Lost Item Returned'
+                break
+              case 'item_misplaced':
+                title = 'Report Misplaced Item'
+                break
               default:
                 title = 'Low Stock Alert'
             }
@@ -184,31 +196,108 @@ export default function useNotifications() {
     await fetchUnreadCount()
   }
 
+  // Store channel reference for cleanup
+  let notificationsChannel = null
+
   // Setup real-time listener for notifications
   const setupRealtimeListener = () => {
     if (!window.Echo) {
-      console.warn('⚠️ Laravel Echo not available for notifications')
+      console.warn('⚠️ Laravel Echo not available for notifications. Will retry...')
+      setTimeout(setupRealtimeListener, 2000)
       return
     }
 
-    try {
-      const channel = window.Echo.channel('notifications')
+    const pusher = window.Echo.connector?.pusher
+    
+    if (!pusher) {
+      console.warn('⚠️ Pusher connector not found. Will retry...')
+      setTimeout(setupRealtimeListener, 2000)
+      return
+    }
+
+    const connectionState = pusher.connection?.state
+    console.log('📡 useNotifications: Echo connection state:', connectionState)
+
+    // If not connected, wait for connection
+    if (connectionState !== 'connected') {
+      console.log('⏳ Waiting for Echo connection before setting up notifications listener...')
       
-      channel.listen('.NotificationCreated', (data) => {
+      const connectedHandler = () => {
+        console.log('✅ Pusher connected! Setting up notifications listener...')
+        setupNotificationsChannelListener()
+        pusher.connection.unbind('connected', connectedHandler)
+      }
+      
+      pusher.connection.bind('connected', connectedHandler)
+      
+      // Also try after a short delay in case connection happens quickly
+      setTimeout(() => {
+        if (pusher.connection?.state === 'connected') {
+          setupNotificationsChannelListener()
+        } else {
+          // If still not connected, retry setup
+          setTimeout(setupRealtimeListener, 2000)
+        }
+      }, 500)
+      
+      return
+    }
+
+    // Already connected - set up listener immediately
+    setupNotificationsChannelListener()
+  }
+
+  // Function to set up the notifications channel listener
+  const setupNotificationsChannelListener = () => {
+    try {
+      // Leave existing channel if any
+      if (notificationsChannel) {
+        window.Echo.leave('notifications')
+        notificationsChannel = null
+      }
+
+      // Create new channel
+      notificationsChannel = window.Echo.channel('notifications')
+      
+      notificationsChannel.listen('.NotificationCreated', (data) => {
         console.log('📬 New notification received:', data)
         
         if (data.notification) {
+          // Determine action/title based on type if not provided
+          let actionTitle = data.notification.title
+          if (!actionTitle) {
+            switch(data.notification.type) {
+              case 'borrow_request':
+                actionTitle = 'Borrow Request'
+                break
+              case 'item_misplaced':
+                actionTitle = 'Report Misplaced Item'
+                break
+              case 'item_lost_damaged_report':
+                actionTitle = 'Item Lost/Damaged Report'
+                break
+              case 'item_recovered':
+                actionTitle = 'Item Recovered'
+                break
+              case 'item_lost_returned':
+                actionTitle = 'Lost Item Returned'
+                break
+              default:
+                actionTitle = 'Low Stock Alert'
+            }
+          }
+          
           const newNotification = {
             id: data.notification.id,
             type: data.notification.type || 'low_stock',
-            title: data.notification.title || 'Low Stock Alert',
+            title: data.notification.title || actionTitle,
             message: data.notification.message,
             user: data.notification.item?.unit || 'System',
             role: 'System',
             timestamp: data.notification.timestamp || data.notification.created_at,
             date: data.notification.date,
             time: data.notification.time,
-            action: data.notification.title || (data.notification.type === 'borrow_request' ? 'Borrow Request' : 'Low Stock Alert'),
+            action: actionTitle,
             isRead: data.notification.isRead ?? false,
             priority: data.notification.priority || 'high',
             item: data.notification.item,
@@ -239,9 +328,23 @@ export default function useNotifications() {
         }
       })
       
+      // Handle reconnection
+      const pusher = window.Echo.connector?.pusher
+      if (pusher) {
+        pusher.connection.bind('connected', () => {
+          console.log('🔄 Echo reconnected, notifications listener is active')
+        })
+        
+        pusher.connection.bind('disconnected', () => {
+          console.warn('⚠️ Echo disconnected, will reconnect automatically')
+        })
+      }
+      
       console.log('✅ Real-time notifications listener active')
     } catch (error) {
-      console.error('❌ Error setting up notifications listener:', error)
+      console.error('❌ Error setting up notifications channel listener:', error)
+      // Retry after delay
+      setTimeout(setupRealtimeListener, 3000)
     }
   }
 

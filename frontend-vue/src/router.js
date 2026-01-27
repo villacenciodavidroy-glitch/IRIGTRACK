@@ -96,7 +96,23 @@ const routes = [
             {
                 path: 'settings',
                 name: 'Settings',
+                redirect: '/settings/logo',
                 component: () => import('./pages/Settings.vue')
+            },
+            {
+                path: 'settings/logo',
+                name: 'ChangeLogo',
+                component: () => import('./pages/Settings.vue')
+            },
+            {
+                path: 'settings/form-labels',
+                name: 'FormLabels',
+                component: () => import('./pages/Settings.vue')
+            },
+            {
+                path: 'settings/activity-log',
+                name: 'SettingsActivityLog',
+                component: ActivityLog
             },
             {
                 path: 'personnel-management',
@@ -201,6 +217,11 @@ const routes = [
                 path: 'supply-requests-management',
                 name: 'SupplyRequestsManagement',
                 component: () => import('./pages/SupplyRequestsManagement.vue')
+            },
+            {
+                path: 'supply-requests-management/quantity',
+                name: 'SupplyQuantity',
+                component: () => import('./pages/SupplyQuantity.vue')
             },
             {
                 path: 'unit-section-analytics',

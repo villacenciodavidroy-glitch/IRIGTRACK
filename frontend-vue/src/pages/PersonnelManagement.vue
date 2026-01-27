@@ -25,23 +25,25 @@
     <!-- Alert Banner for Resigned Users with Pending Items -->
     <div
       v-if="resignedWithPendingItems.length > 0"
-      class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-6 rounded-lg shadow-md"
+      class="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-l-4 border-red-500 p-5 mb-6 rounded-xl shadow-sm"
     >
-      <div class="flex items-start">
-        <span class="material-icons-outlined text-red-600 dark:text-red-400 mr-3 mt-0.5">warning</span>
+      <div class="flex items-start gap-4">
+        <div class="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg">
+          <span class="material-icons-outlined text-red-600 dark:text-red-400 text-2xl">warning</span>
+        </div>
         <div class="flex-1">
-          <h3 class="text-lg font-bold text-red-800 dark:text-red-300 mb-1">
-            ⚠️ Clearance Required: {{ resignedWithPendingItems.length }} Resigned {{ resignedWithPendingItems.length === 1 ? 'User' : 'Users' }} with Pending Items
+          <h3 class="text-lg font-bold text-red-800 dark:text-red-300 mb-1.5">
+            Clearance Required: {{ resignedWithPendingItems.length }} Resigned {{ resignedWithPendingItems.length === 1 ? 'User' : 'Users' }} with Pending Items
           </h3>
-          <p class="text-sm text-red-700 dark:text-red-400 mb-2">
+          <p class="text-sm text-red-700 dark:text-red-400 mb-3">
             The following resigned users still have items issued to them. Please complete their clearance by returning or reassigning all items.
           </p>
-          <div class="flex flex-wrap gap-2 mt-3">
+          <div class="flex flex-wrap gap-2">
             <button
               v-for="person in resignedWithPendingItems"
               :key="`${person.type}-${person.id}`"
               @click="openClearanceModal(person)"
-              class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg font-medium transition-colors"
+              class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 hover:shadow-md transform hover:scale-105"
             >
               {{ person.fullname }} ({{ person.pending_items_count }} {{ person.pending_items_count === 1 ? 'item' : 'items' }})
             </button>
@@ -51,21 +53,28 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 mb-6">
-      <div class="flex flex-wrap gap-4 items-center">
-        <div class="flex-1 min-w-[200px]">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search by name or user code..."
-            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
-          />
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700/50 p-5 mb-6 backdrop-blur-sm">
+      <div class="flex flex-wrap gap-4 items-end">
+        <div class="flex-1 min-w-[250px]">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Search</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500">
+              <span class="material-icons-outlined text-lg">search</span>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search by name or user code..."
+              class="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700/50 dark:text-white transition-all duration-200"
+            />
+          </div>
         </div>
-        <div>
+        <div class="min-w-[180px]">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Status</label>
           <select
             v-model="statusFilter"
             @change="currentPage = 1"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700/50 dark:text-white transition-all duration-200 appearance-none bg-white dark:bg-gray-700/50"
           >
             <option value="all">All Status</option>
             <option value="ACTIVE">Active</option>
@@ -73,11 +82,12 @@
             <option value="RESIGNED">Resigned</option>
           </select>
         </div>
-        <div>
+        <div class="min-w-[150px]">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Per Page</label>
           <select
             v-model="itemsPerPage"
             @change="currentPage = 1"
-            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700/50 dark:text-white transition-all duration-200 appearance-none bg-white dark:bg-gray-700/50"
           >
             <option :value="10">10 per page</option>
             <option :value="25">25 per page</option>
@@ -89,126 +99,114 @@
     </div>
 
     <!-- Personnel Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700/50 overflow-hidden">
+      <div class="responsive-table-wrapper">
+        <table class="min-w-full divide-y divide-gray-200/50 dark:divide-gray-700/50">
+          <thead class="bg-gradient-to-r from-gray-50 via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700/50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User Code</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pending Items</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Name</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider hide-mobile">User Code</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Status</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Pending Items</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider hide-mobile">Unit/Sections</th>
+              <th class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 text-left text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200/50 dark:divide-gray-700/50">
             <tr
               v-for="personnel in paginatedPersonnel"
               :key="`${personnel.type}-${personnel.id}`"
               :class="{
-                'bg-red-50 dark:bg-red-900/20': personnel.status === 'RESIGNED',
-                'hover:bg-gray-50 dark:hover:bg-gray-700': true
+                'bg-red-50/50 dark:bg-red-900/10 border-l-4 border-red-500': personnel.status === 'RESIGNED',
+                'hover:bg-gray-50/80 dark:hover:bg-gray-700/50 transition-colors duration-150': true
               }"
             >
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <img
-                    :src="personnel.image || '/images/default-avatar.png'"
-                    class="h-10 w-10 rounded-full mr-3"
-                    :alt="personnel.fullname"
-                  />
-                  <div>
-                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5">
+                <div class="flex items-center min-w-0">
+                  <div class="relative flex-shrink-0">
+                    <img
+                      :src="personnel.image || '/images/default-avatar.png'"
+                      class="h-8 w-8 sm:h-10 sm:w-10 md:h-11 md:w-11 rounded-full mr-2 sm:mr-3 md:mr-4 ring-2 ring-gray-200 dark:ring-gray-700 object-cover"
+                      :alt="personnel.fullname"
+                    />
+                    <span
+                      v-if="personnel.status === 'ACTIVE'"
+                      class="absolute bottom-0 right-1 sm:right-2 md:right-3 w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"
+                    ></span>
+                    <span
+                      v-else-if="personnel.status === 'RESIGNED'"
+                      class="absolute bottom-0 right-1 sm:right-2 md:right-3 w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"
+                    ></span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">
                       {{ personnel.fullname }}
                     </div>
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ personnel.email }}
+                    <div class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                      {{ personnel.email || 'No email' }}
                     </div>
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm font-mono text-gray-900 dark:text-white">
-                  {{ personnel.code || personnel.user_code || personnel.personnel_code || 'N/A' }}
-                </span>
-                <span v-if="personnel.type === 'PERSONNEL'" class="ml-2 text-xs text-emerald-600 dark:text-emerald-400">
-                  (Personnel)
-                </span>
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5 whitespace-nowrap hide-mobile">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs sm:text-sm font-mono font-medium text-gray-900 dark:text-white">
+                    {{ personnel.code || personnel.user_code || personnel.personnel_code || 'N/A' }}
+                  </span>
+                  <span v-if="personnel.type === 'PERSONNEL'" class="px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded">
+                    Personnel
+                  </span>
+                </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5 whitespace-nowrap">
                 <span
                   :class="{
-                    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': personnel.status === 'ACTIVE',
-                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': personnel.status === 'INACTIVE',
-                    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': personnel.status === 'RESIGNED'
+                    'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border border-green-200 dark:border-green-800': personnel.status === 'ACTIVE',
+                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800': personnel.status === 'INACTIVE',
+                    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800': personnel.status === 'RESIGNED'
                   }"
-                  class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                  class="px-2 sm:px-3 py-0.5 sm:py-1 inline-flex text-[10px] sm:text-xs leading-5 font-bold rounded-full shadow-sm"
                 >
                   {{ personnel.status }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center gap-2">
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5 whitespace-nowrap">
+                <div class="flex items-center gap-1.5 sm:gap-2">
                   <span
                     v-if="personnel.pending_items_count > 0"
                     :class="{
-                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': personnel.status === 'RESIGNED',
-                      'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200': personnel.status !== 'RESIGNED'
+                      'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800': personnel.status === 'RESIGNED',
+                      'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-200 dark:border-orange-800': personnel.status !== 'RESIGNED'
                     }"
-                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                    class="px-2 sm:px-2.5 py-0.5 sm:py-1 inline-flex items-center justify-center text-[10px] sm:text-xs font-bold rounded-full min-w-[20px] sm:min-w-[24px] shadow-sm"
                   >
                     {{ personnel.pending_items_count }}
                   </span>
-                  <span v-else class="text-sm text-gray-500 dark:text-gray-400">0</span>
+                  <span v-else class="text-xs sm:text-sm text-gray-400 dark:text-gray-500 font-medium">0</span>
                   <span
                     v-if="personnel.status === 'RESIGNED' && personnel.pending_items_count > 0"
-                    class="material-icons-outlined text-red-600 dark:text-red-400 text-sm"
+                    class="material-icons-outlined text-red-600 dark:text-red-400 text-sm sm:text-base animate-pulse"
                     title="Resigned user with pending items - Clearance required!"
                   >
                     warning
                   </span>
                 </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {{ personnel.location || 'N/A' }}
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5 whitespace-nowrap hide-mobile">
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                  <span class="material-icons-outlined text-xs sm:text-sm text-gray-400 dark:text-gray-500">location_on</span>
+                  <span class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px] sm:max-w-none">{{ personnel.location || 'N/A' }}</span>
+                </div>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-5 whitespace-nowrap">
                 <button
                   @click="openIssuedItemsModal(personnel)"
-                  class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors duration-200 hover:underline"
-                  title="View all issued items"
+                  class="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-all duration-200 hover:shadow-sm"
+                  title="View all issued items, generate report, clearance, and mark as resigned"
                 >
-                  View Items
-                </button>
-                <button
-                  v-if="personnel.type === 'USER'"
-                  @click="generateAccountabilityReport(personnel)"
-                  class="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-4 font-medium transition-colors"
-                  title="Generate accountability report"
-                >
-                  <span class="material-icons-outlined text-sm align-middle mr-1">description</span>
-                  Report
-                </button>
-                <button
-                  v-if="personnel.pending_items_count > 0"
-                  @click="openClearanceModal(personnel)"
-                  :class="{
-                    'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 font-bold': personnel.status === 'RESIGNED',
-                    'text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300': personnel.status !== 'RESIGNED'
-                  }"
-                  class="mr-4"
-                  :title="personnel.status === 'RESIGNED' ? 'URGENT: Clearance required for resigned user!' : 'Clear pending items'"
-                >
-                  {{ personnel.status === 'RESIGNED' ? '⚠️ Clearance Required' : 'Clearance' }}
-                </button>
-                <button
-                  v-if="personnel.type === 'USER' && personnel.status !== 'RESIGNED'"
-                  @click="markAsResigned(personnel)"
-                  class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                  :disabled="processingResignation === personnel.id"
-                >
-                  {{ processingResignation === personnel.id ? 'Processing...' : 'Mark as Resigned' }}
+                  <span class="material-icons-outlined text-sm sm:text-base">visibility</span>
+                  <span class="hidden sm:inline">View Items</span>
+                  <span class="sm:hidden">View</span>
                 </button>
               </td>
             </tr>
@@ -217,47 +215,47 @@
       </div>
       
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6">
+      <div v-if="totalPages > 1" class="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700/50">
         <div class="flex-1 flex justify-between sm:hidden">
           <button
             @click="currentPage = Math.max(1, currentPage - 1)"
             :disabled="currentPage === 1"
-            class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           >
             Previous
           </button>
           <button
             @click="currentPage = Math.min(totalPages, currentPage + 1)"
             :disabled="currentPage === totalPages"
-            class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           >
             Next
           </button>
         </div>
         <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
           <div>
-            <p class="text-sm text-gray-700 dark:text-gray-300">
-              Showing <span class="font-medium">{{ paginationInfo.start }}</span> to <span class="font-medium">{{ paginationInfo.end }}</span> of <span class="font-medium">{{ paginationInfo.total }}</span> results
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Showing <span class="font-bold text-gray-900 dark:text-white">{{ paginationInfo.start }}</span> to <span class="font-bold text-gray-900 dark:text-white">{{ paginationInfo.end }}</span> of <span class="font-bold text-gray-900 dark:text-white">{{ paginationInfo.total }}</span> results
             </p>
           </div>
           <div>
-            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            <nav class="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
               <button
                 @click="currentPage = Math.max(1, currentPage - 1)"
                 :disabled="currentPage === 1"
-                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="relative inline-flex items-center px-3 py-2 rounded-l-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
-                <span class="material-icons-outlined text-sm">chevron_left</span>
+                <span class="material-icons-outlined text-base">chevron_left</span>
               </button>
               <template v-for="page in totalPages" :key="page">
                 <button
                   v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
                   @click="currentPage = page"
                   :class="{
-                    'z-10 bg-emerald-50 dark:bg-emerald-900 border-emerald-500 dark:border-emerald-400 text-emerald-600 dark:text-emerald-300': currentPage === page,
-                    'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600': currentPage !== page
+                    'z-10 bg-emerald-600 text-white border-emerald-600 shadow-md': currentPage === page,
+                    'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600': currentPage !== page
                   }"
-                  class="relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                  class="relative inline-flex items-center px-4 py-2 border text-sm font-semibold transition-all duration-200"
                 >
                   {{ page }}
                 </button>
@@ -271,9 +269,9 @@
               <button
                 @click="currentPage = Math.min(totalPages, currentPage + 1)"
                 :disabled="currentPage === totalPages"
-                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="relative inline-flex items-center px-3 py-2 rounded-r-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
-                <span class="material-icons-outlined text-sm">chevron_right</span>
+                <span class="material-icons-outlined text-base">chevron_right</span>
               </button>
             </nav>
           </div>
@@ -281,8 +279,14 @@
       </div>
       
       <!-- Empty State -->
-      <div v-if="filteredPersonnel.length === 0" class="text-center py-12">
-        <p class="text-gray-500 dark:text-gray-400">No personnel found</p>
+      <div v-if="filteredPersonnel.length === 0" class="text-center py-16">
+        <div class="flex flex-col items-center">
+          <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
+            <span class="material-icons-outlined text-4xl text-gray-400 dark:text-gray-500">person_search</span>
+          </div>
+          <p class="text-lg font-semibold text-gray-600 dark:text-gray-400">No personnel found</p>
+          <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">Try adjusting your search or filters</p>
+        </div>
       </div>
     </div>
 
@@ -618,7 +622,7 @@
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-gray-200 dark:border-gray-700">
           <div class="flex justify-between items-center">
-            <div>
+            <div class="flex-1">
               <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                 Issued Items for {{ selectedPersonnel?.fullname }} ({{ selectedPersonnel?.code || selectedPersonnel?.user_code || selectedPersonnel?.personnel_code }})
               </h2>
@@ -630,12 +634,45 @@
                 Damaged: {{ allIssuedItems.filter(i => i.status === 'DAMAGED').length }}
               </p>
             </div>
-            <button
-              @click="closeIssuedItemsModal"
-              class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              <span class="material-icons-outlined">close</span>
-            </button>
+            <div class="flex items-center gap-2 ml-4">
+              <button
+                @click="generateAccountabilityReport(selectedPersonnel)"
+                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                title="Generate accountability report"
+              >
+                <span class="material-icons-outlined text-sm">description</span>
+                <span>Generate Report</span>
+              </button>
+              <button
+                v-if="selectedPersonnel?.pending_items_count > 0"
+                @click="openClearanceModal(selectedPersonnel)"
+                :class="{
+                  'bg-red-600 hover:bg-red-700': selectedPersonnel?.status === 'RESIGNED',
+                  'bg-orange-600 hover:bg-orange-700': selectedPersonnel?.status !== 'RESIGNED'
+                }"
+                class="px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                :title="selectedPersonnel?.status === 'RESIGNED' ? 'URGENT: Clearance required!' : 'Clear pending items'"
+              >
+                <span class="material-icons-outlined text-sm">check_circle</span>
+                <span>{{ selectedPersonnel?.status === 'RESIGNED' ? '⚠️ Clearance' : 'Clearance' }}</span>
+              </button>
+              <button
+                v-if="selectedPersonnel?.status !== 'RESIGNED'"
+                @click="markAsResigned(selectedPersonnel)"
+                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                :disabled="processingResignation === selectedPersonnel?.id"
+                title="Mark as resigned"
+              >
+                <span class="material-icons-outlined text-sm">person_remove</span>
+                <span>{{ processingResignation === selectedPersonnel?.id ? 'Processing...' : 'Mark as Resigned' }}</span>
+              </button>
+              <button
+                @click="closeIssuedItemsModal"
+                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2"
+              >
+                <span class="material-icons-outlined">close</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="p-6">
@@ -1262,21 +1299,26 @@ const openBulkReassignModal = () => {
 }
 
 const markAsResigned = async (person) => {
-  // Only users with accounts can be marked as resigned
-  if (person.type === 'PERSONNEL') {
-    showMessage('Personnel without accounts cannot be marked as resigned. Remove them from the location instead.', 'error')
-    return
-  }
-  
   if (!confirm(`Are you sure you want to mark ${person.fullname} as resigned?`)) {
     return
   }
 
   processingResignation.value = person.id
   try {
-    const response = await axiosClient.post(`/users/${person.id}/mark-resigned`)
+    let response
+    if (person.type === 'USER') {
+      // Mark user as resigned
+      response = await axiosClient.post(`/users/${person.id}/mark-resigned`)
+    } else if (person.type === 'PERSONNEL') {
+      // Mark personnel as resigned (clear personnel from location)
+      response = await axiosClient.post(`/locations/${person.id}/mark-personnel-resigned`)
+    } else {
+      showMessage('Invalid personnel type', 'error')
+      return
+    }
+    
     if (response.data.success) {
-      showMessage('User marked as resigned successfully', 'success')
+      showMessage(`${person.type === 'USER' ? 'User' : 'Personnel'} marked as resigned successfully`, 'success')
       await fetchPersonnel()
     }
   } catch (error) {
@@ -1796,14 +1838,27 @@ const showMessage = (msg, type = 'success') => {
 
 // Generate accountability report (PDF)
 const generateAccountabilityReport = async (personnel) => {
-  if (!personnel || personnel.type !== 'USER') {
-    showMessage('Accountability report is only available for user accounts', 'error')
+  if (!personnel) {
+    showMessage('Personnel information is missing', 'error')
     return
   }
   
   try {
+    let endpoint
+    let code = personnel.user_code || personnel.code || personnel.personnel_code || 'N/A'
+    
+    // Use different endpoints based on personnel type
+    if (personnel.type === 'USER') {
+      endpoint = `/memorandum-receipts/accountability-report/user/${personnel.id}`
+    } else if (personnel.type === 'PERSONNEL') {
+      endpoint = `/memorandum-receipts/accountability-report/personnel/${personnel.id}`
+    } else {
+      showMessage('Invalid personnel type', 'error')
+      return
+    }
+    
     // Request PDF format
-    const response = await axiosClient.get(`/memorandum-receipts/accountability-report/user/${personnel.id}`, {
+    const response = await axiosClient.get(endpoint, {
       params: { format: 'pdf' },
       responseType: 'blob' // Important for PDF download
     })
@@ -1813,7 +1868,7 @@ const generateAccountabilityReport = async (personnel) => {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `Accountability_Report_${personnel.user_code || personnel.code}_${new Date().toISOString().split('T')[0]}.pdf`
+    link.download = `Accountability_Report_${code}_${new Date().toISOString().split('T')[0]}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

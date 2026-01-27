@@ -60,10 +60,14 @@ class ItemController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // Get all non-deleted items with all necessary relationships
+            // Pagination parameters
+            $perPage = $request->get('per_page', 50); // Default 50 items per page
+            $page = $request->get('page', 1);
+            
+            // Get paginated non-deleted items with all necessary relationships
             $items = Item::with([
                 'qrCode',
                 'category',
@@ -73,8 +77,20 @@ class ItemController extends Controller
                 'user',
                 'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
                 'latestMemorandumReceipt.issuedToLocation'
-            ])->get();
-            return new ItemCollection($items);
+            ])->paginate($perPage, ['*'], 'page', $page);
+            
+            return response()->json([
+                'success' => true,
+                'data' => new ItemCollection($items->items()),
+                'pagination' => [
+                    'current_page' => $items->currentPage(),
+                    'last_page' => $items->lastPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                    'from' => $items->firstItem(),
+                    'to' => $items->lastItem(),
+                ]
+            ]);
         } catch (\Exception $e) {
             \Log::error('Error fetching items: ' . $e->getMessage());
             return response()->json([
@@ -87,10 +103,14 @@ class ItemController extends Controller
     /**
      * Get active (non-deleted) items
      */
-    public function getActiveItems()
+    public function getActiveItems(Request $request)
     {
         try {
-            // Get all items with all necessary relationships
+            // Pagination parameters
+            $perPage = $request->get('per_page', 50); // Default 50 items per page
+            $page = $request->get('page', 1);
+            
+            // Get paginated items with all necessary relationships
             $items = Item::with([
                 'qrCode',
                 'category',
@@ -100,12 +120,20 @@ class ItemController extends Controller
                 'user',
                 'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
                 'latestMemorandumReceipt.issuedToLocation'
-            ])->get();
+            ])->paginate($perPage, ['*'], 'page', $page);
             
             return response()->json([
                 'message' => 'Active items retrieved successfully',
                 'status' => 'success',
-                'data' => ItemResource::collection($items)
+                'data' => ItemResource::collection($items->items()),
+                'pagination' => [
+                    'current_page' => $items->currentPage(),
+                    'last_page' => $items->lastPage(),
+                    'per_page' => $items->perPage(),
+                    'total' => $items->total(),
+                    'from' => $items->firstItem(),
+                    'to' => $items->lastItem(),
+                ]
             ], 200);
         } catch (\Exception $e) {
             \Log::error('Error retrieving active items: ' . $e->getMessage());

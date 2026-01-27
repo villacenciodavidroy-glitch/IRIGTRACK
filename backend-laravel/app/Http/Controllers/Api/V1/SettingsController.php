@@ -40,23 +40,54 @@ class SettingsController extends Controller
 
         try {
             $file = $request->file('logo');
+            
+            if (!$file || !$file->isValid()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid file uploaded.',
+                ], 422);
+            }
+
             $path = Logo::STORAGE_PATH;
 
-            $file->storeAs('', $path, 'public');
+            // Ensure the public disk exists and is accessible
+            if (!Storage::disk('public')->exists('')) {
+                Storage::disk('public')->makeDirectory('');
+            }
+
+            // Store the file
+            $stored = $file->storeAs('', $path, 'public');
+
+            if (!$stored) {
+                throw new \Exception('Failed to store logo file.');
+            }
+
+            // Verify the file was stored
+            if (!Storage::disk('public')->exists($path)) {
+                throw new \Exception('Logo file was not found after storage.');
+            }
 
             Log::info('Logo updated by user ID: ' . ($request->user()?->id ?? 'unknown'));
+
+            // Get the URL with cache-busting parameter
+            $logoUrl = Logo::url();
+            $separator = strpos($logoUrl, '?') !== false ? '&' : '?';
+            $logoUrlWithCache = $logoUrl . $separator . 't=' . time();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Logo updated successfully.',
-                'url' => Logo::url(),
+                'url' => $logoUrlWithCache,
                 'has_custom' => true,
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('Logo upload failed: ' . $e->getMessage());
+            Log::error('Logo upload stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update logo. Please try again.',
+                'message' => 'Failed to update logo: ' . $e->getMessage(),
             ], 500);
         }
     }

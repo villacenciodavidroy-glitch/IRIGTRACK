@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/memorandum-receipts/formalize/user/{userId}', [MemorandumReceiptController::class, 'formalizeItemsForUser'])->middleware('admin');
     Route::get('/memorandum-receipts/audit-trail/{userCode}', [MemorandumReceiptController::class, 'getAuditTrailByUserCode'])->middleware('admin');
     Route::get('/memorandum-receipts/accountability-report/user/{userId}', [MemorandumReceiptController::class, 'getAccountabilityReport'])->middleware('admin');
+    Route::get('/memorandum-receipts/accountability-report/personnel/{locationId}', [MemorandumReceiptController::class, 'getAccountabilityReportForPersonnel'])->middleware('admin');
     Route::post('/memorandum-receipts/clearance/user/{userId}', [MemorandumReceiptController::class, 'processClearanceWithStatus'])->middleware('admin');
     Route::get('/memorandum-receipts/returned/available-for-reissue', [MemorandumReceiptController::class, 'getReturnedItemsAvailableForReissue'])->middleware('admin');
     Route::post('/memorandum-receipts/{mrId}/reissue', [MemorandumReceiptController::class, 'reissueItem'])->middleware('admin');
@@ -122,8 +123,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/statistics', [NotificationController::class, 'statistics']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+    Route::post('/notifications/item-misplaced', [NotificationController::class, 'reportMisplacedItem']);
     Route::post('/notifications/delete-multiple', [NotificationController::class, 'deleteMultiple']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
     
     // Usage analytics - authenticated users
     Route::get('/usage/quarterly', [UsageController::class, 'getQuarterlyUsage']);
@@ -250,6 +252,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::get('locations/admins', [LocationController::class, 'getAdminLocations']);
         Route::post('locations', [LocationController::class, 'store'])->middleware('admin');
         Route::put('locations/{id}', [LocationController::class, 'update'])->middleware('admin');
+        Route::post('locations/{id}/mark-personnel-resigned', [LocationController::class, 'markPersonnelAsResigned'])->middleware('admin');
         Route::delete('locations/{id}', [LocationController::class, 'destroy'])->middleware('admin');
 
         // Users - admin only for management
@@ -281,6 +284,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::post('memorandum-receipts/formalize/user/{userId}', [MemorandumReceiptController::class, 'formalizeItemsForUser'])->middleware('admin');
         Route::get('memorandum-receipts/audit-trail/{userCode}', [MemorandumReceiptController::class, 'getAuditTrailByUserCode'])->middleware('admin');
         Route::get('memorandum-receipts/accountability-report/user/{userId}', [MemorandumReceiptController::class, 'getAccountabilityReport'])->middleware('admin');
+        Route::get('memorandum-receipts/accountability-report/personnel/{locationId}', [MemorandumReceiptController::class, 'getAccountabilityReportForPersonnel'])->middleware('admin');
         Route::post('memorandum-receipts/clearance/user/{userId}', [MemorandumReceiptController::class, 'processClearanceWithStatus'])->middleware('admin');
         
         // Memorandum Receipts (MR) - authenticated users can view their own items
@@ -315,8 +319,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::get('notifications/statistics', [NotificationController::class, 'statistics']);
         Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::put('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-        Route::delete('notifications/{id}', [NotificationController::class, 'destroy']);
+        Route::post('notifications/item-misplaced', [NotificationController::class, 'reportMisplacedItem']);
         Route::post('notifications/delete-multiple', [NotificationController::class, 'deleteMultiple']);
+        Route::delete('notifications/{id}', [NotificationController::class, 'destroy']);
 
         // USAGE ANALYTICS - authenticated users
         Route::get('usage/quarterly', [UsageController::class, 'getQuarterlyUsage']);

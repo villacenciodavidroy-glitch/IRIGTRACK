@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Item;
 use App\Models\Notification;
 use App\Models\Category;
+use App\Events\NotificationCreated;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -85,6 +86,13 @@ class CheckLowStockJob implements ShouldQueue
                     ]);
 
                     if ($notification && $notification->notification_id) {
+                        // Load relationships for broadcast
+                        $notification->refresh();
+                        $notification->load('item');
+                        
+                        // Broadcast notification event for real-time updates
+                        event(new NotificationCreated($notification));
+                        
                         Log::info("Created low stock notification for item: {$item->unit} (ID: {$item->id}, Quantity: {$item->quantity})");
                     }
                 } catch (\Exception $e) {

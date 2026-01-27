@@ -295,4 +295,119 @@ class NotificationController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Report a misplaced item
+     */
+    public function reportMisplacedItem(Request $request): JsonResponse
+    {
+        try {
+            // Validate input - accept item_id as string (for UUID) or numeric (for integer ID)
+            $request->validate([
+                'item_id' => 'nullable|string',
+                'uuid' => 'nullable|string|exists:items,uuid',
+                'remarks' => 'nullable|string|max:1000',
+                'location' => 'nullable|string|max:255',
+                'found_location' => 'nullable|string|max:255', // Alternative field name from mobile app
+                'notes' => 'nullable|string|max:1000', // Alternative field name from mobile app
+            ]);
+
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Find item by either ID or UUID
+            // The mobile app may send UUID in item_id field, so we need to detect that
+            $item = null;
+            $itemIdentifier = $request->input('item_id') ?? $request->input('uuid');
+            
+            if (!$itemIdentifier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Either item_id or uuid is required'
+                ], 422);
+            }
+
+            // Check if item_id looks like a UUID (contains hyphens) or is numeric
+            if (strpos($itemIdentifier, '-') !== false || preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $itemIdentifier)) {
+                // It's a UUID - look up by UUID
+                $item = \App\Models\Item::where('uuid', $itemIdentifier)->first();
+                
+                if (!$item) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Item not found with the provided UUID'
+                    ], 404);
+                }
+            } elseif (is_numeric($itemIdentifier)) {
+                // It's a numeric ID - look up by ID
+                $item = \App\Models\Item::find((int)$itemIdentifier);
+                
+                if (!$item) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Item not found with the provided item_id'
+                    ], 404);
+                }
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid item_id format. Must be a UUID or numeric ID.'
+                ], 422);
+            }
+
+            // Build notification message
+            $itemName = $item->unit ?? $item->description ?? 'Unknown Item';
+            $reporterName = $user->fullname ?? $user->user_code ?? $user->email ?? 'Unknown User';
+            
+            // Support both field name variations (location/found_location, remarks/notes)
+            $location = $request->input('location') ?? $request->input('found_location');
+            $remarks = $request->input('remarks') ?? $request->input('notes');
+            
+            $locationInfo = $location ? " at {$location}" : '';
+            $remarksInfo = $remarks ? " Remarks: {$remarks}" : '';
+            
+            $notificationMessage = "⚠️ Item '{$itemName}' has been reported as misplaced by {$reporterName}{$locationInfo}.{$remarksInfo}";
+
+            // Create notification
+            $notification = Notification::create([
+                'item_id' => $item->id,
+                'message' => $notificationMessage,
+                'type' => 'item_misplaced',
+                'is_read' => false,
+            ]);
+
+            // Broadcast notification to admins
+            if ($notification && $notification->notification_id) {
+                $notification->refresh();
+                $notification->load(['item']);
+                event(new \App\Events\NotificationCreated($notification));
+                \Log::info("Created misplaced item notification: ID {$notification->notification_id}, Item: {$itemName}, Reporter: {$reporterName}");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Misplaced item reported successfully',
+                'data' => new NotificationResource($notification)
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error reporting misplaced item: ' . $e->getMessage());
+            \Log::error('Exception trace: ' . $e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to report misplaced item: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

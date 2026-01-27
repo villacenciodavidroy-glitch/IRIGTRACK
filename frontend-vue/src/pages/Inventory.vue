@@ -5,6 +5,7 @@ import useItems from '../composables/useItems'
 import useAuth from '../composables/useAuth'
 import useLocations from '../composables/useLocations'
 import useUsers from '../composables/useUsers'
+import useFormLabels from '../composables/useFormLabels'
 import axiosClient from '../axios'
 import SuccessModal from '../components/SuccessModal.vue'
 import { useDebouncedRef } from '../composables/useDebounce'
@@ -21,6 +22,9 @@ const showReturnedItems = ref(false)
 const returnedItems = ref([])
 const loadingReturnedItems = ref(false)
 
+// Form labels
+const { fetchLabels, getLabel } = useFormLabels()
+
 // Reissue modal state
 const showReissueModal = ref(false)
 const selectedItemForReissue = ref(null)
@@ -35,7 +39,7 @@ const { locations, fetchLocations } = useLocations()
 const { users, fetchusers } = useUsers()
 
 // Get items from the API using the composable
-const { items, fetchitems, loading, error } = useItems()
+const { items, fetchitems, loading, error, totalItems: itemsTotal } = useItems()
 
 // Get auth composable for admin check
 const { isAdmin, fetchCurrentUser } = useAuth()
@@ -75,11 +79,15 @@ onMounted(async () => {
   // Fetch current user for admin check
   await fetchCurrentUser()
   
+  // Fetch form labels
+  await fetchLabels()
+  
   // Check if user should be redirected
   const redirected = await checkUserRole()
   if (redirected) return
   
-  await fetchitems()
+  // Fetch all items (or a large number) for proper filtering and counting
+  await fetchitems(false, 10000)
   
   // Set up real-time listener - try multiple times until connected
   const setupRealtimeListener = () => {
@@ -346,7 +354,7 @@ const handleItemBorrowedUpdate = (data) => {
       } else {
         // Refresh the items list to get the latest data
         console.log('🔄 Item not found - refreshing items list...')
-        fetchitems().then(() => {
+        fetchitems(false, 10000).then(() => {
           console.log('✅ Items list refreshed after borrow event')
         })
       }
@@ -706,6 +714,20 @@ const closeQrPreviewModal = () => {
   selectedQrItem.value = null
 }
 
+// View Details Modal
+const showViewDetailsModal = ref(false)
+const selectedViewItem = ref(null)
+
+const openViewDetailsModal = (item) => {
+  selectedViewItem.value = item
+  showViewDetailsModal.value = true
+}
+
+const closeViewDetailsModal = () => {
+  showViewDetailsModal.value = false
+  selectedViewItem.value = null
+}
+
 // Print QR code
 const printQrCode = () => {
   if (!selectedQrItem.value) return
@@ -1021,7 +1043,7 @@ const deleteItem = async () => {
     showSuccessModal.value = true
     
     // Refresh the items list
-    await fetchitems()
+    await fetchitems(false, 10000)
   } catch (error) {
     // Log detailed error information
     console.error('Error deleting item:', error)
@@ -1068,14 +1090,6 @@ const closeSuccessModal = () => {
             </div>
           </div>
           <div v-if="isAdmin()" class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-            <button @click="goToCategories" class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center">
-              <span class="material-icons-outlined text-lg mr-1.5">category</span>
-              <span>Categories</span>
-            </button>
-            <button @click="goToLocations" class="btn-secondary-enhanced flex-1 sm:flex-auto justify-center">
-              <span class="material-icons-outlined text-lg mr-1.5">location_on</span>
-              <span>Unit/Sections</span>
-            </button>
             <button @click="goToAddItem" class="btn-primary-enhanced flex-1 sm:flex-auto justify-center shadow-lg">
               <span class="material-icons-outlined text-lg mr-1.5">add_circle</span>
               <span>Add New Item</span>
@@ -1138,7 +1152,7 @@ const closeSuccessModal = () => {
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Item</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Serial Number</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Model</th>
-                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Category</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{{ getLabel('category', 'Category') }}</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Previous Assignee</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Returned Date</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
@@ -1385,13 +1399,13 @@ const closeSuccessModal = () => {
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
       <!-- Total Items - Hidden for Supply role -->
       <div v-if="!isSupplyRole" class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Total Items</p>
-            <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ totalFilteredItems }}</p>
+            <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ itemsTotal || totalFilteredItems }}</p>
           </div>
           <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
             <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">inventory</span>
@@ -1407,17 +1421,6 @@ const closeSuccessModal = () => {
           </div>
           <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
             <span class="material-icons-outlined text-blue-400 dark:text-blue-400 text-2xl">local_shipping</span>
-          </div>
-        </div>
-      </div>
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Current Page</p>
-            <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ currentPage }} / {{ totalPages || 1 }}</p>
-          </div>
-          <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-            <span class="material-icons-outlined text-purple-400 dark:text-purple-400 text-2xl">description</span>
           </div>
         </div>
       </div>
@@ -1584,7 +1587,7 @@ const closeSuccessModal = () => {
                 </div>
                 <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 line-clamp-2 mb-2">{{ item.description }}</p>
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="px-2 py-0.5 text-sm font-semibold rounded-full" style="background-color: #01200E; color: #FFFFFF;">{{ item.category }}</span>
+                  <span class="px-2 py-0.5 text-sm font-semibold rounded-full bg-gray-800 dark:bg-gray-700 text-white">{{ item.category }}</span>
                   <span class="px-2 py-0.5 bg-blue-900 dark:bg-blue-900 text-sm font-semibold rounded-full" style="color: #FFFFFF;">{{ item.condition }}</span>
                   <span v-if="item.conditionStatus" 
                         :class="[
@@ -1651,7 +1654,7 @@ const closeSuccessModal = () => {
       </div>
       
       <!-- Desktop View (Table Layout) -->
-      <div class="hidden sm:block overflow-x-auto">
+      <div class="hidden sm:block responsive-table-wrapper">
         <!-- Loading indicator -->
         <div v-if="loading" class="flex justify-center items-center py-10">
           <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
@@ -1680,161 +1683,127 @@ const closeSuccessModal = () => {
         <table v-else class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
           <thead>
             <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
-              <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 w-12 px-4 py-4 border-r border-gray-300 dark:border-gray-600">
-                <input type="checkbox" class="w-4 h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
+              <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 w-12 px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 border-r border-gray-300 dark:border-gray-600">
+                <input type="checkbox" class="w-3 h-3 sm:w-4 sm:h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
               </th>
-              <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
-              <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">IMAGE</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ARTICLE</th>
-              <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">SERIAL NUMBER</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">MODEL</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CATEGORY</th>
-              <th class="min-w-[220px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DESCRIPTION</th>
-              <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QUANTITY</th>
-              <th class="min-w-[180px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">PROPERTY ACCOUNT CODE</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT VALUE</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DATE ACQUIRED</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">P.O. NUMBER</th>
-              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT/SECTIONS</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CONDITION</th>
-              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">STATUS</th>
-              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ISSUED TO</th>
-              <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
+              <th class="min-w-[90px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
+              <th class="min-w-[130px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
+              <th class="min-w-[150px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('serial_number', 'SERIAL NUMBER') }}</th>
+              <th class="min-w-[130px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('model', 'MODEL') }}</th>
+              <th class="min-w-[220px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('description', 'DESCRIPTION') }}</th>
+              <th class="min-w-[180px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('property_account_code', 'PROPERTY ACCOUNT CODE') }}</th>
+              <th class="min-w-[130px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
+              <th class="min-w-[130px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('po_number', 'P.O. NUMBER') }}</th>
+              <th class="min-w-[160px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('unit_sections', 'UNIT/SECTIONS') }}</th>
+              <th class="min-w-[130px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CONDITION</th>
+              <th class="min-w-[160px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600 hide-mobile">{{ getLabel('issued_to', 'ISSUED TO') }}</th>
+              <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-700 min-w-[120px] px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-for="(item, index) in paginatedItems" :key="item.id || item.propertyAccountCode" 
                 class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-green-500">
-              <td class="sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+              <td class="sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600">
                 <input type="checkbox" class="w-4 h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600">
                 <div 
-                  class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-1 bg-gray-50 dark:bg-gray-700"
+                  class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-0.5 sm:p-1 bg-gray-50 dark:bg-gray-700"
                   @click="openQrPreviewModal(item)"
                   title="View QR Code"
                 >
-                  <img :src="item.qrCode" alt="QR Code" class="h-10 w-10 object-contain">
+                  <img :src="item.qrCode" alt="QR Code" class="h-8 w-8 sm:h-10 sm:w-10 object-contain">
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gray-50 dark:bg-gray-700">
-                  <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded">
-                </div>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[130px]" :title="item.article">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-xs sm:text-sm md:text-base font-semibold text-gray-900 dark:text-white truncate max-w-[100px] sm:max-w-[130px]" :title="item.article">
                   {{ item.article }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]" :title="item.serialNumber">
-                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">qr_code_2</span>
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px] sm:max-w-[150px]" :title="item.serialNumber">
+                  <span class="material-icons-outlined text-[10px] sm:text-xs align-middle mr-0.5 sm:mr-1 text-gray-500 dark:text-gray-400">qr_code_2</span>
                   {{ item.serialNumber }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.model">
-                  <span class="material-icons-outlined text-xs align-middle mr-1 text-gray-500 dark:text-gray-400">devices</span>
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[100px] sm:max-w-[130px]" :title="item.model">
+                  <span class="material-icons-outlined text-[10px] sm:text-xs align-middle mr-0.5 sm:mr-1 text-gray-500 dark:text-gray-400">devices</span>
                   {{ item.model }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">
-                  {{ item.category }}
-                </span>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[220px]" :title="item.description">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm md:text-base text-gray-700 dark:text-gray-300 truncate max-w-[150px] sm:max-w-[220px]" :title="item.description">
                   {{ item.description }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
-                  {{ item.quantity || '0' }}
-                </span>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base font-mono text-gray-700 dark:text-gray-300 truncate max-w-[180px]" :title="item.propertyAccountCode">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm md:text-base font-mono text-gray-700 dark:text-gray-300 truncate max-w-[120px] sm:max-w-[180px]" :title="item.propertyAccountCode">
                   {{ item.propertyAccountCode }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px]" :title="item.unitValue">
-                  {{ item.unitValue }}
-                </div>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base text-gray-600 dark:text-gray-400 truncate max-w-[130px]" :title="item.dateAcquired">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400 truncate max-w-[100px] sm:max-w-[130px]" :title="item.dateAcquired">
                   {{ item.dateAcquired }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base text-gray-600 dark:text-gray-400 truncate max-w-[130px]" :title="item.poNumber">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div class="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400 truncate max-w-[100px] sm:max-w-[130px]" :title="item.poNumber">
                   {{ item.poNumber }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]" :title="item.location">
-                  <span class="material-icons-outlined text-base align-middle mr-1 text-gray-600 dark:text-gray-400">location_on</span>
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600">
+                <div class="text-xs sm:text-sm md:text-base text-gray-700 dark:text-gray-300 truncate max-w-[120px] sm:max-w-[160px]" :title="item.location">
+                  <span class="material-icons-outlined text-xs sm:text-sm md:text-base align-middle mr-0.5 sm:mr-1 text-gray-600 dark:text-gray-400">location_on</span>
                   {{ item.location }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600">
+                <span class="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
                   {{ item.condition }}
                 </span>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span v-if="item.conditionStatus" 
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold',
-                        item.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
-                        item.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
-                        item.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
-                        item.conditionStatus === 'Disposal' ? 'bg-red-600 text-white' :
-                        'bg-gray-600 text-white'
-                      ]">
-                  {{ item.conditionStatus }}
-                </span>
-                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-gray-400 text-white">
-                  N/A
-                </span>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div v-if="item.issuedTo && item.issuedTo !== 'Not Assigned'" class="max-w-[160px]">
-                  <div class="text-base font-bold text-gray-700 dark:text-gray-300">
+              <td class="px-2 sm:px-3 md:px-4 py-2 sm:py-3 border-r border-gray-300 dark:border-gray-600 hide-mobile">
+                <div v-if="item.issuedTo && item.issuedTo !== 'Not Assigned'" class="max-w-[120px] sm:max-w-[160px]">
+                  <div class="text-xs sm:text-sm md:text-base font-bold text-gray-700 dark:text-gray-300 truncate">
                     {{ getIssuedToNamePart(item.issuedTo, 0) }}
                   </div>
-                  <div v-if="getIssuedToNamePart(item.issuedTo, 1)" class="text-base font-bold text-gray-700 dark:text-gray-300">
+                  <div v-if="getIssuedToNamePart(item.issuedTo, 1)" class="text-xs sm:text-sm md:text-base font-bold text-gray-700 dark:text-gray-300 truncate">
                     {{ getIssuedToNamePart(item.issuedTo, 1) }}
                   </div>
-                  <div v-if="item.issued_to_code" class="text-sm text-gray-500 dark:text-gray-400">
+                  <div v-if="item.issued_to_code" class="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">
                     ({{ item.issued_to_code }})
                   </div>
                 </div>
-                <div v-else class="text-base text-gray-500 dark:text-gray-400">
+                <div v-else class="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400">
                   Not Assigned
                 </div>
               </td>
-              <td class="sticky right-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-4 py-3">
-                <div class="flex justify-center gap-2">
+              <td class="sticky right-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-1 sm:px-2 md:px-4 py-2 sm:py-3">
+                <div class="flex justify-center gap-1 sm:gap-2">
+                  <button 
+                    @click="openViewDetailsModal(item)" 
+                    class="p-1 sm:p-1.5 md:p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
+                    title="View details"
+                  >
+                    <span class="material-icons-outlined text-xs sm:text-sm">visibility</span>
+                  </button>
                   <button 
                     @click="editItem(item)" 
                     style="background: linear-gradient(to bottom right, #009832, #007a28);"
-                    class="p-2 rounded-lg text-white hover:opacity-90 shadow-md hover:shadow-lg transition-all duration-200"
+                    class="p-1 sm:p-1.5 md:p-2 rounded-lg text-white hover:opacity-90 shadow-md hover:shadow-lg transition-all duration-200"
                     title="Edit item"
                   >
-                    <span class="material-icons-outlined text-sm">edit</span>
+                    <span class="material-icons-outlined text-xs sm:text-sm">edit</span>
                   </button>
                   <button 
                     @click="openDeleteModal(item)" 
-                    class="p-2 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 shadow-md hover:shadow-lg transition-all duration-200"
+                    class="p-1 sm:p-1.5 md:p-2 rounded-lg bg-gradient-to-br from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 shadow-md hover:shadow-lg transition-all duration-200"
                     title="Delete item"
                     :disabled="deleteLoading && itemBeingDeleted === item.id"
                   >
-                    <span v-if="!(deleteLoading && itemBeingDeleted === item.id)" class="material-icons-outlined text-sm">delete</span>
-                    <span v-else class="material-icons-outlined text-sm animate-spin">refresh</span>
+                    <span v-if="!(deleteLoading && itemBeingDeleted === item.id)" class="material-icons-outlined text-xs sm:text-sm">delete</span>
+                    <span v-else class="material-icons-outlined text-xs sm:text-sm animate-spin">refresh</span>
                   </button>
                 </div>
               </td>
@@ -1848,11 +1817,11 @@ const closeSuccessModal = () => {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div class="flex items-center gap-2">
-              <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-              <span class="text-base font-semibold" style="color: #01200E;">
-                Showing <span class="font-bold" style="color: #01200E;">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
-                <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
-                <span class="font-bold" style="color: #01200E;">{{ totalFilteredItems }}</span> items
+              <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+              <span class="text-base font-semibold text-gray-700 dark:text-gray-300">
+                Showing <span class="font-bold text-gray-900 dark:text-white">{{ (currentPage - 1) * itemsPerPage + 1 }}</span> to 
+                <span class="font-bold text-gray-900 dark:text-white">{{ Math.min(currentPage * itemsPerPage, totalFilteredItems) }}</span> of 
+                <span class="font-bold text-gray-900 dark:text-white">{{ totalFilteredItems }}</span> items
               </span>
             </div>
             <div class="flex items-center gap-2">
@@ -1937,7 +1906,7 @@ const closeSuccessModal = () => {
         </div>
       </div>
 
-      <div class="hidden sm:block overflow-x-auto">
+      <div class="hidden sm:block responsive-table-wrapper">
         <table v-if="paginatedConsumableItems.length" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
           <thead>
             <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700">
@@ -1945,17 +1914,12 @@ const closeSuccessModal = () => {
                 <input type="checkbox" class="w-4 h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
               </th>
               <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
-              <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">IMAGE</th>
-              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ARTICLE</th>
-              <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">SERIAL NUMBER</th>
-              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">MODEL</th>
-              <th class="min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CATEGORY</th>
-              <th class="min-w-[240px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DESCRIPTION</th>
-              <th class="min-w-[100px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QUANTITY</th>
-              <th class="min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT VALUE</th>
-              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DATE ACQUIRED</th>
-              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">UNIT/SECTIONS</th>
-              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">STATUS</th>
+              <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
+              <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('serial_number', 'SERIAL NUMBER') }}</th>
+              <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('model', 'MODEL') }}</th>
+              <th class="min-w-[240px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('description', 'DESCRIPTION') }}</th>
+              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
+              <th class="min-w-[140px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('unit_sections', 'UNIT/SECTIONS') }}</th>
               <th class="sticky right-0 z-10 bg-gray-50 dark:bg-gray-700 min-w-[120px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider">ACTIONS</th>
             </tr>
           </thead>
@@ -1975,11 +1939,6 @@ const closeSuccessModal = () => {
                 </div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-blue-500 rounded-lg overflow-hidden inline-block p-1 bg-gray-50 dark:bg-gray-700">
-                  <img :src="item.image" alt="Item" class="h-10 w-10 object-cover rounded">
-                </div>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[160px]" :title="item.article">{{ item.article }}</div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
@@ -1995,20 +1954,7 @@ const closeSuccessModal = () => {
                 </div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold" style="background-color: #01200E; color: #FFFFFF;">
-                  {{ item.category }}
-                </span>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base text-gray-700 dark:text-gray-300 truncate max-w-[240px]" :title="item.description">{{ item.description }}</div>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
-                  {{ item.quantity || '0' }}
-                </span>
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div class="text-base font-medium text-gray-700 dark:text-gray-300">{{ item.unitValue }}</div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base text-gray-600 dark:text-gray-400">{{ item.dateAcquired }}</div>
@@ -2019,24 +1965,15 @@ const closeSuccessModal = () => {
                   {{ item.location }}
                 </div>
               </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <span v-if="item.conditionStatus" 
-                      :class="[
-                        'inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold',
-                        item.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
-                        item.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
-                        item.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
-                        item.conditionStatus === 'Disposal' ? 'bg-red-600 text-white' :
-                        'bg-gray-600 text-white'
-                      ]">
-                  {{ item.conditionStatus }}
-                </span>
-                <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-gray-400 text-white">
-                  N/A
-                </span>
-              </td>
               <td class="sticky right-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-4 py-3">
                 <div class="flex justify-center gap-2">
+                  <button 
+                    @click="openViewDetailsModal(item)" 
+                    class="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transition-all duration-200"
+                    title="View details"
+                  >
+                    <span class="material-icons-outlined text-sm">visibility</span>
+                  </button>
                   <button 
                     @click="editItem(item)" 
                     style="background: linear-gradient(to bottom right, #009832, #007a28);"
@@ -2273,6 +2210,167 @@ const closeSuccessModal = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Details Modal -->
+    <div v-if="showViewDetailsModal && selectedViewItem" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="closeViewDetailsModal">
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5 border-b border-green-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
+                <span class="material-icons-outlined text-white text-2xl">info</span>
+              </div>
+              <div>
+                <h3 class="text-xl font-bold text-white">Item Details</h3>
+                <p class="text-green-100 text-sm">{{ selectedViewItem.article || 'N/A' }}</p>
+              </div>
+            </div>
+            <button @click="closeViewDetailsModal" class="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors">
+              <span class="material-icons-outlined">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-6 overflow-y-auto max-h-[70vh]">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Item Image -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Image</label>
+              <div class="flex justify-center">
+                <img :src="selectedViewItem.image" alt="Item Image" class="h-48 w-48 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-600">
+              </div>
+            </div>
+
+            <!-- Article -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('article', 'Article') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.article || 'N/A' }}</p>
+            </div>
+
+            <!-- Serial Number -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('serial_number', 'Serial Number') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.serialNumber || 'N/A' }}</p>
+            </div>
+
+            <!-- Model -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('model', 'Model') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.model || 'N/A' }}</p>
+            </div>
+
+            <!-- Category -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('category', 'Category') }}</label>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-800 dark:bg-gray-700 text-white">
+                {{ selectedViewItem.category || 'N/A' }}
+              </span>
+            </div>
+
+            <!-- Description -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('description', 'Description') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.description || 'N/A' }}</p>
+            </div>
+
+            <!-- Quantity -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('quantity', 'Quantity') }}</label>
+              <span class="inline-flex items-center justify-center px-3 py-1 rounded-lg text-base font-bold bg-purple-900 dark:bg-purple-900" style="color: #FFFFFF;">
+                {{ selectedViewItem.quantity || '0' }}
+              </span>
+            </div>
+
+            <!-- Property Account Code -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('property_account_code', 'Property Account Code') }}</label>
+              <p class="text-base font-mono text-gray-900 dark:text-white">{{ selectedViewItem.propertyAccountCode || 'N/A' }}</p>
+            </div>
+
+            <!-- Unit Value -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('unit_value', 'Unit Value') }}</label>
+              <p class="text-base font-medium text-gray-900 dark:text-white">{{ selectedViewItem.unitValue || 'N/A' }}</p>
+            </div>
+
+            <!-- Date Acquired -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('date_acquired', 'Date Acquired') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.dateAcquired || 'N/A' }}</p>
+            </div>
+
+            <!-- P.O. Number -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('po_number', 'P.O. Number') }}</label>
+              <p class="text-base text-gray-900 dark:text-white">{{ selectedViewItem.poNumber || 'N/A' }}</p>
+            </div>
+
+            <!-- Unit/Sections -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('unit_sections', 'Unit/Sections') }}</label>
+              <p class="text-base text-gray-900 dark:text-white flex items-center gap-1">
+                <span class="material-icons-outlined text-base">location_on</span>
+                {{ selectedViewItem.location || 'N/A' }}
+              </p>
+            </div>
+
+            <!-- Condition -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Condition</label>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-900 dark:bg-blue-900" style="color: #FFFFFF;">
+                {{ selectedViewItem.condition || 'N/A' }}
+              </span>
+            </div>
+
+            <!-- Status -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Status</label>
+              <span v-if="selectedViewItem.conditionStatus" 
+                    :class="[
+                      'inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold',
+                      selectedViewItem.conditionStatus === 'Good' ? 'bg-green-600 text-white' :
+                      selectedViewItem.conditionStatus === 'Less Reliable' ? 'bg-yellow-600 text-white' :
+                      selectedViewItem.conditionStatus === 'Un-operational' ? 'bg-orange-600 text-white' :
+                      selectedViewItem.conditionStatus === 'Disposal' ? 'bg-red-600 text-white' :
+                      'bg-gray-600 text-white'
+                    ]">
+                {{ selectedViewItem.conditionStatus }}
+              </span>
+              <span v-else class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-400 text-white">
+                N/A
+              </span>
+            </div>
+
+            <!-- Issued To -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ getLabel('issued_to', 'Issued To') }}</label>
+              <div v-if="selectedViewItem.issuedTo && selectedViewItem.issuedTo !== 'Not Assigned'">
+                <p class="text-base font-bold text-gray-900 dark:text-white">{{ getIssuedToNamePart(selectedViewItem.issuedTo, 0) }}</p>
+                <p v-if="getIssuedToNamePart(selectedViewItem.issuedTo, 1)" class="text-base font-bold text-gray-900 dark:text-white">
+                  {{ getIssuedToNamePart(selectedViewItem.issuedTo, 1) }}
+                </p>
+                <p v-if="selectedViewItem.issued_to_code" class="text-sm text-gray-500 dark:text-gray-400">
+                  ({{ selectedViewItem.issued_to_code }})
+                </p>
+              </div>
+              <p v-else class="text-base text-gray-500 dark:text-gray-400">Not Assigned</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-t border-gray-200 dark:border-gray-600 flex justify-end gap-3">
+          <button 
+            @click="closeViewDetailsModal"
+            class="px-6 py-2.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

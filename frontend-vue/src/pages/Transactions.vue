@@ -1190,11 +1190,11 @@ const printTransactions = () => {
       <div v-if="!loading && transactions.length > 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 p-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 gap-4">
           <div class="flex items-center gap-2">
-            <span class="material-icons-outlined text-lg" style="color: #01200E;">info</span>
-            <span class="text-sm font-semibold" style="color: #01200E;">
-              Showing <span class="font-bold" style="color: #01200E;">{{ totalTransactions > 0 ? ((currentPage - 1) * transactionsPerPage + 1) : 0 }}</span> to 
-              <span class="font-bold" style="color: #01200E;">{{ Math.min(currentPage * transactionsPerPage, totalTransactions) }}</span> of 
-              <span class="font-bold" style="color: #01200E;">{{ totalTransactions }}</span> entries
+            <span class="material-icons-outlined text-lg text-gray-700 dark:text-gray-300">info</span>
+            <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Showing <span class="font-bold text-gray-900 dark:text-white">{{ totalTransactions > 0 ? ((currentPage - 1) * transactionsPerPage + 1) : 0 }}</span> to 
+              <span class="font-bold text-gray-900 dark:text-white">{{ Math.min(currentPage * transactionsPerPage, totalTransactions) }}</span> of 
+              <span class="font-bold text-gray-900 dark:text-white">{{ totalTransactions }}</span> entries
             </span>
           </div>
           <div v-if="totalPages > 1" class="flex items-center justify-center sm:justify-end gap-1.5 flex-wrap">

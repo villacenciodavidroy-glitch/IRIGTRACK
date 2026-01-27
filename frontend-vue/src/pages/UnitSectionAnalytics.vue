@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50 pb-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
     <!-- Enhanced Header Section -->
     <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 shadow-2xl rounded-2xl mt-4 sm:mt-6">
       <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
@@ -44,7 +44,7 @@
             <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
             <div class="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
           </div>
-          <span class="text-gray-600 font-semibold text-lg">Loading analytics...</span>
+          <span class="text-gray-600 dark:text-gray-300 font-semibold text-lg">Loading analytics...</span>
         </div>
       </div>
 
@@ -272,7 +272,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../axios'
 import { Bar, Pie, Doughnut, Line } from 'vue-chartjs'
@@ -309,6 +309,12 @@ const router = useRouter()
 const statistics = ref([])
 const loading = ref(false)
 const error = ref(null)
+
+// Detect dark mode
+const isDarkMode = ref(document.documentElement.classList.contains('dark'))
+
+// Watch for dark mode changes
+let darkModeObserver = null
 
 // Chart data computed properties
 const totalRequestsChartData = computed(() => {
@@ -435,65 +441,86 @@ const summaryStats = computed(() => {
   }
 })
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top',
-      labels: {
-        padding: 15,
-        font: {
-          size: 12,
+// Chart options that adapt to dark mode
+const chartOptions = computed(() => {
+  const textColor = isDarkMode.value ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.87)'
+  const gridColor = isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+  const tooltipBg = isDarkMode.value ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.8)'
+  
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          padding: 15,
+          font: {
+            size: 12,
+            weight: 'bold'
+          },
+          color: textColor
+        }
+      },
+      tooltip: {
+        backgroundColor: tooltipBg,
+        padding: 12,
+        titleColor: 'rgba(255, 255, 255, 1)',
+        bodyColor: 'rgba(255, 255, 255, 0.9)',
+        titleFont: {
+          size: 14,
           weight: 'bold'
+        },
+        bodyFont: {
+          size: 13
+        },
+        cornerRadius: 8
+      }
+    }
+  }
+})
+
+const barChartOptions = computed(() => {
+  const gridColor = isDarkMode.value ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+  const textColor = isDarkMode.value ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)'
+  
+  return {
+    ...chartOptions.value,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1,
+          color: textColor
+        },
+        grid: {
+          color: gridColor
+        }
+      },
+      x: {
+        ticks: {
+          color: textColor
+        },
+        grid: {
+          display: false
         }
       }
-    },
-    tooltip: {
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      padding: 12,
-      titleFont: {
-        size: 14,
-        weight: 'bold'
-      },
-      bodyFont: {
-        size: 13
-      },
-      cornerRadius: 8
     }
   }
-}
+})
 
-const barChartOptions = {
-  ...chartOptions,
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        stepSize: 1
-      },
-      grid: {
-        color: 'rgba(0, 0, 0, 0.05)'
-      }
-    },
-    x: {
-      grid: {
-        display: false
+const pieChartOptions = computed(() => {
+  return {
+    ...chartOptions.value,
+    plugins: {
+      ...chartOptions.value.plugins,
+      legend: {
+        ...chartOptions.value.plugins.legend,
+        position: 'bottom'
       }
     }
   }
-}
-
-const pieChartOptions = {
-  ...chartOptions,
-  plugins: {
-    ...chartOptions.plugins,
-    legend: {
-      ...chartOptions.plugins.legend,
-      position: 'bottom'
-    }
-  }
-}
+})
 
 const fetchStatistics = async () => {
   loading.value = true
@@ -522,5 +549,22 @@ const getRankBadgeClass = (index) => {
 
 onMounted(() => {
   fetchStatistics()
+  
+  // Create a MutationObserver to watch for dark mode class changes
+  darkModeObserver = new MutationObserver(() => {
+    isDarkMode.value = document.documentElement.classList.contains('dark')
+  })
+  
+  darkModeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+  })
+})
+
+// Cleanup observer on unmount
+onBeforeUnmount(() => {
+  if (darkModeObserver) {
+    darkModeObserver.disconnect()
+  }
 })
 </script>

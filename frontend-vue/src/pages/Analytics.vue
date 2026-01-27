@@ -100,7 +100,7 @@
     </div>
 
     <!-- Supply Snapshot (Quantity Only) -->
-    <div class="bg-gradient-to-br from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-lg sm:rounded-xl shadow-lg border-2 border-slate-600 dark:border-slate-700 overflow-hidden mb-8">
+    <div class="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-800 dark:to-slate-900 rounded-lg sm:rounded-xl shadow-lg border-2 border-gray-300 dark:border-slate-700 overflow-hidden mb-8">
       <!-- Header -->
       <div class="bg-gradient-to-r from-green-500 to-green-600 dark:from-green-600 dark:to-green-700 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
         <div class="flex items-center gap-2 sm:gap-3">
@@ -113,23 +113,23 @@
       <!-- Table: scrollable body, sticky header -->
       <div class="px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
         <div 
-          class="overflow-x-auto overflow-y-auto max-h-[240px] sm:max-h-[280px] lg:max-h-[360px] rounded-lg border border-slate-600 dark:border-slate-700"
+          class="overflow-x-auto overflow-y-auto max-h-[240px] sm:max-h-[280px] lg:max-h-[360px] rounded-lg border border-gray-300 dark:border-slate-700"
           style="overscroll-behavior: contain;"
         >
           <table class="w-full min-w-[280px]">
             <thead class="sticky top-0 z-10">
-              <tr class="border-b-2 border-slate-600 dark:border-slate-700 bg-slate-700 dark:bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
-                <th class="text-left py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">ITEM NAME</th>
-                <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">QUANTITY</th>
+              <tr class="border-b-2 border-gray-300 dark:border-slate-700 bg-gray-200 dark:bg-slate-800 shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+                <th class="text-left py-3 px-4 text-xs sm:text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">ITEM NAME</th>
+                <th class="text-right py-3 px-4 text-xs sm:text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">{{ getLabel('quantity', 'QUANTITY') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr 
                 v-for="c in consumableQuantities" 
                 :key="c.name"
-                class="border-b border-slate-600/50 dark:border-slate-700/50 hover:bg-slate-600/30 dark:hover:bg-slate-700/30 transition-colors"
+                class="border-b border-gray-200 dark:border-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700/30 transition-colors"
               >
-                <td class="py-3 px-4 text-sm sm:text-base text-white font-medium">{{ c.name }}</td>
+                <td class="py-3 px-4 text-sm sm:text-base text-gray-900 dark:text-white font-medium">{{ c.name }}</td>
                 <td class="py-3 px-4 text-right">
                   <span class="inline-flex items-center justify-center bg-green-400 dark:bg-green-500 text-white text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border-2 border-green-600 dark:border-green-700 min-w-[3rem] sm:min-w-[4rem]">
                     {{ c.quantity }}
@@ -137,7 +137,7 @@
                 </td>
               </tr>
               <tr v-if="consumableQuantities.length === 0">
-                <td colspan="2" class="py-6 px-4 text-center text-sm text-white/70">
+                <td colspan="2" class="py-6 px-4 text-center text-sm text-gray-600 dark:text-white/70">
                   No supply items available
                 </td>
               </tr>
@@ -1366,7 +1366,7 @@
             <thead>
               <tr class="bg-gradient-to-r from-gray-200 via-gray-200 to-gray-200 dark:from-gray-700 dark:via-gray-700 dark:to-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">ITEM NAME</th>
-                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CATEGORY</th>
+                <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('category', 'CATEGORY') }}</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CURRENT STOCK</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">CONSUMPTION RATE</th>
                 <th class="px-6 py-4 text-left text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">DAYS UNTIL EMPTY</th>
@@ -1443,17 +1443,7 @@
         </div>
       
         <div class="bg-white dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div class="flex gap-3">
-              <button @click="exportConsumablesCSV" class="px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all shadow-md hover:shadow-lg font-semibold flex items-center gap-2 text-base">
-                <span class="material-icons-outlined text-base">download</span>
-                Export Excel
-              </button>
-              <button @click="generateSupplyReport" class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg font-semibold flex items-center gap-2 text-base">
-                <span class="material-icons-outlined text-base">inventory</span>
-                Generate Report
-              </button>
-            </div>
+          <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
             <div class="flex gap-2">
               <button 
                 @click="goPrev" 
@@ -1584,6 +1574,7 @@
 import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import useItems from '../composables/useItems'
+import useFormLabels from '../composables/useFormLabels'
 import useNotifications from '../composables/useNotifications'
 import axios from 'axios'
 import axiosClient from '../axios'
@@ -1603,7 +1594,9 @@ import { Line, Bar } from 'vue-chartjs'
 const router = useRouter()
 
 // Fetch real inventory data
-const { items, fetchitems, loading, error } = useItems()
+const { items, fetchitems, loading, error, totalItems: itemsTotal } = useItems()
+
+const { fetchLabels, getLabel } = useFormLabels()
 
 // Fetch notifications for low stock alerts
 const { notifications, fetchNotifications, refreshNotifications } = useNotifications()
@@ -2016,22 +2009,96 @@ const allItemsLifespan = computed(() => {
       }
     })
     .filter(item => item !== null) // Remove items without Python API predictions
+    .filter(item => item.remainingLifespan > 0) // Exclude items with 0 remaining days
 })
 
 // Computed data based on real inventory
+// This needs to check the original items before filtering, to include items with 0 days
 const endingSoonItems = computed(() => {
-  return (allItemsLifespan.value || [])
-    .filter(item => {
-      // Filter items with remaining lifespan <= 30 days
-      // Use remainingLifespan (in days) or calculate from remainingYears
-      const remainingDays = item.remainingLifespan ?? (item.remainingYears ? item.remainingYears * 365 : 999)
-      return remainingDays <= 30
+  if (!items.value || items.value.length === 0) return []
+  if (!lifespanPredictions.value || lifespanPredictions.value.length === 0) return []
+  
+  // Calculate items ending soon directly from items and predictions (before filtering)
+  return items.value
+    .filter(item => !isConsumableCategory(item?.category))
+    .map(item => {
+      const catboostPred = lifespanPredictions.value.find(p => p.item_id === item.id)
+      
+      if (!catboostPred || catboostPred.remaining_years == null || isNaN(catboostPred.remaining_years)) {
+        return null
+      }
+      
+      const acquisitionDate = new Date(item.date_acquired)
+      const today = new Date()
+      const daysSinceAcquisition = Math.floor((today - acquisitionDate) / (1000 * 60 * 60 * 24))
+      const yearsInUse = daysSinceAcquisition / 365.25
+      
+      let remainingYears = parseFloat(catboostPred.remaining_years)
+      let remainingLifespanDays = Math.round(remainingYears * 365)
+      
+      // Check if item should be disposed
+      const conditionStatus = item.condition_status || null
+      const condition = item.condition?.condition || item.condition || ''
+      let conditionNumberStr = ''
+      if (item.condition_number?.condition_number) {
+        conditionNumberStr = String(item.condition_number.condition_number).toUpperCase()
+      }
+      
+      const shouldDispose = (
+        conditionNumberStr === 'R' ||
+        conditionStatus === 'Disposal' ||
+        String(condition).includes('Non-Serviceable') ||
+        String(condition).includes('Non - Serviceable') ||
+        catboostPred.disposal_flag === true
+      )
+      
+      if (shouldDispose) {
+        remainingYears = 0.0
+        remainingLifespanDays = 0
+      }
+      
+      // Only include items with <= 30 days remaining (including 0 days for ending soon list)
+      if (remainingLifespanDays > 30) {
+        return null
+      }
+      
+      const expectedLifespan = catboostPred.lifespan_estimate != null && !isNaN(catboostPred.lifespan_estimate)
+        ? Math.round(catboostPred.lifespan_estimate * 365)
+        : Math.round((remainingYears + yearsInUse) * 365)
+      
+      const lifespanEndDate = new Date(today.getTime() + (remainingYears * 365.25 * 24 * 60 * 60 * 1000))
+      
+      // Status classes
+      let statusClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+      let categoryClass = (item.category || '') === 'ICT' ? 'bg-purple-100 text-purple-800' : 
+                         (item.category || '') === 'Desktop' ? 'bg-blue-100 text-blue-800' :
+                         'bg-green-100 text-green-800'
+      
+      if (shouldDispose || remainingLifespanDays === 0) {
+        statusClass = 'bg-red-600 text-white dark:bg-red-700 dark:text-white'
+      } else if (remainingLifespanDays <= 15) {
+        statusClass = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      } else if (remainingLifespanDays <= 30) {
+        statusClass = 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+      }
+      
+      return {
+        itemId: item.id,
+        name: item.unit || 'Unknown Item',
+        description: item.description || '',
+        category: item.category || 'Unknown',
+        categoryClass,
+        acquisitionDate: acquisitionDate.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+        expectedLifespan,
+        remainingLifespan: remainingLifespanDays,
+        remainingYears: parseFloat(remainingYears.toFixed(2)),
+        lifespanEndDate: lifespanEndDate.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+        statusClass,
+        conditionStatus: conditionStatus || 'Unknown'
+      }
     })
-    .sort((a, b) => {
-      const daysA = a.remainingLifespan ?? (a.remainingYears ? a.remainingYears * 365 : 999)
-      const daysB = b.remainingLifespan ?? (b.remainingYears ? b.remainingYears * 365 : 999)
-      return daysA - daysB
-    })
+    .filter(item => item !== null)
+    .sort((a, b) => a.remainingLifespan - b.remainingLifespan) // Sort by remaining days ascending
 })
 
 const endingLifespanCount = computed(() => endingSoonItems.value.length)
@@ -2206,7 +2273,7 @@ const equipmentLifespanItems = computed(() => {
   // Use allItemsLifespan which already filters out supply items and uses Python API predictions
   // Only include items with valid predictions (remainingLifespan > 0)
   return (allItemsLifespan.value || [])
-    .filter(item => item.remainingLifespan != null && item.remainingLifespan >= 0 && item.expectedLifespan != null)
+    .filter(item => item.remainingLifespan != null && item.remainingLifespan > 0 && item.expectedLifespan != null)
     .sort((a, b) => a.remainingLifespan - b.remainingLifespan) // Sort by remaining lifespan ascending (most urgent first)
     .slice(0, 10) // Limit to top 10
 })
@@ -2670,7 +2737,7 @@ const handleRestock = async () => {
     // Update quantity via backend API using item uuid as route key
     await axiosClient.put(`/items/${item.uuid}`, { quantity: newQuantity })
     // Refresh inventory data
-    await fetchitems()
+    await fetchitems(false, 10000)
     
     // Close modal after successful submission
     showRestockModal.value = false
@@ -3704,6 +3771,7 @@ const fetchPredictions = async () => {
 const notificationInterval = ref(null)
 
 onMounted(async () => {
+  await fetchLabels()
   await fetchitems()
   await fetchPredictions()
   // Fetch notifications to show low stock alerts

@@ -701,6 +701,18 @@ const setupRealtimeWithPopup = () => {
             case 'borrow_request':
               notificationTitle = 'Borrow Request'
               break
+            case 'item_lost_damaged_report':
+              notificationTitle = 'Item Lost/Damaged Report'
+              break
+            case 'item_recovered':
+              notificationTitle = 'Item Recovered'
+              break
+            case 'item_lost_returned':
+              notificationTitle = 'Lost Item Returned'
+              break
+            case 'item_misplaced':
+              notificationTitle = 'Report Misplaced Item'
+              break
             default:
               notificationTitle = 'Low Stock Alert'
           }

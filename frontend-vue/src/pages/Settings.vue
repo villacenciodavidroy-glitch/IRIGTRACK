@@ -1,13 +1,22 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import axiosClient from '../axios'
 import useAuth from '../composables/useAuth'
 import useLogo from '../composables/useLogo'
 import useFormLabels from '../composables/useFormLabels'
 
+const route = useRoute()
 const { isAdmin } = useAuth()
 const { logoUrl, fetchLogo, refetch: refetchLogo } = useLogo()
 const { labels, fetchLabels, refetch: refetchLabels, getLabel, getPlaceholder, getSectionTitle, getSectionSubtitle, getHelperText } = useFormLabels()
+
+// Determine which section to show based on route
+const currentSection = computed(() => {
+  if (route.path.includes('/form-labels')) return 'form-labels'
+  if (route.path.includes('/logo')) return 'logo'
+  return 'logo' // default to logo
+})
 
 const fileInput = ref(null)
 const selectedFile = ref(null)
@@ -70,16 +79,30 @@ const uploadLogo = async () => {
   try {
     const form = new FormData()
     form.append('logo', selectedFile.value)
+    
     const res = await axiosClient.post('/settings/logo', form)
+    
     if (res.data?.success) {
       successMessage.value = 'Logo updated successfully.'
       clearSelection()
+      // Force refetch with cache busting
       await refetchLogo()
+      // Also force a page refresh of the logo image
+      if (res.data?.url) {
+        const separator = res.data.url.includes('?') ? '&' : '?'
+        const newUrl = `${res.data.url}${separator}t=${Date.now()}`
+        // Update logoUrl directly if needed
+      }
     } else {
       errorMessage.value = res.data?.message || 'Failed to update logo.'
     }
   } catch (err) {
-    errorMessage.value = err.response?.data?.message || err.response?.data?.errors?.logo?.[0] || 'Failed to update logo.'
+    console.error('Logo upload error:', err)
+    const errorMsg = err.response?.data?.message || 
+                     err.response?.data?.errors?.logo?.[0] || 
+                     err.message || 
+                     'Failed to update logo. Please check console for details.'
+    errorMessage.value = errorMsg
   } finally {
     uploading.value = false
   }
@@ -207,7 +230,7 @@ const groupedLabels = computed(() => {
 
       <template v-else>
         <!-- Change Logo -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+        <div v-if="currentSection === 'logo'" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
           <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
             <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span class="material-icons-outlined text-green-600 dark:text-green-400">image</span>
@@ -280,7 +303,7 @@ const groupedLabels = computed(() => {
         </div>
 
         <!-- Form Labels -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+        <div v-if="currentSection === 'form-labels'" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
           <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
             <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span class="material-icons-outlined text-green-600 dark:text-green-400">label</span>

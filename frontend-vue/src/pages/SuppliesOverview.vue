@@ -90,12 +90,12 @@
             </th>
             <th class="px-4 py-3 text-left">QR CODE</th>
             <th class="px-4 py-3 text-left">IMAGE</th>
-            <th class="px-4 py-3 text-left">ARTICLE</th>
-            <th class="px-4 py-3 text-left">CATEGORY</th>
-            <th class="px-4 py-3 text-left">DESCRIPTION</th>
-            <th class="px-4 py-3 text-left">PROPERTY ACCOUNT CODE</th>
+            <th class="px-4 py-3 text-left">{{ getLabel('article', 'ARTICLE') }}</th>
+            <th class="px-4 py-3 text-left">{{ getLabel('category', 'CATEGORY') }}</th>
+            <th class="px-4 py-3 text-left">{{ getLabel('description', 'DESCRIPTION') }}</th>
+            <th class="px-4 py-3 text-left">{{ getLabel('property_account_code', 'PROPERTY ACCOUNT CODE') }}</th>
             <th class="px-4 py-3 text-left">STOCK</th>
-            <th class="px-4 py-3 text-left">DATE ACQUIRED</th>
+            <th class="px-4 py-3 text-left">{{ getLabel('date_acquired', 'DATE ACQUIRED') }}</th>
             <th class="px-4 py-3 text-left">ACTIONS</th>
           </tr>
         </thead>
@@ -159,7 +159,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import useFormLabels from '../composables/useFormLabels'
+
+const { fetchLabels, getLabel } = useFormLabels()
+
+onMounted(async () => {
+  await fetchLabels()
+})
 
 const searchQuery = ref('')
 const currentPage = ref(1)

@@ -883,6 +883,7 @@ const getStatusBadgeClass = (status, request = null) => {
       ? 'bg-cyan-100 text-cyan-800 border-2 border-cyan-300 animate-pulse'
       : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
   }
+  if (statusLower === 'for_claiming') return 'bg-orange-100 text-orange-800 border-2 border-orange-300 animate-pulse'
   if (statusLower === 'rejected') return 'bg-red-100 text-red-800'
   if (statusLower === 'fulfilled') return 'bg-blue-100 text-blue-800'
   return 'bg-yellow-100 text-yellow-800'
@@ -1049,6 +1050,11 @@ const handleAllMessageClick = async (message) => {
 const closeAllMessagesView = () => {
   showAllMessagesView.value = false
   router.replace({ query: {} })
+}
+
+// Close history modal
+const closeHistoryModal = () => {
+  showHistoryModal.value = false
 }
 
 // Setup real-time listener for user's supply requests
@@ -1233,56 +1239,6 @@ watch(requestStatusFilter, () => {
       </div>
     </Transition>
     
-    <!-- Enhanced Header Section -->
-    <div v-if="!showAllMessagesView" class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-2xl rounded-2xl mt-4 sm:mt-6 overflow-hidden relative">
-      <!-- Decorative Background Elements -->
-      <div class="absolute inset-0 opacity-10">
-        <div class="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
-        <div class="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
-      </div>
-      
-      <div class="px-6 py-6 sm:px-8 sm:py-7 relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div class="flex items-start gap-4">
-          <div class="flex items-center gap-3 pt-1">
-            <button 
-              @click="router.push('/dashboard')" 
-              class="p-3 bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white rounded-xl hover:bg-white/30 hover:scale-105 transition-all duration-200 shadow-lg"
-              title="Go back"
-            >
-              <span class="material-icons-outlined text-xl">arrow_back</span>
-            </button>
-          </div>
-          <div class="text-white">
-            <div class="flex items-center gap-3 mb-2">
-              <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-                <span class="material-icons-outlined text-2xl">inventory_2</span>
-              </div>
-              <h1 class="text-3xl sm:text-4xl font-extrabold leading-tight">Available Supplies</h1>
-            </div>
-            <p class="text-white/95 text-base sm:text-lg mt-1 font-medium">View available stock and request supplies for your needs</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <button
-            v-if="cart.length > 0"
-            @click="openCart" 
-            class="bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-400 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 dark:border-gray-700 relative group"
-          >
-            <span class="material-icons-outlined text-lg text-blue-700 dark:text-blue-400 group-hover:scale-110 transition-transform">playlist_add</span>
-            <span>Request List</span>
-            <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse">{{ cart.length }}</span>
-          </button>
-          <button
-            @click="showHistoryModal = true; fetchMyRequests()" 
-            class="bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg border-2 border-white/80 dark:border-gray-700 group"
-          >
-            <span class="material-icons-outlined text-lg text-emerald-700 dark:text-emerald-400 group-hover:rotate-180 transition-transform duration-500">history</span>
-            <span>My Requests</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- All Messages View -->
     <div v-if="showAllMessagesView" class="p-4 sm:p-6">
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -1407,9 +1363,16 @@ watch(requestStatusFilter, () => {
               class="w-full pl-12 pr-4 py-3.5 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 shadow-sm hover:border-gray-400 dark:hover:border-gray-500"
             />
           </div>
-          <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <span class="material-icons-outlined text-lg">info</span>
-            <span>{{ supplies.length }} {{ supplies.length === 1 ? 'item' : 'items' }} found</span>
+          <div class="flex items-center gap-3">
+            <button
+              v-if="cart.length > 0"
+              @click="openCart" 
+              class="bg-blue-600 dark:bg-blue-700 text-white px-5 py-3 rounded-xl flex items-center gap-2 hover:-translate-y-1 hover:shadow-xl transition-all duration-200 font-bold shadow-lg relative group"
+            >
+              <span class="material-icons-outlined text-lg group-hover:scale-110 transition-transform">playlist_add</span>
+              <span>Request List</span>
+              <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg animate-pulse">{{ cart.length }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1871,55 +1834,55 @@ watch(requestStatusFilter, () => {
     </div>
 
     <!-- Enhanced Request History Modal -->
-    <div v-if="showHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="showHistoryModal = false">
+    <div v-if="showHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeHistoryModal">
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl p-6 md:p-8 space-y-6 max-h-[90vh] overflow-y-auto animate-modal-in">
         <!-- Enhanced Header -->
         <div class="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-start gap-4 flex-1">
-            <div class="p-3 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 rounded-xl">
-              <span class="material-icons-outlined text-2xl text-purple-600 dark:text-purple-400">history</span>
+            <div class="flex items-start gap-4 flex-1">
+              <div class="p-3 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 rounded-xl">
+                <span class="material-icons-outlined text-2xl text-purple-600 dark:text-purple-400">history</span>
+              </div>
+              <div class="flex-1">
+                <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">My Request History</h3>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">View and manage all your supply requests</p>
+              </div>
+              <div v-if="myRequests.length > 0" class="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full text-sm font-bold">
+                {{ requestHistoryPagination.total || myRequests.length }} {{ (requestHistoryPagination.total || myRequests.length) === 1 ? 'request' : 'requests' }}
+              </div>
             </div>
-            <div class="flex-1">
-              <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">My Request History</h3>
-              <p class="text-sm font-medium text-gray-600 dark:text-gray-400">View and manage all your supply requests</p>
-            </div>
-            <div v-if="myRequests.length > 0" class="px-3 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full text-sm font-bold">
-              {{ requestHistoryPagination.total || myRequests.length }} {{ (requestHistoryPagination.total || myRequests.length) === 1 ? 'request' : 'requests' }}
-            </div>
+            <button 
+              @click="closeHistoryModal" 
+              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+            >
+              <span class="material-icons-outlined text-xl">close</span>
+            </button>
           </div>
-          <button 
-            @click="showHistoryModal = false" 
-            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
-          >
-            <span class="material-icons-outlined text-xl">close</span>
-          </button>
-        </div>
 
         <!-- Enhanced Filter -->
         <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-            <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">filter_list</span>
-            <span>Filter by Status:</span>
-          </div>
-          <div class="relative flex-1 max-w-xs">
-            <select 
-              v-model="requestStatusFilter"
-              class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none cursor-pointer font-medium"
-            >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="fulfilled">Fulfilled</option>
-            </select>
-            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-              <span class="material-icons-outlined">tune</span>
-            </span>
-            <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
-              <span class="material-icons-outlined">keyboard_arrow_down</span>
-            </span>
-          </div>
-        </div>
+              <div class="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                <span class="material-icons-outlined text-lg text-emerald-600 dark:text-emerald-400">filter_list</span>
+                <span>Filter by Status:</span>
+              </div>
+              <div class="relative flex-1 max-w-xs">
+                <select 
+                  v-model="requestStatusFilter"
+                  class="w-full px-4 py-3 pl-12 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 appearance-none cursor-pointer font-medium"
+                >
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="fulfilled">Completed</option>
+                </select>
+                <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
+                  <span class="material-icons-outlined">tune</span>
+                </span>
+                <span class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none">
+                  <span class="material-icons-outlined">keyboard_arrow_down</span>
+                </span>
+              </div>
+            </div>
 
         <!-- Enhanced Requests Table -->
         <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
@@ -1990,11 +1953,12 @@ watch(requestStatusFilter, () => {
                     ]"
                   >
                     <span class="material-icons-outlined text-xs">
-                      {{ request.status === 'pending' ? 'hourglass_empty' : request.status === 'approved' ? 'check_circle' : request.status === 'ready_for_pickup' ? (request.pickup_scheduled_at ? 'schedule' : 'pending') : request.status === 'fulfilled' ? 'done_all' : 'cancel' }}
+                      {{ request.status === 'pending' ? 'hourglass_empty' : request.status === 'approved' ? 'check_circle' : request.status === 'ready_for_pickup' ? (request.pickup_scheduled_at ? 'schedule' : 'pending') : request.status === 'for_claiming' ? 'shopping_cart' : request.status === 'fulfilled' ? 'done_all' : 'cancel' }}
                     </span>
                     {{ request.status === 'ready_for_pickup' 
                         ? (request.pickup_scheduled_at ? 'Ready for Pickup' : 'Awaiting Pickup Schedule') 
-                        : request.status }}
+                        : request.status === 'for_claiming' ? 'For Claiming'
+                        : request.status === 'fulfilled' ? 'Completed' : request.status }}
                   </span>
                 </td>
                 <td class="px-6 py-4">
@@ -2013,7 +1977,7 @@ watch(requestStatusFilter, () => {
                   <div class="flex items-center gap-2">
                     <!-- Receipt Download Button -->
                     <button
-                      v-if="request.approval_proof && (request.status === 'approved' || request.status === 'fulfilled' || request.status === 'ready_for_pickup')"
+                      v-if="request.approval_proof && (request.status === 'approved' || request.status === 'fulfilled' || request.status === 'ready_for_pickup' || request.status === 'for_claiming')"
                       @click="downloadRequestReceipt(request.id, $event)"
                       class="p-2.5 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
                       title="Download Approval Receipt"

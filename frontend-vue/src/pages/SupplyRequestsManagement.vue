@@ -49,6 +49,7 @@ const requestToApprove = ref(null)
 const requestToFulfill = ref(null)
 const requestToSchedulePickup = ref(null)
 const pickupScheduleForm = ref({
+  pickup_option: 'schedule', // 'pickup_now' or 'schedule'
   pickup_scheduled_at: '',
   notify_user: true,
   quick_interval: null // Store selected quick interval
@@ -184,9 +185,8 @@ const fetchRequests = async (silent = false) => {
     if (debouncedSearchQuery.value) {
       params.search = debouncedSearchQuery.value
     }
-    // Only apply status filter if activeTab is 'completed' or if explicitly set
-    // For 'active' tab, we want to see all non-completed statuses, so don't filter by status
-    if (statusFilter.value && activeTab.value !== 'active') {
+    // Apply status filter if set
+    if (statusFilter.value) {
       params.status = statusFilter.value
     }
     if (startDate.value) {
@@ -1093,6 +1093,7 @@ const openPickupScheduleModal = (request) => {
   }
   requestToSchedulePickup.value = request
   pickupScheduleForm.value = {
+    pickup_option: 'schedule', // Default to 'schedule'
     pickup_scheduled_at: '',
     notify_user: true,
     quick_interval: null
@@ -1107,6 +1108,7 @@ const closePickupScheduleModal = () => {
     showPickupScheduleModal.value = false
     requestToSchedulePickup.value = null
     pickupScheduleForm.value = {
+      pickup_option: 'schedule',
       pickup_scheduled_at: '',
       notify_user: true,
       quick_interval: null
@@ -1235,10 +1237,34 @@ const notifyUserReadyForPickup = async (request) => {
   }
 }
 
-// Schedule pickup
+// Schedule pickup or pickup now
 const schedulePickup = async () => {
   if (!requestToSchedulePickup.value) return
   
+  // Handle "Pickup Now" option
+  if (pickupScheduleForm.value.pickup_option === 'pickup_now') {
+    schedulingPickup.value = true
+    try {
+      // Notify user immediately for pickup now
+      const response = await axiosClient.post(`/supply-requests/${requestToSchedulePickup.value.id}/notify-ready-pickup`)
+      
+      if (response.data.success) {
+        closePickupScheduleModal()
+        fetchRequests()
+      } else {
+        showSimpleBanner(response.data.message || 'Failed to notify user', 'error', true, 5000)
+      }
+    } catch (err) {
+      console.error('Error notifying user for pickup now:', err)
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to notify user'
+      showSimpleBanner(errorMessage, 'error', true, 5000)
+    } finally {
+      schedulingPickup.value = false
+    }
+    return
+  }
+  
+  // Handle "Schedule" option
   if (!pickupScheduleForm.value.pickup_scheduled_at) {
     showSimpleBanner('Please select a pickup time', 'error', true, 4000)
     return
@@ -1286,10 +1312,11 @@ const schedulePickup = async () => {
 // Open fulfill modal
 const openFulfillModal = (request) => {
   // Check if request can be fulfilled
-  // Allow fulfillment for approved, ready_for_pickup, and admin_accepted statuses
+  // Allow fulfillment for approved, ready_for_pickup, for_claiming, and admin_accepted statuses
   // ready_for_pickup means the user has been notified and can pick up, so fulfillment happens after pickup
-  if (!['admin_accepted', 'approved', 'ready_for_pickup'].includes(request.status)) {
-    showSimpleBanner(`Cannot fulfill request. Current status: ${request.status}. Only approved or ready-for-pickup requests can be fulfilled.`, 'error', true, 5000)
+  // for_claiming means the user has been notified for immediate pickup
+  if (!['admin_accepted', 'approved', 'ready_for_pickup', 'for_claiming'].includes(request.status)) {
+    showSimpleBanner(`Cannot fulfill request. Current status: ${request.status}. Only approved, ready-for-pickup, or for-claiming requests can be fulfilled.`, 'error', true, 5000)
     return
   }
   requestToFulfill.value = request
@@ -1346,7 +1373,7 @@ const needsAction = (request) => {
     if (request.status === 'pending') return true
     // Supply approved requests need Assign to Admin
     if (request.status === 'supply_approved') return true
-    // Ready for pickup requests need Notify User, Schedule Pickup, or Fulfill
+    // Ready for pickup requests need Schedule Pickup or Fulfill
     if (request.status === 'ready_for_pickup') return true
   }
   
@@ -1391,9 +1418,32 @@ const completedRequests = computed(() => {
   })
 })
 
-// Get the requests to display based on active tab
+// Get all requests combined, with new requests (pending) at the top
 const displayedRequests = computed(() => {
-  return activeTab.value === 'active' ? activeRequests.value : completedRequests.value
+  // Combine all requests
+  let allRequests = [...requests.value]
+  
+  // Apply status filter if set (client-side filtering as backup)
+  if (statusFilter.value) {
+    allRequests = allRequests.filter(request => {
+      return request.status === statusFilter.value
+    })
+  }
+  
+  // Sort: pending/new requests first, then others by date (newest first)
+  return allRequests.sort((a, b) => {
+    const aStatus = a.status?.toLowerCase()
+    const bStatus = b.status?.toLowerCase()
+    
+    // If one is pending and the other isn't, pending comes first
+    if (aStatus === 'pending' && bStatus !== 'pending') return -1
+    if (aStatus !== 'pending' && bStatus === 'pending') return 1
+    
+    // Otherwise, sort by date (newest first)
+    const aDate = new Date(a.created_at || 0)
+    const bDate = new Date(b.created_at || 0)
+    return bDate - aDate
+  })
 })
 
 // Start action reminder banner
@@ -1455,9 +1505,9 @@ const getActionRequiredTooltip = (request) => {
   
   // For Supply Account users
   if (!isAdmin()) {
-    if (request.status === 'pending') return 'Action required - Approve or Reject'
+    if (request.status === 'pending') return 'Action required - Accept or Reject'
     if (request.status === 'supply_approved') return 'Action required - Assign to Admin'
-    if (request.status === 'ready_for_pickup') return 'Action required - Notify User, Schedule Pickup, or Fulfill'
+    if (request.status === 'ready_for_pickup') return 'Action required - Schedule Pickup or Fulfill'
   }
   
   // For Admin users
@@ -1470,6 +1520,20 @@ const getActionRequiredTooltip = (request) => {
   return 'Action required'
 }
 
+// Get status display text
+const getStatusDisplayText = (status) => {
+  if (status === 'pending') return 'New Request'
+  if (status === 'supply_approved') return 'Request Approved'
+  if (status === 'admin_assigned') return 'For Admin Approval'
+  if (status === 'admin_accepted') return 'Admin Accepted'
+  if (status === 'approved') return 'Approved By Admin'
+  if (status === 'ready_for_pickup') return 'Approved By Admin'
+  if (status === 'for_claiming') return 'For Claiming'
+  if (status === 'fulfilled') return 'Completed'
+  if (status === 'rejected') return 'Rejected'
+  return status
+}
+
 // Get status badge class
 const getStatusBadgeClass = (status) => {
   const statusLower = status?.toLowerCase()
@@ -1477,6 +1541,7 @@ const getStatusBadgeClass = (status) => {
   if (statusLower === 'supply_approved') return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-2 border-blue-700 dark:border-blue-500'
   if (statusLower === 'admin_assigned') return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-2 border-purple-700 dark:border-purple-500'
   if (statusLower === 'ready_for_pickup') return 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-2 border-cyan-700 dark:border-cyan-500'
+  if (statusLower === 'for_claiming') return 'bg-gradient-to-r from-orange-500 to-orange-600 text-white border-2 border-orange-700 dark:border-orange-500'
   if (statusLower === 'rejected') return 'bg-gradient-to-r from-red-500 to-red-600 text-white border-2 border-red-700 dark:border-red-500'
   if (statusLower === 'fulfilled') return 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white border-2 border-indigo-700 dark:border-indigo-500'
   return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-2 border-yellow-700 dark:border-yellow-500'
@@ -1859,18 +1924,8 @@ watch([statusFilter, startDate, endDate], () => {
   fetchRequests()
 })
 
-watch(activeTab, () => {
-  currentPage.value = 1
-  // Clear status filter when switching tabs to ensure all relevant requests are shown
-  // Active tab should show all active requests (pending, approved, admin_assigned, etc.)
-  // Completed tab should show all completed requests (fulfilled, rejected, cancelled)
-  if (activeTab.value === 'active') {
-    // Clear status filter so we can see all active statuses (pending, approved, admin_assigned, etc.)
-    statusFilter.value = ''
-  }
-  // Refetch requests after clearing filter
-  fetchRequests()
-})
+// Note: activeTab is kept for backward compatibility but no longer used for filtering
+// All requests are now displayed together with new requests (pending) sorted first
 
 watch(currentPage, () => {
   fetchRequests()
@@ -2006,87 +2061,6 @@ watch(requestsNeedingAction, () => {
       </div>
     </Transition>
 
-    <!-- Enhanced Header Section -->
-    <div class="relative overflow-hidden bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800 shadow-2xl border-b-4 border-blue-900 dark:border-gray-600 mt-0">
-      <div class="absolute inset-0 bg-grid-pattern opacity-5"></div>
-      <div class="relative px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-7 flex flex-col gap-3 sm:gap-4">
-        <div class="flex items-start gap-3 sm:gap-4">
-          <div class="flex items-center gap-2 sm:gap-3 pt-1 flex-shrink-0">
-            <button 
-              @click="router.push('/dashboard')" 
-              class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm border-2 border-white/30 dark:border-gray-600 text-white rounded-lg sm:rounded-xl hover:bg-white/30 dark:hover:bg-gray-600/80 hover:scale-105 transition-all duration-200 shadow-lg"
-              title="Return to Dashboard"
-            >
-              <span class="material-icons-outlined text-lg sm:text-xl">arrow_back</span>
-            </button>
-            <button 
-              @click="refreshData" 
-              class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm border-2 border-white/30 dark:border-gray-600 text-white rounded-lg sm:rounded-xl hover:bg-white/30 dark:hover:bg-gray-600/80 hover:scale-105 transition-all duration-200 shadow-lg"
-              title="Refresh Data"
-              :disabled="loading"
-            >
-              <span class="material-icons-outlined text-lg sm:text-xl" :class="{ 'animate-spin': loading }">refresh</span>
-            </button>
-          </div>
-          <div class="flex items-start gap-2 sm:gap-4 flex-1 min-w-0">
-            <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/80 backdrop-blur-sm rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
-              <span class="material-icons-outlined text-2xl sm:text-3xl text-white">inventory_2</span>
-          </div>
-          <div class="text-white flex-1 min-w-0">
-              <h1 class="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-extrabold leading-tight tracking-tight break-words mb-1">SUPPLY REQUESTS MANAGEMENT SYSTEM</h1>
-              <p class="text-white/95 dark:text-gray-300 text-xs sm:text-sm lg:text-base mt-1 sm:mt-1.5 font-semibold">Official Request Processing and Approval Portal</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Enhanced Stock Overview Cards -->
-    <div class="p-3 sm:p-4 lg:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-      <div class="bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-900 dark:to-blue-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-blue-400 dark:border-blue-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
-        <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
-            <span class="material-icons-outlined text-2xl sm:text-3xl">inventory_2</span>
-          </div>
-          <div class="text-right">
-            <p class="text-3xl sm:text-4xl font-extrabold">{{ stockSummary.total_items }}</p>
-          </div>
-        </div>
-          <div>
-          <p class="text-xs sm:text-sm font-bold text-blue-100 dark:text-blue-200 uppercase tracking-wider mb-1">Total Inventory Items</p>
-          <p class="text-xs text-blue-200 dark:text-blue-300">Active items in system</p>
-          </div>
-          </div>
-      <div class="bg-gradient-to-br from-green-500 to-green-600 dark:from-green-900 dark:to-green-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-green-400 dark:border-green-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200">
-        <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
-            <span class="material-icons-outlined text-2xl sm:text-3xl">shopping_cart</span>
-        </div>
-          <div class="text-right">
-            <p class="text-3xl sm:text-4xl font-extrabold">{{ stockSummary.total_quantity }}</p>
-      </div>
-        </div>
-          <div>
-          <p class="text-xs sm:text-sm font-bold text-green-100 dark:text-green-200 uppercase tracking-wider mb-1">Total Stock Quantity</p>
-          <p class="text-xs text-green-200 dark:text-green-300">Units available</p>
-          </div>
-          </div>
-      <div class="bg-gradient-to-br from-red-500 to-red-600 dark:from-red-900 dark:to-red-800 rounded-lg sm:rounded-xl shadow-lg border-2 border-red-400 dark:border-red-700 p-4 sm:p-5 lg:p-6 text-white transform hover:scale-105 transition-all duration-200 sm:col-span-2 lg:col-span-1" :class="{ 'animate-pulse': stockSummary.low_stock_count > 0 }">
-        <div class="flex items-center justify-between mb-3 sm:mb-4">
-          <div class="p-2 sm:p-3 bg-white/20 dark:bg-gray-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl">
-            <span class="material-icons-outlined text-2xl sm:text-3xl">warning</span>
-          </div>
-          <div class="text-right">
-            <p class="text-3xl sm:text-4xl font-extrabold">{{ stockSummary.low_stock_count }}</p>
-          </div>
-        </div>
-        <div>
-          <p class="text-xs sm:text-sm font-bold text-red-100 dark:text-red-200 uppercase tracking-wider mb-1">Low Stock Alert</p>
-          <p class="text-xs text-red-200 dark:text-red-300">Requires attention</p>
-        </div>
-      </div>
-    </div>
-
     <!-- All Messages View -->
     <div v-if="showAllMessagesView" class="p-6">
       <div class="bg-white dark:bg-gray-800 shadow-sm border-2 border-gray-300 dark:border-gray-700 overflow-hidden">
@@ -2179,7 +2153,7 @@ watch(requestsNeedingAction, () => {
                     </span>
                     <span v-if="message.supply_request?.status">
                       <span class="font-medium">Status:</span> 
-                      <span class="capitalize">{{ message.supply_request.status }}</span>
+                      <span>{{ getStatusDisplayText(message.supply_request.status) }}</span>
                     </span>
                   </div>
                 </div>
@@ -2232,10 +2206,11 @@ watch(requestsNeedingAction, () => {
                 class="w-full px-4 py-3 pl-10 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 text-sm font-medium appearance-none transition-all"
             >
               <option value="">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
+              <option value="pending">New Request</option>
+              <option value="approved">Accepted</option>
+              <option value="for_claiming">For Claiming</option>
               <option value="rejected">Rejected</option>
-              <option value="fulfilled">Fulfilled</option>
+              <option value="fulfilled">Completed</option>
             </select>
               <span class="material-icons-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">flag</span>
               <span class="material-icons-outlined absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">keyboard_arrow_down</span>
@@ -2255,42 +2230,6 @@ watch(requestsNeedingAction, () => {
               <span class="material-icons-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm pointer-events-none">calendar_today</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Tabs to separate Active/Pending from Completed requests -->
-      <div v-if="!loading && !error" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 mb-4">
-        <div class="flex border-b border-gray-200 dark:border-gray-700">
-          <button
-            @click="activeTab = 'active'"
-            :class="[
-              'flex-1 px-4 py-3 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2',
-              activeTab === 'active'
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-b-2 border-blue-800 dark:border-blue-500'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-            ]"
-          >
-            <span class="material-icons-outlined text-base">{{ activeTab === 'active' ? 'pending_actions' : 'schedule' }}</span>
-            <span>Active/Pending</span>
-            <span v-if="activeRequests.length > 0" class="px-2 py-0.5 bg-white/20 dark:bg-gray-800/20 rounded-full text-xs font-bold">
-              {{ activeRequests.length }}
-            </span>
-          </button>
-          <button
-            @click="activeTab = 'completed'"
-            :class="[
-              'flex-1 px-4 py-3 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2',
-              activeTab === 'completed'
-                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-b-2 border-indigo-800 dark:border-indigo-500'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-            ]"
-          >
-            <span class="material-icons-outlined text-base">{{ activeTab === 'completed' ? 'check_circle' : 'done_all' }}</span>
-            <span>Completed</span>
-            <span v-if="completedRequests.length > 0" class="px-2 py-0.5 bg-white/20 dark:bg-gray-800/20 rounded-full text-xs font-bold">
-              {{ completedRequests.length }}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -2331,7 +2270,7 @@ watch(requestsNeedingAction, () => {
             <span class="material-icons-outlined text-6xl text-gray-400 dark:text-gray-500">inbox</span>
           </div>
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">No Requests Found</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">{{ searchQuery || statusFilter ? 'No records match your current filter criteria. Please adjust your search parameters.' : (activeTab === 'active' ? 'No active or pending requests are currently available.' : 'No completed requests are currently available.') }}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">{{ searchQuery || statusFilter ? 'No records match your current filter criteria. Please adjust your search parameters.' : 'No requests are currently available.' }}</p>
         </div>
       </div>
 
@@ -2365,8 +2304,8 @@ watch(requestsNeedingAction, () => {
             <div class="flex flex-col items-end gap-2">
               <span :class="['inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold uppercase rounded-lg shadow-sm', getStatusBadgeClass(request.status)]">
                 <span class="material-icons-outlined text-xs">flag</span>
-                <span class="hidden sm:inline">{{ request.status === 'supply_approved' ? 'Supply Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status }}</span>
-                <span class="sm:hidden">{{ request.status === 'supply_approved' ? 'Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status.substring(0, 4) }}</span>
+                <span class="hidden sm:inline">{{ getStatusDisplayText(request.status) }}</span>
+                <span class="sm:hidden">{{ getStatusDisplayText(request.status).substring(0, 6) }}</span>
               </span>
             </div>
           </div>
@@ -2494,7 +2433,7 @@ watch(requestsNeedingAction, () => {
                   <span class="hidden sm:inline">Assign</span>
                   <span class="sm:hidden">+</span>
                 </button>
-                <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
+                <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup' && request.status !== 'for_claiming'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
                   <span class="material-icons-outlined text-xs">block</span>
                   <span class="hidden sm:inline">No Action</span>
                   <span class="sm:hidden">-</span>
@@ -2523,7 +2462,7 @@ watch(requestsNeedingAction, () => {
                   <span class="hidden sm:inline">Accept</span>
                   <span class="sm:hidden">OK</span>
                 </button>
-                <span v-if="isAdmin() && request.status !== 'supply_approved' && request.status !== 'admin_assigned' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
+                <span v-if="isAdmin() && request.status !== 'supply_approved' && request.status !== 'admin_assigned' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup' && request.status !== 'for_claiming'" class="inline-flex items-center gap-1 px-2 py-1 text-gray-500 dark:text-gray-400 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 rounded">
                   <span class="material-icons-outlined text-xs">block</span>
                   <span class="hidden sm:inline">No Action</span>
                   <span class="sm:hidden">-</span>
@@ -2550,8 +2489,8 @@ watch(requestsNeedingAction, () => {
                 <th v-if="isAdmin()" class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
                   <div class="flex items-center gap-1">
                     <span class="material-icons-outlined text-xs">location_on</span>
-                    <span class="hidden sm:inline">Location</span>
-                    <span class="sm:hidden">Loc</span>
+                    <span class="hidden sm:inline">Unit/Sections</span>
+                    <span class="sm:hidden">Unit/Sections</span>
                   </div>
                 </th>
                 <th v-if="isAdmin()" class="px-2 sm:px-3 py-2 text-left text-xs font-bold text-white uppercase tracking-wide border-r border-blue-500/30 dark:border-gray-600">
@@ -2614,8 +2553,8 @@ watch(requestsNeedingAction, () => {
                 <td class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
                   <span :class="['inline-flex items-center gap-0.5 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wide rounded shadow-sm', getStatusBadgeClass(request.status)]">
                     <span class="material-icons-outlined text-[10px]">flag</span>
-                    <span class="hidden xl:inline">{{ request.status === 'supply_approved' ? 'Supply Approved' : request.status === 'admin_assigned' ? 'Assigned to Admin' : request.status === 'admin_accepted' ? 'Admin Accepted' : request.status === 'ready_for_pickup' ? 'Ready for Pickup' : request.status }}</span>
-                    <span class="xl:hidden">{{ request.status === 'supply_approved' ? 'Approved' : request.status === 'admin_assigned' ? 'Assigned' : request.status === 'admin_accepted' ? 'Accepted' : request.status === 'ready_for_pickup' ? 'Pickup' : request.status.substring(0, 6) }}</span>
+                    <span class="hidden xl:inline">{{ getStatusDisplayText(request.status) }}</span>
+                    <span class="xl:hidden">{{ getStatusDisplayText(request.status).substring(0, 6) }}</span>
                     </span>
                   </td>
                 <td class="px-2 sm:px-3 py-2 border-r border-gray-200 dark:border-gray-700">
@@ -2692,7 +2631,7 @@ watch(requestsNeedingAction, () => {
                       </button>
                     </template>
                     
-                    <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup'" class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    <span v-if="!isAdmin() && request.status !== 'pending' && request.status !== 'supply_approved' && request.status !== 'admin_accepted' && request.status !== 'approved' && request.status !== 'ready_for_pickup' && request.status !== 'for_claiming'" class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-xs font-semibold bg-gray-100 dark:bg-gray-700 rounded-lg">
                       <span class="material-icons-outlined text-xs sm:text-sm">block</span>
                       <span class="hidden sm:inline">No Action</span>
                     </span>
@@ -2758,7 +2697,7 @@ watch(requestsNeedingAction, () => {
       <div class="bg-white dark:bg-gray-800 shadow-lg border-2 border-gray-400 dark:border-gray-600 w-full max-w-md">
         <div class="bg-gradient-to-r from-blue-800 to-blue-700 dark:from-gray-700 dark:to-gray-800 border-b-2 border-blue-900 dark:border-gray-600 px-6 py-4 flex items-start justify-between">
           <div>
-            <h3 class="text-lg font-bold text-white uppercase tracking-wide">Assign Request to Administrator</h3>
+            <h3 class="text-lg font-bold text-white uppercase tracking-wide">Assign Admin</h3>
             <p class="text-xs text-white/90 dark:text-gray-300 mt-1">Request Item: {{ selectedRequest?.item_name }}</p>
           </div>
           <button @click="closeAssignModal" class="text-white hover:bg-white/20 dark:hover:bg-gray-600 p-1 transition-colors">
@@ -2793,7 +2732,7 @@ watch(requestsNeedingAction, () => {
             :disabled="loading || !assignForm.admin_id"
             class="px-5 py-2 text-sm font-semibold bg-purple-700 text-white border-2 border-purple-900 dark:border-purple-800 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-purple-700 transition-all rounded-lg"
           >
-            Assign Request
+            Assign Admin
           </button>
         </div>
       </div>
@@ -2916,7 +2855,7 @@ watch(requestsNeedingAction, () => {
                 <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
                   <span class="material-icons-outlined text-white text-xl">check_circle</span>
                 </div>
-                <h3 class="text-lg font-bold text-white">Approve Request</h3>
+                <h3 class="text-lg font-bold text-white">Accept Request</h3>
               </div>
               <button
                 @click="closeApproveModal"
@@ -2937,7 +2876,7 @@ watch(requestsNeedingAction, () => {
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-base font-semibold text-gray-900 dark:text-white mb-2">
-                  Are you sure you want to approve this request?
+                  Are you sure you want to accept this request?
                 </p>
                 <div v-if="requestToApprove" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mt-3">
                   <div v-if="!isMultiItemApprove()" class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
@@ -2955,7 +2894,7 @@ watch(requestsNeedingAction, () => {
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">flag</span>
-                      <span><strong>Status:</strong> <span class="capitalize">{{ requestToApprove.status }}</span></span>
+                      <span><strong>Status:</strong> <span>{{ getStatusDisplayText(requestToApprove.status) }}</span></span>
                     </div>
                   </div>
                   <div v-else class="text-sm text-gray-700 dark:text-gray-300 space-y-3">
@@ -3008,7 +2947,7 @@ watch(requestsNeedingAction, () => {
                 </div>
                 <p v-if="!allItemsRejectedInApproveModal()" class="text-sm text-gray-600 dark:text-gray-400 mt-3 flex items-start gap-2">
                   <span class="material-icons-outlined text-green-500 text-sm mt-0.5">info</span>
-                  <span>{{ isMultiItemApprove() ? 'Only non-rejected items will be approved and the requester notified.' : 'The request will be approved and the requester will be notified.' }}</span>
+                  <span>{{ isMultiItemApprove() ? 'Only non-rejected items will be accepted and the requester notified.' : 'The request will be accepted and the requester will be notified.' }}</span>
                 </p>
               </div>
             </div>
@@ -3031,7 +2970,7 @@ watch(requestsNeedingAction, () => {
             >
               <span v-if="!approvingRequest" class="material-icons-outlined text-lg">check_circle</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
-              <span>{{ approvingRequest ? 'Approving...' : 'Approve Request' }}</span>
+              <span>{{ approvingRequest ? 'Accepting...' : 'Accept Request' }}</span>
             </button>
           </div>
         </div>
@@ -3087,7 +3026,7 @@ watch(requestsNeedingAction, () => {
                 <div class="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
                   <span class="material-icons-outlined text-white text-xl">done_all</span>
                 </div>
-                <h3 class="text-lg font-bold text-white">Mark as Fulfilled</h3>
+                <h3 class="text-lg font-bold text-white">Mark as Completed</h3>
               </div>
               <button
                 @click="closeFulfillModal"
@@ -3108,7 +3047,7 @@ watch(requestsNeedingAction, () => {
               </div>
               <div class="flex-1">
                 <p class="text-base font-semibold text-gray-900 dark:text-white mb-2">
-                  Mark this request as fulfilled?
+                  Mark this request as completed?
                 </p>
                 <div v-if="requestToFulfill" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600 mt-3">
                   <div v-if="requestToFulfill.items && requestToFulfill.items.length > 1" class="text-sm text-gray-700 dark:text-gray-300 space-y-2">
@@ -3118,9 +3057,9 @@ watch(requestsNeedingAction, () => {
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">flag</span>
-                      <span><strong>Status:</strong> <span class="capitalize">{{ requestToFulfill.status }}</span></span>
+                      <span><strong>Status:</strong> <span>{{ getStatusDisplayText(requestToFulfill.status) }}</span></span>
                     </div>
-                    <p class="text-xs font-medium text-amber-600 dark:text-amber-400 pt-1">Approved items to fulfill (rejected excluded):</p>
+                    <p class="text-xs font-medium text-amber-600 dark:text-amber-400 pt-1">Accepted items to fulfill (rejected excluded):</p>
                     <div class="space-y-1.5 max-h-32 overflow-y-auto">
                       <div v-for="(it, idx) in requestToFulfill.items.filter(i => !isItemRejected(i))" :key="it.id || idx" class="flex justify-between text-xs">
                         <span class="text-gray-700 dark:text-gray-300">{{ it.item_name }}</span>
@@ -3147,17 +3086,17 @@ watch(requestsNeedingAction, () => {
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">flag</span>
-                      <span><strong>Status:</strong> <span class="capitalize">{{ requestToFulfill.status }}</span></span>
+                      <span><strong>Status:</strong> <span>{{ getStatusDisplayText(requestToFulfill.status) }}</span></span>
                     </div>
                   </div>
                 </div>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-3 flex items-start gap-2">
                   <span class="material-icons-outlined text-indigo-500 text-sm mt-0.5">info</span>
                   <span v-if="requestToFulfill?.status === 'ready_for_pickup'">
-                    This will mark the request as fulfilled after the user has picked up their items. Make sure the user has collected their items before marking as fulfilled.
+                    This will mark the request as completed after the user has picked up their items. Make sure the user has collected their items before marking as completed.
                   </span>
                   <span v-else>
-                    This will mark the request as fulfilled and complete the request process.
+                    This will mark the request as completed and complete the request process.
                   </span>
                 </p>
               </div>
@@ -3181,7 +3120,7 @@ watch(requestsNeedingAction, () => {
             >
               <span v-if="!fulfillingRequest" class="material-icons-outlined text-lg">done_all</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
-              <span>{{ fulfillingRequest ? 'Marking...' : 'Mark as Fulfilled' }}</span>
+              <span>{{ fulfillingRequest ? 'Marking...' : 'Mark as Completed' }}</span>
             </button>
           </div>
         </div>
@@ -3241,8 +3180,38 @@ watch(requestsNeedingAction, () => {
               </div>
             </div>
 
-            <!-- Pickup Time Input -->
+            <!-- Pickup Option Radio Buttons -->
             <div class="space-y-3">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                <span class="flex items-center gap-2">
+                  <span class="material-icons-outlined text-cyan-600 dark:text-cyan-400 text-lg">radio_button_checked</span>
+                  Pickup Option <span class="text-red-500">*</span>
+                </span>
+              </label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    v-model="pickupScheduleForm.pickup_option"
+                    type="radio"
+                    value="pickup_now"
+                    class="w-4 h-4 text-cyan-600 border-gray-300 focus:ring-cyan-500"
+                  />
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pickup Now</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    v-model="pickupScheduleForm.pickup_option"
+                    type="radio"
+                    value="schedule"
+                    class="w-4 h-4 text-cyan-600 border-gray-300 focus:ring-cyan-500"
+                  />
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Schedule</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Pickup Time Input (only show when Schedule is selected) -->
+            <div v-if="pickupScheduleForm.pickup_option === 'schedule'" class="space-y-3">
               <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
                 <span class="flex items-center gap-2">
                   <span class="material-icons-outlined text-cyan-600 dark:text-cyan-400 text-lg">access_time</span>
@@ -3379,6 +3348,17 @@ watch(requestsNeedingAction, () => {
               </p>
             </div>
 
+            <!-- Pickup Now Message -->
+            <div v-if="pickupScheduleForm.pickup_option === 'pickup_now'" class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div class="flex items-start gap-3">
+                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">check_circle</span>
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Ready for Immediate Pickup</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-400">The user will be notified immediately that their request is ready for pickup now.</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Notify User Checkbox -->
             <div class="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <input
@@ -3408,12 +3388,12 @@ watch(requestsNeedingAction, () => {
             </button>
             <button
               @click="schedulePickup"
-              :disabled="schedulingPickup || !pickupScheduleForm.pickup_scheduled_at"
+              :disabled="schedulingPickup || (pickupScheduleForm.pickup_option === 'schedule' && !pickupScheduleForm.pickup_scheduled_at)"
               class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span v-if="!schedulingPickup" class="material-icons-outlined text-lg">schedule</span>
+              <span v-if="!schedulingPickup" class="material-icons-outlined text-lg">{{ pickupScheduleForm.pickup_option === 'pickup_now' ? 'done' : 'schedule' }}</span>
               <span v-else class="material-icons-outlined text-lg animate-spin">refresh</span>
-              <span>{{ schedulingPickup ? 'Scheduling...' : 'Schedule Pickup' }}</span>
+              <span>{{ schedulingPickup ? (pickupScheduleForm.pickup_option === 'pickup_now' ? 'Processing...' : 'Scheduling...') : (pickupScheduleForm.pickup_option === 'pickup_now' ? 'Pickup Now' : 'Schedule Pickup') }}</span>
             </button>
           </div>
         </div>
@@ -3522,13 +3502,13 @@ watch(requestsNeedingAction, () => {
                         
                         <!-- Approval Date -->
                         <div v-if="extractApprovalDate(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 dark:border-green-800 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved</span>
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Accepted</span>
                           <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApprovalDate(msg.message) }}</span>
                         </div>
                         
-                        <!-- Approved By -->
+                        <!-- Accepted By -->
                         <div v-if="extractApproverName(msg.message)" class="flex flex-col sm:flex-row sm:items-start sm:justify-between py-1.5 border-b border-green-200 dark:border-green-800 gap-1">
-                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Approved By</span>
+                          <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide flex-shrink-0">Accepted By</span>
                           <span class="text-xs text-gray-900 dark:text-white break-words sm:text-right">{{ extractApproverName(msg.message) }}</span>
                         </div>
                         
@@ -3689,7 +3669,7 @@ watch(requestsNeedingAction, () => {
                     </div>
                     <div v-if="selectedRequestForProof?.status">
                       <span class="font-semibold">Status:</span> 
-                      <span class="capitalize">{{ selectedRequestForProof.status }}</span>
+                      <span>{{ getStatusDisplayText(selectedRequestForProof.status) }}</span>
                     </div>
                   </div>
                   <p class="text-xs text-gray-600 dark:text-gray-400 mt-3 italic">⚠️ Please verify the receipt details match the request before releasing items to the user.</p>
@@ -3890,7 +3870,7 @@ watch(requestsNeedingAction, () => {
                   <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
                     <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400">location_on</span>
                   </div>
-                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Location</label>
+                  <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Unit/Sections</label>
                 </div>
                 <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ selectedViewRequest.user?.location || 'N/A' }}</p>
               </div>
@@ -3962,11 +3942,7 @@ watch(requestsNeedingAction, () => {
                   <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</label>
                 </div>
                 <span :class="['px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center shadow-sm', getStatusBadgeClass(selectedViewRequest.status)]">
-                  {{ selectedViewRequest.status === 'supply_approved' ? 'Supply Approved' : 
-                     selectedViewRequest.status === 'admin_assigned' ? 'Assigned to Admin' :
-                     selectedViewRequest.status === 'admin_accepted' ? 'Admin Accepted' :
-                     selectedViewRequest.status === 'ready_for_pickup' ? 'For Pickup' :
-                     selectedViewRequest.status }}
+                  {{ getStatusDisplayText(selectedViewRequest.status) }}
                 </span>
               </div>
 
@@ -4006,7 +3982,7 @@ watch(requestsNeedingAction, () => {
                     class="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-emerald-400 dark:border-emerald-500"
                   >
                     <span class="material-icons-outlined text-lg">check_circle</span>
-                    <span>Approve</span>
+                    <span>Accept</span>
                   </button>
                   <button
                     @click="handleRejectFromView(selectedViewRequest)"
@@ -4028,16 +4004,8 @@ watch(requestsNeedingAction, () => {
                   </button>
                 </template>
                 
-                <!-- Notify User and Schedule Pickup (for ready_for_pickup status) -->
+                <!-- Schedule Pickup (for ready_for_pickup status) -->
                 <template v-if="!isAdmin() && selectedViewRequest.status === 'ready_for_pickup'">
-                  <button
-                    @click="handleNotifyUserFromView(selectedViewRequest)"
-                    :disabled="notifyingUser"
-                    class="px-5 py-2.5 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-green-400 dark:border-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span class="material-icons-outlined text-lg">{{ notifyingUser ? 'hourglass_empty' : 'notifications' }}</span>
-                    <span>{{ notifyingUser ? 'Notifying...' : 'Notify User' }}</span>
-                  </button>
                   <button
                     @click="handleSchedulePickupFromView(selectedViewRequest)"
                     class="px-5 py-2.5 bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-900/20 dark:hover:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-cyan-400 dark:border-cyan-500"
@@ -4048,13 +4016,13 @@ watch(requestsNeedingAction, () => {
                 </template>
                 
                 <!-- Fulfill button (for admin_accepted, approved, or ready_for_pickup) -->
-                <template v-if="selectedViewRequest.status === 'admin_accepted' || selectedViewRequest.status === 'approved' || selectedViewRequest.status === 'ready_for_pickup'">
+                <template v-if="selectedViewRequest.status === 'admin_accepted' || selectedViewRequest.status === 'approved' || selectedViewRequest.status === 'ready_for_pickup' || selectedViewRequest.status === 'for_claiming'">
                   <button
                     @click="handleFulfillFromView(selectedViewRequest)"
                     class="px-5 py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2 border-2 border-blue-400 dark:border-blue-500"
                   >
                     <span class="material-icons-outlined text-lg">done_all</span>
-                    <span>Fulfill</span>
+                    <span>Completed</span>
                   </button>
                 </template>
                 

@@ -147,7 +147,7 @@ class SupplyRequestController extends Controller
             // Apply filters
             if ($request->has('status') && !empty($request->status)) {
                 // Validate status value to prevent constraint violations
-                $validStatuses = ['pending', 'supply_approved', 'admin_assigned', 'admin_accepted', 'approved', 'ready_for_pickup', 'rejected', 'fulfilled', 'cancelled'];
+                $validStatuses = ['pending', 'supply_approved', 'admin_assigned', 'admin_accepted', 'approved', 'ready_for_pickup', 'for_claiming', 'rejected', 'fulfilled', 'cancelled'];
                 $requestedStatus = $request->status;
                 if (in_array($requestedStatus, $validStatuses)) {
                     $query->where('status', $requestedStatus);
@@ -2509,11 +2509,11 @@ class SupplyRequestController extends Controller
                 }
             }
 
-            // Check current status - can fulfill approved or ready_for_pickup requests
-            if (!in_array($supplyRequest->status, ['approved', 'ready_for_pickup'])) {
+            // Check current status - can fulfill approved, ready_for_pickup, for_claiming, or admin_accepted requests
+            if (!in_array($supplyRequest->status, ['approved', 'ready_for_pickup', 'for_claiming', 'admin_accepted'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Can only fulfill approved or ready-for-pickup requests'
+                    'message' => 'Can only fulfill approved, ready-for-pickup, for-claiming, or admin-accepted requests'
                 ], 400);
             }
 
@@ -3151,11 +3151,15 @@ class SupplyRequestController extends Controller
                 
                 Log::info("Pickup notification message created for request ID: {$supplyRequest->id}, Message ID: {$message->id}");
                 
+                // Change status to 'for_claiming' when Pickup Now is clicked
+                $supplyRequest->status = 'for_claiming';
+                
                 // Update pickup_notified_at if column exists
                 if (Schema::hasColumn('supply_requests', 'pickup_notified_at')) {
                     $supplyRequest->pickup_notified_at = now();
-                    $supplyRequest->save();
                 }
+                
+                $supplyRequest->save();
                 
                 // Broadcast event for real-time update (this will trigger message refresh in frontend)
                 event(new SupplyRequestApproved($supplyRequest, $pickupMessage));

@@ -8,6 +8,7 @@ import SuccessModal from '../components/SuccessModal.vue'
 
 const router = useRouter()
 const searchQuery = ref('')
+const validationFilter = ref('all') // 'all', 'validated', 'not_validated'
 const currentPage = ref(1)
 const itemsPerPage = ref(8)
 const totalItems = ref(0)
@@ -93,9 +94,16 @@ const filteredItems = computed(() => {
   const query = searchQuery.value?.toLowerCase().trim()
   let result = inventoryItems.value
   
+  // Apply validation filter
+  if (validationFilter.value === 'validated') {
+    result = result.filter(item => item.qrCodeVersion && item.qrCodeVersion !== null)
+  } else if (validationFilter.value === 'not_validated') {
+    result = result.filter(item => !item.qrCodeVersion || item.qrCodeVersion === null)
+  }
+  
   if (query) {
     // Optimize search: only search relevant fields
-    result = inventoryItems.value.filter(item => {
+    result = result.filter(item => {
       return (
         (item.article || '').toLowerCase().includes(query) ||
         (item.description || '').toLowerCase().includes(query) ||
@@ -120,7 +128,12 @@ const totalFilteredItems = computed(() => {
 
 // Count validated items (items with qrCodeVersion)
 const validatedItemsCount = computed(() => {
-  return filteredItems.value.filter(item => item.qrCodeVersion && item.qrCodeVersion !== null).length
+  return inventoryItems.value.filter(item => item.qrCodeVersion && item.qrCodeVersion !== null).length
+})
+
+// Count unvalidated items (items without qrCodeVersion)
+const unvalidatedItemsCount = computed(() => {
+  return inventoryItems.value.filter(item => !item.qrCodeVersion || item.qrCodeVersion === null).length
 })
 
 const paginatedItems = computed(() => {
@@ -841,7 +854,7 @@ const navigateBack = () => {
       </div>
 
       <!-- Statistics Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <!-- Total Items Card -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
           <div class="flex items-center justify-between">
@@ -873,31 +886,61 @@ const navigateBack = () => {
           <div class="flex items-center justify-between">
             <div>
               <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Validated Items</p>
-              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ validatedItemsCount }} / {{ totalFilteredItems }}</p>
+              <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ validatedItemsCount }} / {{ itemsTotal || totalFilteredItems }}</p>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
               <span class="material-icons-outlined text-green-400 dark:text-green-400 text-2xl">check_circle</span>
             </div>
           </div>
         </div>
+        
+        <!-- Not Validated Items Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg hover:shadow-lg transition-shadow duration-300 border border-gray-200 dark:border-gray-700 p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-base font-medium text-gray-600 dark:text-gray-400 mb-1">Not Validated Items</p>
+              <p class="text-3xl font-bold text-orange-600 dark:text-orange-400">{{ unvalidatedItemsCount }}</p>
+            </div>
+            <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+              <span class="material-icons-outlined text-orange-400 dark:text-orange-400 text-2xl">warning</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Enhanced Search Bar -->
+      <!-- Enhanced Search Bar and Filter -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md dark:shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-        <div class="relative flex-1">
-          <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-            <span class="material-icons-outlined text-green-600 text-xl">search</span>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <!-- Search Input -->
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+              <span class="material-icons-outlined text-green-600 text-xl">search</span>
+            </div>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search by article, description, category, PAC, or unit/sections..."
+              class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
+            >
+            <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
+              <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
+                <span class="material-icons-outlined text-lg">close</span>
+              </button>
+            </div>
           </div>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search by article, description, category, PAC, or unit/sections..."
-            class="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 font-medium text-base"
-          >
-          <div v-if="searchQuery" class="absolute inset-y-0 right-0 flex items-center pr-3">
-            <button @click="searchQuery = ''" class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-300 dark:hover:text-gray-300 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 transition-colors">
-              <span class="material-icons-outlined text-lg">close</span>
-            </button>
+          
+          <!-- Validation Filter Dropdown -->
+          <div class="flex items-center gap-2 sm:w-auto">
+            <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">Filter:</label>
+            <select
+              v-model="validationFilter"
+              @change="currentPage = 1"
+              class="bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+            >
+              <option value="all">All Items</option>
+              <option value="not_validated">Not Validated ({{ unvalidatedItemsCount }})</option>
+              <option value="validated">Validated ({{ validatedItemsCount }})</option>
+            </select>
           </div>
         </div>
       </div>

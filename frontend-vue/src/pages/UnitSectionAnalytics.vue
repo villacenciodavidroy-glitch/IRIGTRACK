@@ -184,7 +184,7 @@
                   <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Approved</th>
                   <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Pending</th>
                   <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Rejected</th>
-                  <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Fulfilled</th>
+                  <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Completed</th>
                   <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Unique Users</th>
                 </tr>
               </thead>
@@ -364,7 +364,7 @@ const statusDistributionChartData = computed(() => {
   }, { approved: 0, pending: 0, rejected: 0, fulfilled: 0 })
 
   return {
-    labels: ['Approved', 'Pending', 'Rejected', 'Fulfilled'],
+    labels: ['Approved', 'Pending', 'Rejected', 'Completed'],
     datasets: [{
       data: [totals.approved, totals.pending, totals.rejected, totals.fulfilled],
       backgroundColor: [
@@ -411,7 +411,7 @@ const statusComparisonChartData = computed(() => {
         borderWidth: 2
       },
       {
-        label: 'Fulfilled',
+        label: 'Completed',
         data: top5.map(s => s.fulfilled_requests || 0),
         backgroundColor: 'rgba(59, 130, 246, 0.8)',
         borderColor: 'rgba(59, 130, 246, 1)',

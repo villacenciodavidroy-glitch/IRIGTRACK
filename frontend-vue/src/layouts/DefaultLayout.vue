@@ -394,13 +394,14 @@ const currentDate = ref(new Date())
 const baseNavigation = [
   { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
   { name: 'Inventory', path: '/inventory', icon: 'inventory' },
-  { name: 'Supply Requests', path: '/supply-requests', icon: 'shopping_cart' },
+  { name: 'Request Supply', path: '/supply-requests', icon: 'playlist_add' },
+  { name: 'My Request', path: '/request-history', icon: 'history' },
   { name: 'Analytics', path: '/analytics', icon: 'analytics' },
   { name: 'QR Generation', path: '/QRGeneration', icon: 'qr_code_2' },
   { name: 'Reporting', path: '/reporting', icon: 'assessment' }
 ]
 
-// Admin-only base navigation (without Supply Requests for regular users)
+// Admin-only base navigation (without Supply List for regular users)
 const adminBaseNavigation = [
   { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
   { name: 'Inventory', path: '/inventory', icon: 'inventory' },
@@ -411,22 +412,13 @@ const adminBaseNavigation = [
 
 // User role only navigation (simplified)
 const userOnlyNavigation = [
-  { name: 'Supply Requests', path: '/supply-requests', icon: 'shopping_cart' }
+  { name: 'Request Supply', path: '/supply-requests', icon: 'playlist_add' },
+  { name: 'My Request', path: '/request-history', icon: 'history' }
 ]
 
 // Admin-only navigation items
 const adminNavigation = [
   { name: 'Supply Management', path: '/admin/supply-requests', icon: 'inventory_2' },
-  {
-    name: 'Organization',
-    icon: 'business',
-    hasSubmenu: true,
-    id: 'organization',
-    submenu: [
-      { name: 'Categories', path: '/categories', icon: 'category' },
-      { name: 'Units/Sections', path: '/locations', icon: 'location_on' }
-    ]
-  },
   {
     name: 'Manage Account',
     icon: 'manage_accounts',
@@ -443,9 +435,10 @@ const adminNavigation = [
     hasSubmenu: true,
     id: 'settings',
     submenu: [
+      { name: 'Categories', path: '/categories', icon: 'category' },
+      { name: 'Units/Sections', path: '/locations', icon: 'location_on' },
       { name: 'Change Logo', path: '/settings/logo', icon: 'image' },
-      { name: 'Form Labels', path: '/settings/form-labels', icon: 'label' },
-      { name: 'Activity Log', path: '/settings/activity-log', icon: 'history' }
+      { name: 'Form Labels', path: '/settings/form-labels', icon: 'label' }
     ]
   },
   {
@@ -454,6 +447,7 @@ const adminNavigation = [
     hasSubmenu: true,
     id: 'history',
     submenu: [
+      { name: 'Activity Log', path: '/settings/activity-log', icon: 'history' },
       { name: 'Deleted Items', path: '/history/deleted-items', icon: 'delete' },
       { name: 'Maintenance Records', path: '/history/maintenance-records', icon: 'build' },
       { name: 'Transactions', path: '/transactions', icon: 'swap_horiz' }
@@ -516,6 +510,23 @@ const navigation = computed(() => {
   // For other roles, show base navigation
   const nav = [...baseNavigation]
   return nav
+})
+
+// Computed property for page title display
+const pageTitle = computed(() => {
+  const routeName = route.name
+  const titleMap = {
+    'SupplyRequests': 'Request Supply',
+    'SupplyRequestsManagement': 'Supply Requests Management',
+    'AdminSupplyRequests': 'Admin Supply Requests',
+    'RequestHistory': 'My Request',
+    'Dashboard': 'Dashboard',
+    'Inventory': 'Inventory',
+    'Analytics': 'Analytics',
+    'QRGeneration': 'QR Generation',
+    'Reporting': 'Reporting'
+  }
+  return titleMap[routeName] || routeName
 })
 
 // Computed property for user display name
@@ -1891,7 +1902,7 @@ onBeforeUnmount(() => {
               {{ isSidebarOpen ? 'close' : 'menu' }}
             </span>
           </button>
-          <h1 class="text-base xs:text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 dark:text-green-400 truncate">{{ route.name }}</h1>
+          <h1 class="text-base xs:text-lg sm:text-xl lg:text-2xl font-semibold text-gray-800 dark:text-green-400 truncate">{{ pageTitle }}</h1>
         </div>
 
         <!-- Right Side Icons -->
@@ -2069,15 +2080,17 @@ onBeforeUnmount(() => {
                           :class="{
                             'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300': message.supply_request.status === 'fulfilled',
                             'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300': message.supply_request.status === 'approved' || message.supply_request.status === 'ready_for_pickup',
+                            'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300': message.supply_request.status === 'for_claiming',
                             'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300': message.supply_request.status === 'rejected',
-                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': !['fulfilled', 'approved', 'ready_for_pickup', 'rejected'].includes(message.supply_request.status)
+                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': !['fulfilled', 'approved', 'ready_for_pickup', 'for_claiming', 'rejected'].includes(message.supply_request.status)
                           }">
                           <span class="w-1.5 h-1.5 rounded-full"
                             :class="{
                               'bg-green-500': message.supply_request.status === 'fulfilled',
                               'bg-yellow-500': message.supply_request.status === 'approved' || message.supply_request.status === 'ready_for_pickup',
+                              'bg-orange-500': message.supply_request.status === 'for_claiming',
                               'bg-red-500': message.supply_request.status === 'rejected',
-                              'bg-gray-400': !['fulfilled', 'approved', 'ready_for_pickup', 'rejected'].includes(message.supply_request.status)
+                              'bg-gray-400': !['fulfilled', 'approved', 'ready_for_pickup', 'for_claiming', 'rejected'].includes(message.supply_request.status)
                             }"></span>
                           {{ message.supply_request.status.replace('_', ' ') }}
                         </span>
@@ -2224,24 +2237,6 @@ onBeforeUnmount(() => {
               >
                 <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">person</span>
                 <span class="font-medium">Profile</span>
-              </router-link>
-              <router-link
-                v-if="isAdmin()"
-                to="/activity-log"
-                class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
-                @click="isProfileDropdownOpen = false"
-              >
-                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">history</span>
-                <span class="font-medium">Activity Log</span>
-              </router-link>
-              <router-link
-                v-if="isAdmin()"
-                to="/history/deleted-items"
-                class="flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"
-                @click="isProfileDropdownOpen = false"
-              >
-                <span class="material-icons-outlined mr-3 text-lg text-gray-800 dark:text-[#E2E8F0]">folder</span>
-                <span class="font-medium">History</span>
               </router-link>
               <button
                 class="w-full text-left flex items-center px-4 py-2.5 text-sm text-gray-800 dark:text-[#E2E8F0] hover:bg-gray-50 dark:hover:bg-[#4A5568] transition-colors"

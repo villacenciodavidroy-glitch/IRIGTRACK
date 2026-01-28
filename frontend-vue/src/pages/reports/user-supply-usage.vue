@@ -1,18 +1,18 @@
 <template>
-  <div class="min-h-screen bg-white dark:bg-gray-800 p-4 sm:p-6 screen-only">
+  <div class="min-h-screen bg-white dark:bg-gray-900 p-4 sm:p-6 screen-only">
     <div class="max-w-full mx-auto space-y-5">
       <!-- Header Section -->
       <div class="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-lg shadow-lg overflow-hidden screen-only">
         <div class="px-6 py-5 md:px-8 md:py-6 flex flex-wrap items-center gap-4">
           <button 
             @click="goBack" 
-            class="p-2.5 bg-white rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+            class="p-2.5 bg-white dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             title="Go back"
           >
-            <span class="material-icons-outlined text-indigo-600 text-xl md:text-2xl">arrow_back</span>
+            <span class="material-icons-outlined text-indigo-600 dark:text-indigo-400 text-xl md:text-2xl">arrow_back</span>
           </button>
-          <div class="p-3 bg-white rounded-lg flex-shrink-0 shadow-md">
-            <span class="material-icons-outlined text-indigo-600 text-2xl md:text-3xl">inventory_2</span>
+          <div class="p-3 bg-white dark:bg-gray-800 rounded-lg flex-shrink-0 shadow-md">
+            <span class="material-icons-outlined text-indigo-600 dark:text-indigo-400 text-2xl md:text-3xl">inventory_2</span>
           </div>
           <div class="flex-1 min-w-0">
             <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1">Supply Item Usage Report</h1>
@@ -22,25 +22,25 @@
             <button 
               @click="exportToExcel" 
               :disabled="loading || rankedSupplies.length === 0"
-              class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span class="material-icons-outlined text-lg text-emerald-700">download</span>
+              <span class="material-icons-outlined text-lg text-emerald-700 dark:text-emerald-400">download</span>
               <span>Export Excel</span>
             </button>
             <button 
               @click.stop.prevent="exportToPDF" 
               :disabled="loading || rankedSupplies.length === 0"
-              class="bg-white text-emerald-700 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-400 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:-translate-y-0.5 transition-all font-semibold shadow-lg border border-white/60 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span class="material-icons-outlined text-lg text-emerald-700">picture_as_pdf</span>
+              <span class="material-icons-outlined text-lg text-emerald-700 dark:text-emerald-400">picture_as_pdf</span>
               <span>Export PDF</span>
             </button>
             <button 
               @click="openPrintDialog" 
               :disabled="loading || rankedSupplies.length === 0"
-              class="bg-emerald-50 text-emerald-800 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-white transition-all font-semibold shadow-lg border border-white/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-white dark:hover:bg-emerald-900/50 transition-all font-semibold shadow-lg border border-white/60 dark:border-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span class="material-icons-outlined text-lg text-emerald-700">print</span>
+              <span class="material-icons-outlined text-lg text-emerald-700 dark:text-emerald-400">print</span>
               <span>Print Report</span>
             </button>
           </div>
@@ -228,63 +228,33 @@
           <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Visual comparison of top supplies by total usage</p>
         </div>
         <div class="p-6">
-          <div class="h-[400px] w-full">
-            <Bar :data="chartData" :options="chartOptions" />
+          <div class="h-[400px] w-full" id="usage-chart-container">
+            <Bar ref="chartRef" :data="chartData" :options="chartOptions" />
           </div>
         </div>
       </div>
 
-      <!-- Budget Insights Section -->
-      <div v-if="!loading && !error && rankedSupplies.length > 0" class="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl shadow-md border-2 border-yellow-200 dark:border-yellow-800 p-6 screen-only">
-        <div class="flex items-start gap-4">
-          <div class="p-3 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg">
-            <span class="material-icons-outlined text-yellow-600 dark:text-yellow-400 text-3xl">warning</span>
-          </div>
-          <div class="flex-1">
-            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Budget Management Insights</h3>
-            <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
-              The following supplies have the highest consumption rates and may require closer budget monitoring:
-            </p>
-            <ul class="space-y-2">
-              <li 
-                v-for="(supply, index) in top3Supplies" 
-                :key="supply.item_id"
-                class="flex items-center gap-2 text-sm"
-              >
-                <span class="font-bold text-yellow-600 dark:text-yellow-400">#{{ index + 1 }}</span>
-                <span class="text-gray-900 dark:text-white font-medium">{{ supply.item?.unit }}</span>
-                <span class="text-gray-600 dark:text-gray-400">-</span>
-                <span class="text-gray-700 dark:text-gray-300">{{ formatNumber(supply.total_usage) }} units total</span>
-                <span 
-                  v-if="supply.trend === 'increasing'"
-                  class="ml-auto px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded text-xs font-medium"
-                >
-                  Increasing Trend
-                </span>
-              </li>
-            </ul>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mt-4 italic">
-              💡 Recommendation: Monitor these items closely and consider bulk purchasing or alternative suppliers to optimize budget allocation.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
   <!-- Print-only optimized layout -->
   <div class="print-only" style="display: none;" v-if="!loading && !error && rankedSupplies.length > 0">
-    <div style="padding: 15mm 10mm; font-family: 'Times New Roman', serif; max-width: 100%;">
+    <div style="padding: 20px; font-family: 'Times New Roman', serif; max-width: 100%;">
       <!-- Print Header -->
-      <div style="text-align: center; margin-bottom: 15px; border-bottom: 1.5px solid #333; padding-bottom: 12px;">
-        <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px; white-space: nowrap;">REPUBLIC OF THE PHILIPPINES</div>
-        <div style="font-size: 14px; font-weight: bold; margin-bottom: 4px; white-space: nowrap;">NATIONAL IRRIGATION ADMINISTRATION</div>
-        <div style="font-size: 12px; margin-bottom: 8px;">Region X</div>
-        <div style="font-size: 16px; font-weight: bold; margin-top: 12px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;">
+      <div style="text-align: center; margin-bottom: 25px;">
+        <div style="margin-bottom: 15px;">
+          <div style="font-size: 15px; font-weight: bold; margin-bottom: 2px;">Republic of the Philippines</div>
+          <div style="font-size: 15px; font-weight: bold; margin-bottom: 2px;">National Irrigation Administration</div>
+          <div style="font-size: 13px; font-weight: normal; margin-bottom: 8px;">Region XI</div>
+        </div>
+        
+        <img :src="logoImage" alt="NIA Logo" style="width: 50px; height: 50px; margin: 8px auto; display: block;" />
+        
+        <div style="font-size: 16px; font-weight: bold; margin: 12px 0 3px 0; text-transform: uppercase; letter-spacing: 1px;">
           SUPPLY ITEM USAGE REPORT
         </div>
-        <div style="font-size: 13px; font-weight: bold; margin-top: 4px;">
-          Year {{ selectedYear }}
+        <div style="font-size: 13px; font-weight: bold; margin-bottom: 15px;">
+          For the Year {{ selectedYear }}
         </div>
       </div>
 
@@ -346,27 +316,49 @@
         </tbody>
       </table>
 
+      <!-- Print Chart Section -->
+      <div v-if="chartImage" style="margin-top: 25px; page-break-inside: avoid;">
+        <div style="border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 12px;">
+          <h2 style="font-size: 14px; font-weight: bold; margin: 0; text-transform: uppercase;">Usage Comparison Chart</h2>
+          <p style="font-size: 10px; color: #666; margin: 4px 0 0 0;">Visual comparison of top supplies by total usage</p>
+        </div>
+        <div style="width: 100%; margin-bottom: 10px; text-align: center;">
+          <img :src="chartImage" alt="Usage Comparison Chart" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+        </div>
+      </div>
+
       <!-- Print Footer -->
-      <div style="margin-top: 25px; padding-top: 12px; border-top: 1px solid #333; font-size: 9px;">
-        <div style="text-align: right; margin-top: 15px;">
-          <div style="margin-bottom: 35px;">
-            <div style="border-top: 0.5px solid #333; width: 180px; margin-left: auto; padding-top: 4px;">
-              <strong>Prepared by:</strong><br>
-              {{ signatureData.preparedBy.name || 'Jasper Kim Sales' }}<br>
+      <div style="margin-top: 30px; padding-top: 20px; font-size: 11px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <!-- Prepared by -->
+          <div style="flex: 1; text-align: left; padding-right: 20px;">
+            <div style="font-weight: bold; margin-bottom: 8px;">Prepared by:</div>
+            <div style="font-weight: bold; text-transform: uppercase; margin-bottom: 4px; font-size: 11px;">
+              {{ (signatureData.preparedBy.name || 'Jasper Kim Sales').toUpperCase() }}
+            </div>
+            <div style="font-weight: normal; font-size: 10px;">
               {{ signatureData.preparedBy.title || 'Property Officer B' }}
             </div>
           </div>
-          <div style="margin-bottom: 35px;">
-            <div style="border-top: 0.5px solid #333; width: 180px; margin-left: auto; padding-top: 4px;">
-              <strong>Reviewed by:</strong><br>
-              {{ signatureData.reviewedBy.name || 'ANA LIZA C. DINOPOL' }}<br>
+          
+          <!-- Reviewed by -->
+          <div style="flex: 1; text-align: left; padding-right: 20px;">
+            <div style="font-weight: bold; margin-bottom: 8px;">Reviewed by:</div>
+            <div style="font-weight: bold; text-transform: uppercase; margin-bottom: 4px; font-size: 11px;">
+              {{ (signatureData.reviewedBy.name || 'ANA LIZA C. DINOPOL').toUpperCase() }}
+            </div>
+            <div style="font-weight: normal; font-size: 10px;">
               {{ signatureData.reviewedBy.title || 'Administrative Services Officer A' }}
             </div>
           </div>
-          <div>
-            <div style="border-top: 0.5px solid #333; width: 180px; margin-left: auto; padding-top: 4px;">
-              <strong>Noted by:</strong><br>
-              {{ signatureData.notedBy.name || 'LARRY C. FRANADA' }}<br>
+          
+          <!-- Noted by -->
+          <div style="flex: 1; text-align: left;">
+            <div style="font-weight: bold; margin-bottom: 8px;">Noted by:</div>
+            <div style="font-weight: bold; text-transform: uppercase; margin-bottom: 4px; font-size: 11px;">
+              {{ (signatureData.notedBy.name || 'LARRY C. FRANADA').toUpperCase() }}
+            </div>
+            <div style="font-weight: normal; font-size: 10px;">
               {{ signatureData.notedBy.title || 'Division Manager A' }}
             </div>
           </div>
@@ -377,36 +369,36 @@
 
   <!-- Signature Modal -->
   <div v-if="showSignatureModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print-hidden">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 space-y-5">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 space-y-5 border border-gray-200 dark:border-gray-700">
       <div class="flex items-start justify-between">
         <div>
-          <h3 class="text-xl font-semibold text-gray-900">Edit Signature Information</h3>
+          <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Edit Signature Information</h3>
         </div>
-        <button @click="showSignatureModal = false" class="text-gray-500 hover:text-gray-700">
+        <button @click="showSignatureModal = false" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
           <span class="material-icons-outlined">close</span>
         </button>
       </div>
 
       <div class="grid gap-6">
         <div class="space-y-3">
-          <p class="text-sm font-semibold text-gray-800">Prepared by:</p>
-          <input v-model="signatureData.preparedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <input v-model="signatureData.preparedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Prepared by:</p>
+          <input v-model="signatureData.preparedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input v-model="signatureData.preparedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
         <div class="space-y-3">
-          <p class="text-sm font-semibold text-gray-800">Reviewed by:</p>
-          <input v-model="signatureData.reviewedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <input v-model="signatureData.reviewedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Reviewed by:</p>
+          <input v-model="signatureData.reviewedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input v-model="signatureData.reviewedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
         <div class="space-y-3">
-          <p class="text-sm font-semibold text-gray-800">Noted by:</p>
-          <input v-model="signatureData.notedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <input v-model="signatureData.notedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Noted by:</p>
+          <input v-model="signatureData.notedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input v-model="signatureData.notedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
       </div>
 
       <div class="flex items-center justify-end gap-3 pt-2">
-        <button @click="showSignatureModal = false" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+        <button @click="showSignatureModal = false" class="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
           Cancel
         </button>
         <button @click="printReport" class="px-5 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow">
@@ -580,7 +572,7 @@
 </style>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bar } from 'vue-chartjs'
 import {
@@ -593,6 +585,7 @@ import {
   Legend
 } from 'chart.js'
 import axiosClient from '../../axios'
+import logoImage from '../../assets/logo.png'
 
 ChartJS.register(
   CategoryScale,
@@ -634,6 +627,8 @@ const error = ref(null)
 const selectedYear = ref(new Date().getFullYear())
 const sortBy = ref('total_usage')
 const limit = ref(20)
+const chartRef = ref(null)
+const chartImage = ref(null)
 
 // Available years
 const availableYears = computed(() => {
@@ -654,10 +649,6 @@ const sortByLabel = computed(() => {
     'recent_usage': 'Recent Usage'
   }
   return labels[sortBy.value] || 'Total Usage'
-})
-
-const top3Supplies = computed(() => {
-  return rankedSupplies.value.slice(0, 3)
 })
 
 const chartData = computed(() => {
@@ -695,10 +686,30 @@ const chartOptions = {
   scales: {
     y: {
       beginAtZero: true,
+      title: {
+        display: true,
+        text: 'Total Usage (units)',
+        font: {
+          size: 14,
+          weight: 'bold'
+        },
+        color: '#374151'
+      },
       ticks: {
         callback: function(value) {
           return value.toLocaleString()
         }
+      }
+    },
+    x: {
+      title: {
+        display: true,
+        text: 'Supply Items',
+        font: {
+          size: 14,
+          weight: 'bold'
+        },
+        color: '#374151'
       }
     }
   }
@@ -721,6 +732,12 @@ const fetchSupplyUsage = async () => {
     if (response.data.success) {
       rankedSupplies.value = response.data.data || []
       summary.value = response.data.summary || null
+      
+      // Capture chart image after data loads and chart renders
+      await nextTick()
+      setTimeout(() => {
+        captureChartImage()
+      }, 1500)
     } else {
       error.value = response.data.message || 'Failed to fetch supply usage data'
     }
@@ -920,13 +937,67 @@ const exportToPDF = async () => {
   }
 }
 
+// Capture chart as image
+const captureChartImage = () => {
+  try {
+    if (chartRef.value) {
+      // Chart.js component exposes chartInstance
+      const chartInstance = chartRef.value.chartInstance || chartRef.value.$data?._chart || chartRef.value.$refs?.chart?.chartInstance
+      if (chartInstance && typeof chartInstance.toBase64Image === 'function') {
+        chartImage.value = chartInstance.toBase64Image('image/png', 1.0)
+        return true
+      }
+    }
+    // Fallback: try to find canvas element within the chart container
+    const chartContainer = document.getElementById('usage-chart-container')
+    if (chartContainer) {
+      const canvas = chartContainer.querySelector('canvas')
+      if (canvas) {
+        chartImage.value = canvas.toDataURL('image/png', 1.0)
+        return true
+      }
+    }
+    // Last fallback: find any canvas (less reliable)
+    const canvas = document.querySelector('canvas')
+    if (canvas) {
+      chartImage.value = canvas.toDataURL('image/png', 1.0)
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('Error capturing chart image:', error)
+    chartImage.value = null
+    return false
+  }
+}
+
 // Print Report - show signature modal first
-const openPrintDialog = () => {
+const openPrintDialog = async () => {
+  // Capture chart image before opening modal
+  await nextTick()
+  setTimeout(() => {
+    captureChartImage()
+  }, 500)
   showSignatureModal.value = true
 }
 
 // Print report with formatted document
-const printReport = () => {
+const printReport = async () => {
+  // Ensure chart image is captured
+  await nextTick()
+  if (!chartImage.value) {
+    const captured = captureChartImage()
+    // Wait a bit for image to be ready
+    setTimeout(() => {
+      performPrint()
+    }, captured ? 200 : 500)
+  } else {
+    performPrint()
+  }
+}
+
+// Perform the actual print
+const performPrint = () => {
   showSignatureModal.value = false
   
   // Get the print-only content
@@ -981,6 +1052,17 @@ const printReport = () => {
   printWindow.document.close()
 }
 
+// Watch chart data and capture image when it updates
+watch([chartData, rankedSupplies], () => {
+  if (rankedSupplies.value.length > 0) {
+    nextTick(() => {
+      setTimeout(() => {
+        captureChartImage()
+      }, 2000)
+    })
+  }
+}, { deep: true })
+
 // Lifecycle
 onMounted(() => {
   fetchSupplyUsage()
@@ -994,6 +1076,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   vertical-align: middle;
+}
+
+/* Dark mode support for select options */
+select option {
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
 }
 
 /* Print Styles */

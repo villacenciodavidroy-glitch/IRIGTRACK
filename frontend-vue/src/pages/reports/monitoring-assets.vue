@@ -665,7 +665,7 @@ const exportToExcel = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8 space-y-6">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 md:p-8 space-y-6">
     <!-- Header Section -->
     <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-xl rounded-2xl mt-2">
       <div class="px-6 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1145,12 +1145,12 @@ const exportToExcel = () => {
 
   <!-- Confirm Modal -->
   <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4">
-      <h3 class="text-lg font-semibold text-gray-900">Confirm Export</h3>
-      <p class="text-sm text-gray-700">{{ confirmModal.message }}</p>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4 border border-gray-200 dark:border-gray-700">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Confirm Export</h3>
+      <p class="text-sm text-gray-700 dark:text-gray-300">{{ confirmModal.message }}</p>
       <div class="flex justify-end gap-3 pt-2">
         <button
-          class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+          class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
           @click="confirmCancel"
         >
           Cancel

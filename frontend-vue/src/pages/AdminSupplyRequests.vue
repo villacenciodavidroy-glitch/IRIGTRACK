@@ -734,6 +734,9 @@ const getStatusBadgeClass = (status) => {
   if (statusLower === 'ready_for_pickup') {
     return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
   }
+  if (statusLower === 'for_claiming') {
+    return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 border-2 border-orange-300 dark:border-orange-700'
+  }
   return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
 }
 
@@ -789,7 +792,7 @@ const needsAction = (request) => {
     // Supply approved requests need Assign to Admin (if assigned to current admin)
     if (request.status === 'supply_approved' && isAssignedAdmin(request)) return true
     // Ready for pickup requests need Fulfill
-    if (request.status === 'ready_for_pickup') return true
+    if (request.status === 'ready_for_pickup' || request.status === 'for_claiming') return true
   }
   
   return false
@@ -804,7 +807,7 @@ const getActionRequiredTooltip = (request) => {
     if (request.status === 'admin_assigned' && isAssignedAdmin(request)) return 'Action required - Accept Request'
     if (request.status === 'pending' && isAssignedAdmin(request)) return 'Action required - Approve or Reject'
     if (request.status === 'supply_approved' && isAssignedAdmin(request)) return 'Action required - Approve or Reject'
-    if (request.status === 'ready_for_pickup') return 'Action required - Fulfill Request'
+    if (request.status === 'ready_for_pickup' || request.status === 'for_claiming') return 'Action required - Fulfill Request'
   }
   
   return 'Action required'
@@ -1187,7 +1190,7 @@ const statistics = computed(() => {
             ]"
           >
             <span class="material-icons-outlined text-lg">pending</span>
-            <span>Pending</span>
+            <span>New Request</span>
             <span v-if="statistics.pending > 0" class="ml-1 px-2 py-0.5 bg-white/20 dark:bg-gray-800/50 rounded-full text-xs font-bold">
               {{ statistics.pending }}
             </span>
@@ -1262,12 +1265,12 @@ const statistics = computed(() => {
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 dark:bg-gray-700 dark:text-white transition-all text-sm"
             >
               <option value="">All Status</option>
-              <option value="supply_approved">Supply Approved</option>
-              <option value="admin_assigned">Assigned to Admin</option>
+              <option value="supply_approved">Request Approved</option>
+              <option value="admin_assigned">For Admin Approval</option>
               <option value="admin_accepted">Admin Accepted</option>
-              <option value="approved">Approved</option>
+              <option value="approved">Approved By Admin</option>
               <option value="rejected">Rejected</option>
-              <option value="fulfilled">Fulfilled</option>
+              <option value="fulfilled">Completed</option>
             </select>
           </div>
           <div class="min-w-[140px]">
@@ -1358,10 +1361,14 @@ const statistics = computed(() => {
                 </td>
                 <td class="px-3 py-2 sm:px-4 sm:py-3 md:px-6 md:py-4 whitespace-nowrap">
                   <span :class="['px-2 sm:px-2.5 py-0.5 sm:py-1 inline-flex items-center text-[10px] sm:text-xs font-semibold rounded-md', getStatusBadgeClass(request.status)]">
-                    {{ request.status === 'supply_approved' ? 'Supply Approved' : 
-                       request.status === 'admin_assigned' ? 'Assigned to Admin' :
+                    {{ request.status === 'supply_approved' ? 'Request Approved' : 
+                       request.status === 'admin_assigned' ? 'For Admin Approval' :
                        request.status === 'admin_accepted' ? 'Admin Accepted' :
+                       request.status === 'approved' ? 'Approved By Admin' :
                        request.status === 'ready_for_pickup' ? 'For Pickup' :
+                       request.status === 'for_claiming' ? 'For Claiming' :
+                       request.status === 'fulfilled' ? 'Completed' :
+                       request.status === 'pending' ? 'New Request' :
                        request.status }}
                   </span>
                 </td>
@@ -1927,10 +1934,13 @@ const statistics = computed(() => {
                 <label class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</label>
               </div>
               <span :class="['px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center shadow-sm', getStatusBadgeClass(selectedViewRequest.status)]">
-                {{ selectedViewRequest.status === 'supply_approved' ? 'Supply Approved' : 
-                   selectedViewRequest.status === 'admin_assigned' ? 'Assigned to Admin' :
+                {{ selectedViewRequest.status === 'supply_approved' ? 'Request Approved' : 
+                   selectedViewRequest.status === 'admin_assigned' ? 'For Admin Approval' :
                    selectedViewRequest.status === 'admin_accepted' ? 'Admin Accepted' :
+                   selectedViewRequest.status === 'approved' ? 'Approved By Admin' :
                    selectedViewRequest.status === 'ready_for_pickup' ? 'For Pickup' :
+                   selectedViewRequest.status === 'fulfilled' ? 'Completed' :
+                   selectedViewRequest.status === 'pending' ? 'New Request' :
                    selectedViewRequest.status }}
               </span>
             </div>

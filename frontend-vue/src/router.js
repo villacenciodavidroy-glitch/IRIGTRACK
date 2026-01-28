@@ -214,6 +214,11 @@ const routes = [
                 component: () => import('./pages/SupplyRequests.vue')
             },
             {
+                path: 'request-history',
+                name: 'RequestHistory',
+                component: () => import('./pages/RequestHistory.vue')
+            },
+            {
                 path: 'supply-requests-management',
                 name: 'SupplyRequestsManagement',
                 component: () => import('./pages/SupplyRequestsManagement.vue')

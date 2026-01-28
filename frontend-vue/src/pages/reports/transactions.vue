@@ -577,7 +577,7 @@ const formatDateTime = (dateString) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 pb-8 print-area screen-only">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8 print-area screen-only">
     <!-- Header Section -->
     <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 shadow-xl rounded-2xl mt-4 sm:mt-6">
       <div class="px-6 py-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -637,12 +637,12 @@ const formatDateTime = (dateString) => {
 
     <!-- Confirm Modal -->
     <div v-if="confirmModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <h3 class="text-lg font-semibold text-gray-900">Confirm Export</h3>
-        <p class="text-sm text-gray-700">{{ confirmModal.message }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm p-6 space-y-4 border border-gray-200 dark:border-gray-700">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Confirm Export</h3>
+        <p class="text-sm text-gray-700 dark:text-gray-300">{{ confirmModal.message }}</p>
         <div class="flex justify-end gap-3 pt-2">
           <button
-            class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+            class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
             @click="confirmCancel"
           >
             Cancel
@@ -659,36 +659,36 @@ const formatDateTime = (dateString) => {
 
     <!-- Signature Modal -->
     <div v-if="showSignatureModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print-hidden">
-      <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-6 space-y-5">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl p-6 space-y-5 border border-gray-200 dark:border-gray-700">
         <div class="flex items-start justify-between">
           <div>
-            <h3 class="text-xl font-semibold text-gray-900">Edit Signature Information</h3>
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Edit Signature Information</h3>
           </div>
-          <button @click="showSignatureModal = false" class="text-gray-500 hover:text-gray-700">
+          <button @click="showSignatureModal = false" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
             <span class="material-icons-outlined">close</span>
           </button>
         </div>
 
         <div class="grid gap-6">
           <div class="space-y-3">
-            <p class="text-sm font-semibold text-gray-800">Prepared by:</p>
-            <input v-model="signatureData.preparedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            <input v-model="signatureData.preparedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Prepared by:</p>
+            <input v-model="signatureData.preparedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input v-model="signatureData.preparedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           <div class="space-y-3">
-            <p class="text-sm font-semibold text-gray-800">Reviewed by:</p>
-            <input v-model="signatureData.reviewedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            <input v-model="signatureData.reviewedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Reviewed by:</p>
+            <input v-model="signatureData.reviewedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input v-model="signatureData.reviewedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           <div class="space-y-3">
-            <p class="text-sm font-semibold text-gray-800">Noted by:</p>
-            <input v-model="signatureData.notedBy.name" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            <input v-model="signatureData.notedBy.title" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Noted by:</p>
+            <input v-model="signatureData.notedBy.name" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input v-model="signatureData.notedBy.title" type="text" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-2">
-          <button @click="showSignatureModal = false" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+          <button @click="showSignatureModal = false" class="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
             Cancel
           </button>
           <button @click="printReport" class="px-5 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow">
@@ -701,54 +701,54 @@ const formatDateTime = (dateString) => {
     <!-- Main Content -->
     <div class="p-4 sm:p-6">
       <!-- Loading State -->
-      <div v-if="loading" class="bg-white rounded-xl shadow-md border border-gray-100 p-12">
+      <div v-if="loading" class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 p-12">
         <div class="flex flex-col items-center justify-center">
           <div class="inline-block p-4 bg-gray-50 dark:bg-gray-700 rounded-full mb-4">
             <span class="material-icons-outlined animate-spin text-5xl text-green-400">refresh</span>
           </div>
-          <p class="text-lg font-semibold text-gray-900">Loading transactions...</p>
+          <p class="text-lg font-semibold text-gray-900 dark:text-white">Loading transactions...</p>
         </div>
       </div>
 
       <!-- Error State -->
-      <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-4">
-        <p class="text-red-800">{{ error }}</p>
+      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+        <p class="text-red-800 dark:text-red-300">{{ error }}</p>
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="transactions.length === 0" class="bg-white rounded-xl shadow-md border border-gray-100 p-12">
+      <div v-else-if="transactions.length === 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 p-12">
         <div class="flex flex-col items-center justify-center">
-          <span class="material-icons-outlined text-6xl text-gray-400 mb-4">swap_horiz</span>
-          <h3 class="text-xl font-bold text-gray-900 mb-2">No transactions found</h3>
-          <p class="text-gray-600 text-center">{{ searchQuery ? 'Try adjusting your search query' : 'No transactions available.' }}</p>
+          <span class="material-icons-outlined text-6xl text-gray-400 dark:text-gray-500 mb-4">swap_horiz</span>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No transactions found</h3>
+          <p class="text-gray-600 dark:text-gray-400 text-center">{{ searchQuery ? 'Try adjusting your search query' : 'No transactions available.' }}</p>
         </div>
       </div>
 
       <!-- Table -->
-      <div v-else class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden print:shadow-none">
+      <div v-else class="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden print:shadow-none">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gradient-to-r from-emerald-50 to-emerald-100">
+            <thead class="bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Requested By</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Approved By</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Receiver</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Location</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Item Name</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Transaction Time</th>
-                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Requested By</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Approved By</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Receiver</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Location</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Item Name</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Quantity</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Transaction Time</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="transaction in transactions" :key="transaction.id" class="hover:bg-emerald-50/60">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ transaction.requested_by || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ transaction.approver_name || transaction.approved_by || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ transaction.borrower_name || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ transaction.location || 'N/A' }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900">{{ transaction.item_name || 'N/A' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ transaction.quantity || 0 }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDateTime(transaction.transaction_time) }}</td>
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tr v-for="transaction in transactions" :key="transaction.id" class="hover:bg-emerald-50/60 dark:hover:bg-emerald-900/20">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.requested_by || 'N/A' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.approver_name || transaction.approved_by || 'N/A' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.borrower_name || 'N/A' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.location || 'N/A' }}</td>
+                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">{{ transaction.item_name || 'N/A' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ transaction.quantity || 0 }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ formatDateTime(transaction.transaction_time) }}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="[
                     'px-2 py-1 text-xs font-semibold rounded-full',
@@ -765,18 +765,18 @@ const formatDateTime = (dateString) => {
         </div>
 
         <!-- Pagination -->
-        <div class="bg-emerald-50 border-t border-emerald-100 px-6 py-4 print:hidden">
+        <div class="bg-emerald-50 dark:bg-emerald-900/20 border-t border-emerald-100 dark:border-emerald-800 px-6 py-4 print:hidden">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2 text-sm text-emerald-900 bg-white border border-emerald-100 px-4 py-2 rounded-full shadow-sm">
-                <span class="material-icons-outlined text-emerald-600 text-lg">info</span>
+              <div class="flex items-center gap-2 text-sm text-emerald-900 dark:text-emerald-200 bg-white dark:bg-gray-800 border border-emerald-100 dark:border-emerald-800 px-4 py-2 rounded-full shadow-sm">
+                <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-lg">info</span>
                 <span>Showing <span class="font-medium">{{ startIndex || 0 }}</span> to <span class="font-medium">{{ endIndex || 0 }}</span> of <span class="font-medium">{{ totalTransactions }}</span> items</span>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-sm text-emerald-900">Items per page:</span>
+                <span class="text-sm text-emerald-900 dark:text-emerald-200">Items per page:</span>
                 <select 
                   v-model="itemsPerPage"
-                  class="px-4 py-2 border border-emerald-200 rounded-lg text-sm bg-white text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+                  class="px-4 py-2 border border-emerald-200 dark:border-emerald-700 rounded-lg text-sm bg-white dark:bg-gray-800 text-emerald-900 dark:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
                 >
                   <option value="8">8</option>
                   <option value="10">10</option>
@@ -790,7 +790,7 @@ const formatDateTime = (dateString) => {
               <button 
                 @click="currentPage = 1"
                 :disabled="currentPage === 1"
-                class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                class="px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-200 bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 title="First page"
               >
                 «
@@ -798,7 +798,7 @@ const formatDateTime = (dateString) => {
               <button 
                 @click="currentPage--" 
                 :disabled="currentPage === 1"
-                class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                class="px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-200 bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 title="Previous page"
               >
                 &lt;
@@ -811,10 +811,10 @@ const formatDateTime = (dateString) => {
                   :disabled="page === 'ellipsis'"
                   :class="[
                     'px-3 py-2 text-sm font-medium rounded transition-colors shadow-sm',
-                    page === 'ellipsis' ? 'cursor-default bg-transparent border-0' : 'cursor-pointer border border-emerald-200',
+                    page === 'ellipsis' ? 'cursor-default bg-transparent border-0' : 'cursor-pointer border border-emerald-200 dark:border-emerald-700',
                     currentPage === page 
                       ? 'bg-emerald-600 text-white border-emerald-600' 
-                      : 'bg-white text-emerald-900 hover:bg-emerald-50'
+                      : 'bg-white dark:bg-gray-800 text-emerald-900 dark:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
                   ]"
                 >
                   {{ page === 'ellipsis' ? '...' : page }}
@@ -823,7 +823,7 @@ const formatDateTime = (dateString) => {
               <button 
                 @click="currentPage++" 
                 :disabled="currentPage === totalPages"
-                class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                class="px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-200 bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 title="Next page"
               >
                 &gt;
@@ -831,7 +831,7 @@ const formatDateTime = (dateString) => {
               <button 
                 @click="currentPage = totalPages"
                 :disabled="currentPage === totalPages"
-                class="px-3 py-2 text-sm font-medium text-emerald-900 bg-white border border-emerald-200 rounded hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                class="px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-200 bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-700 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                 title="Last page"
               >
                 »

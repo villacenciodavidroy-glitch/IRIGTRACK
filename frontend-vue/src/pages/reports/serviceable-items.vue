@@ -4,13 +4,16 @@ import { useRouter } from 'vue-router'
 import useItems from '../../composables/useItems'
 import useAuth from '../../composables/useAuth'
 import axiosClient from '../../axios'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 const router = useRouter()
 const searchQuery = ref('')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const selectedStatus = ref('all') // all, serviceable, non-serviceable, maintenance
+
+// Shared logo (matches sidebar and settings)
+const { logoUrl, publicLogoUrl, logoDataUrl, fetchLogo } = useLogo()
 
 // Get items from the API using the composable
 const { items, fetchitems, loading, error } = useItems()
@@ -37,6 +40,11 @@ const signatureData = ref({
 
 // Fetch items when component mounts
 onMounted(async () => {
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   await fetchitems()
 })
 
@@ -516,6 +524,10 @@ const printReport = () => {
   
   const now = new Date()
   const currentYear = now.getFullYear()
+
+  // Use the same logo as the sidebar/settings.
+  // Prefer base64 data URL for reliable rendering inside print window.
+  const currentLogo = logoDataUrl.value || publicLogoUrl.value || ''
   
   // Use edited signature data
   const preparedByName = signatureData.value.preparedBy.name || getUserDisplayName() || 'Admin User'
@@ -673,7 +685,7 @@ const printReport = () => {
           <div class="region">Region XI</div>
         </div>
         
-        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        <img src="${currentLogo}" alt="NIA Logo" class="logo" />
         
         <div class="report-title">SERVICEABLE ITEMS REPORT</div>
         <div class="report-year">For the Year ${currentYear}</div>

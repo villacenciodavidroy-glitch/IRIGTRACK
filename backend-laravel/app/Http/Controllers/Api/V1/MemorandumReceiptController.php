@@ -2394,10 +2394,20 @@ class MemorandumReceiptController extends Controller
             $dompdf->set_option('isHtml5ParserEnabled', true);
             $dompdf->set_option('isRemoteEnabled', true);
             $dompdf->set_option('defaultFont', 'Arial');
-            
+
+            // Get logo as base64 so the same logo used in the sidebar
+            // is also embedded in the accountability report PDF.
+            $logoBase64 = null;
+            $logoPath = \App\Support\Logo::path();
+            if (file_exists($logoPath)) {
+                $logoContent = file_get_contents($logoPath);
+                $logoBase64 = base64_encode($logoContent);
+            }
+
             $html = view('reports.accountability-report', [
                 'report' => $report,
-                'generated_at' => now()
+                'generated_at' => now(),
+                'logo_base64' => $logoBase64,
             ])->render();
             
             $dompdf->loadHtml($html);

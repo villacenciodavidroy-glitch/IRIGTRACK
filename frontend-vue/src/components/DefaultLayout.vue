@@ -91,19 +91,7 @@
 
       <!-- Page Content -->
       <main class="p-6">
-        <!-- Preloader -->
-    <div v-if="showPreloader" class="pre-loader">
-      <div class="pre-loader-box">
-        <div class="loader-logo">
-          <img src="../assets/logo.png" alt="" class="w-24 h-24" />
-        </div>
-        <div class="loader-progress" id="progress_div">
-          <div class="bar" :style="{ width: `${progress}%` }"></div>
-        </div>
-        <div class="percent" id="percent1">{{ progress }}%</div>
-        <div class="loading-text">{{ isLoading ? 'Logging in...' : 'Loading...' }}</div>
-      </div>
-    </div>
+        <!-- Preloader removed -->
         <RouterView />
       </main>
     </div>

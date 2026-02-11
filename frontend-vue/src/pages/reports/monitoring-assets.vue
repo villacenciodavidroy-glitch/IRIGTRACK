@@ -5,7 +5,7 @@ import useItems from '../../composables/useItems'
 import useFormLabels from '../../composables/useFormLabels'
 import useAuth from '../../composables/useAuth'
 import axiosClient from '../../axios'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -14,6 +14,9 @@ const itemsPerPage = ref(10)
 const selectedLocation = ref('all') // all units/sections
 const viewMode = ref('cards') // 'cards' or 'table'
 const selectedCategory = ref(null)
+
+// Shared logo (matches sidebar and settings)
+const { logoUrl, publicLogoUrl, logoDataUrl, fetchLogo } = useLogo()
 
 // Get items from the API using the composable
 const { items, fetchitems, loading, error } = useItems()
@@ -42,8 +45,13 @@ const signatureData = ref({
 })
 
 // Fetch items when component mounts
-// Force refresh to ensure we get the latest data matching Inventory.vue
+// Force refresh to ensure we get the latest data and logo
 onMounted(async () => {
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   await fetchLabels()
   // Force a fresh fetch to ensure data matches Inventory.vue
   await fetchitems()
@@ -356,6 +364,10 @@ const printReport = () => {
   
   // Get category name for report title
   const categoryName = selectedCategory.value || 'DESKTOP'
+
+  // Use the same logo as the sidebar/settings.
+  // Prefer base64 data URL for reliable rendering inside print window.
+  const currentLogo = logoDataUrl.value || publicLogoUrl.value || ''
   
   // Use edited signature data
   const preparedByName = signatureData.value.preparedBy.name || getUserDisplayName() || 'Admin User'
@@ -534,7 +546,7 @@ const printReport = () => {
           <div class="region">Region XI</div>
         </div>
         
-        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        <img src="${currentLogo}" alt="NIA Logo" class="logo" />
         
         <div class="report-title">${categoryName.toUpperCase()} MONITORING</div>
         <div class="report-year">For the Year ${currentYear}</div>

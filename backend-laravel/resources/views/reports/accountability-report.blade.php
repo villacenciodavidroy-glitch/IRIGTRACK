@@ -19,6 +19,10 @@
             padding-bottom: 15px;
             margin-bottom: 20px;
         }
+        .header-logo {
+            height: 60px;
+            margin-bottom: 10px;
+        }
         .header h1 {
             color: #1e40af;
             margin: 0;
@@ -171,6 +175,9 @@
 <body>
     <!-- Header -->
     <div class="header">
+        @if(!empty($logo_base64))
+            <img src="data:image/png;base64,{{ $logo_base64 }}" alt="NIA Logo" class="header-logo">
+        @endif
         <h1>ACCOUNTABILITY REPORT</h1>
         <p>National Irrigation Administration</p>
         <p>Equipment and Property Accountability System</p>

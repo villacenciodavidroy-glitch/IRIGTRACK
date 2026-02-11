@@ -444,9 +444,14 @@ const getIssuedToNamePart = (fullName, partIndex) => {
   return parts[partIndex] || null
 }
 
-// Non-consumable items for the main inventory table
+// Non-Supply items for the main inventory table
+// Exclude items whose category is "Supply" / "Supplies" from the main list,
+// since they are shown separately in the Supply Items table below.
 const nonConsumableItems = computed(() => {
-  return inventoryItems.value.filter(i => (i.category || '').toLowerCase() !== 'consumables')
+  return inventoryItems.value.filter(i => {
+    const category = (i.category || '').toLowerCase().trim()
+    return category !== 'supply' && category !== 'supplies'
+  })
 })
 
 // Get unique categories for filter dropdown
@@ -1913,7 +1918,6 @@ const closeSuccessModal = () => {
               <th class="sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 w-12 px-4 py-4 border-r border-gray-300 dark:border-gray-600">
                 <input type="checkbox" class="w-4 h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
               </th>
-              <th class="min-w-[90px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">QR CODE</th>
               <th class="min-w-[160px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('article', 'ARTICLE') }}</th>
               <th class="min-w-[150px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('serial_number', 'SERIAL NUMBER') }}</th>
               <th class="min-w-[130px] px-4 py-4 text-left text-sm font-bold text-gray-700 dark:text-white uppercase tracking-wider border-r border-gray-300 dark:border-gray-600">{{ getLabel('model', 'MODEL') }}</th>
@@ -1928,15 +1932,6 @@ const closeSuccessModal = () => {
                 class="group hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 border-l-4 border-transparent hover:border-blue-500">
               <td class="sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-700 dark:group-hover:bg-gray-700 px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <input type="checkbox" class="w-4 h-4 rounded border-gray-500 dark:border-gray-500 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer bg-gray-600 dark:bg-gray-600">
-              </td>
-              <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
-                <div 
-                  class="cursor-pointer transition-all duration-300 hover:scale-125 hover:border-2 hover:border-green-500 rounded-lg overflow-hidden inline-block p-1 bg-gray-50 dark:bg-gray-700"
-                  @click="openQrPreviewModal(item)"
-                  title="View QR Code"
-                >
-                  <img :src="item.qrCode" alt="QR Code" class="h-10 w-10 object-contain">
-                </div>
               </td>
               <td class="px-4 py-3 border-r border-gray-300 dark:border-gray-600">
                 <div class="text-base font-semibold text-gray-900 dark:text-white truncate max-w-[160px]" :title="item.article">{{ item.article }}</div>

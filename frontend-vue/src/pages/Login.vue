@@ -1,21 +1,7 @@
 
 <template>
   <div>
-    <!-- Preloader -->
-    <div v-if="showPreloader" class="pre-loader">
-      <div class="pre-loader-box">
-        <div class="loader-logo">
-          <img :src="logoUrl" alt="" class="w-24 h-24" />
-        </div>
-        <div class="loader-progress" id="progress_div">
-          <div class="bar" :style="{ width: `${progress}%` }"></div>
-        </div>
-        <div class="percent" id="percent1">{{ progress }}%</div>
-        <div class="loading-text">{{ isLoading ? 'Logging in...' : 'Loading...' }}</div>
-      </div>
-    </div>
-
-    <!-- Main Login Form -->
+    <!-- Main Login Form (preloader removed) -->
     <div class="login-container min-h-screen relative flex items-center p-3 sm:p-4 md:p-6">
       <!-- Background Image -->`
       <div class="absolute inset-0 bg-image"></div>
@@ -150,8 +136,6 @@ import useLogo from '../composables/useLogo'
 const router = useRouter()
 const { logoUrl, fetchLogo } = useLogo()
 const isLoading = ref(false)
-const progress = ref(0)
-const showPreloader = ref(true)
 
 // Form data with proper reactivity
 const data = ref({
@@ -181,66 +165,39 @@ const preventBackNavigation = () => {
   }
 }
 
-// Simulate initial page load
-const initializeLoader = () => {
-  let loadProgress = 0
-  const interval = setInterval(() => {
-    loadProgress += 1
-    progress.value = loadProgress
-    if (loadProgress >= 100) {
-      clearInterval(interval)
-      showPreloader.value = false
-    }
-  }, 30) // Slower interval for smoother animation
-}
-
 const login = async () => {
   isLoading.value = true
-  showPreloader.value = true
-  progress.value = 0
   errors.value = {}
 
   // Optional fake delay
   await new Promise(resolve => setTimeout(resolve, 500))
 
-  let loadProgress = 0
-  const interval = setInterval(async () => {
-    loadProgress += 2
-    progress.value = loadProgress
-
-    if (loadProgress >= 100) {
-      clearInterval(interval)
-
-      try {
-        const response = await axiosClient.post('/login', data.value)
-        if (response.status === 200) {
-          if (response.data.token) {
-            localStorage.setItem('token', response.data.token)
-            axiosClient.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
-          }
-          if (response.data.user && response.data.user.id) {
-            localStorage.setItem('userId', response.data.user.id)
-          }
-          await router.push('/dashboard')
-        }
-      } catch (error) {
-        if (error.response && (error.response.status === 401 || error.response.status === 422)) {
-          errors.value = error.response.data.errors || { general: [error.response.data.message] }
-        } else {
-          console.error('Unexpected error:', error.message)
-          errors.value = { general: ['An unexpected error occurred. Please try again.'] }
-        }
-      } finally {
-        isLoading.value = false
-        showPreloader.value = false
+  try {
+    const response = await axiosClient.post('/login', data.value)
+    if (response.status === 200) {
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token)
+        axiosClient.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
       }
+      if (response.data.user && response.data.user.id) {
+        localStorage.setItem('userId', response.data.user.id)
+      }
+      await router.push('/dashboard')
     }
-  }, 40) // Slower for smoother animation
+  } catch (error) {
+    if (error.response && (error.response.status === 401 || error.response.status === 422)) {
+      errors.value = error.response.data.errors || { general: [error.response.data.message] }
+    } else {
+      console.error('Unexpected error:', error.message)
+      errors.value = { general: ['An unexpected error occurred. Please try again.'] }
+    }
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Component lifecycle
 onMounted(() => {
-  initializeLoader()
   fetchLogo()
   const cleanup = preventBackNavigation()
   onUnmounted(cleanup)

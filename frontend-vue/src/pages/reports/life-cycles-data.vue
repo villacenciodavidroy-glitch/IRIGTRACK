@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import useItems from '../../composables/useItems'
 import useAuth from '../../composables/useAuth'
 import axiosClient from '../../axios'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -21,6 +21,9 @@ const PY_API_BASE = import.meta.env.VITE_PY_API_BASE_URL || 'http://127.0.0.1:50
 // Get items from the API
 const { items, fetchitems, loading, error } = useItems()
 const { getUserDisplayName } = useAuth()
+
+// Shared logo (matches sidebar and settings)
+const { logoUrl, publicLogoUrl, logoDataUrl, fetchLogo } = useLogo()
 
 // Lifespan predictions state
 const lifespanPredictions = ref([])
@@ -709,6 +712,10 @@ const printReport = () => {
   const printWindow = window.open('', '_blank')
   const now = new Date()
   const currentYear = now.getFullYear()
+
+  // Use the same logo as the sidebar/settings.
+  // Prefer base64 data URL for reliable rendering inside print window.
+  const currentLogo = logoDataUrl.value || publicLogoUrl.value || ''
   
   // Use edited signature data
   const preparedByName = signatureData.value.preparedBy.name || getUserDisplayName() || 'Admin User'
@@ -814,7 +821,7 @@ const printReport = () => {
           <div>National Irrigation Administration</div>
           <div>Region XI</div>
         </div>
-        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        <img src="${currentLogo}" alt="NIA Logo" class="logo" />
         <div class="report-title">LIFE CYCLES DATA REPORT</div>
         <div class="report-year">For the Year ${currentYear}</div>
       </div>
@@ -907,6 +914,12 @@ const changeSorting = (field) => {
 
 // Initialize data
 onMounted(async () => {
+  // Ensure we have the latest logo for printing
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   await fetchitems()
   await fetchLifespanPredictions()
 })

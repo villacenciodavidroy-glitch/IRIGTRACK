@@ -3,9 +3,11 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../../axios'
 import { useDebouncedRef } from '../../composables/useDebounce'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 const router = useRouter()
+// Shared logo (matches sidebar and settings)
+const { logoUrl, publicLogoUrl, logoDataUrl, fetchLogo } = useLogo()
 const records = ref([])
 const allRecords = ref([]) // Store all records for export
 const loading = ref(false)
@@ -79,7 +81,12 @@ const fetchMaintenanceRecords = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   fetchMaintenanceRecords()
   fetchAllRecords()
 })
@@ -348,6 +355,10 @@ const printReport = () => {
   
   // Get all records for printing
   const recordsToPrint = allRecords.value.length > 0 ? allRecords.value : records.value
+
+  // Use the same logo as the sidebar/settings.
+  // Prefer base64 data URL for reliable rendering inside print window.
+  const currentLogo = logoDataUrl.value || publicLogoUrl.value || ''
   
   const tableRows = recordsToPrint.map((record, index) => `
     <tr>
@@ -480,7 +491,7 @@ const printReport = () => {
           <div class="region">Region XI</div>
         </div>
         
-        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        <img src="${currentLogo}" alt="NIA Logo" class="logo" />
         
         <div class="report-title">MAINTENANCE RECORDS REPORT</div>
         <div class="report-year">For the Year ${currentYear}</div>

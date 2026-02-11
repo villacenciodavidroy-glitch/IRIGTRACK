@@ -929,10 +929,11 @@ onMounted(async () => {
     router.replace({ query: {} })
   }
   
-  // Refresh notifications periodically to keep them updated (less frequent now with real-time)
+  // Refresh notifications periodically so new ones appear even if Echo/WebSockets fail.
+  // Use a short interval to make this feel real-time without requiring a manual page refresh.
   notificationInterval.value = setInterval(async () => {
     await fetchNotifications(100) // Refresh with same limit
-  }, 30000) // Refresh every 30 seconds (less frequent due to real-time updates)
+  }, 5000) // Refresh every 5 seconds
 })
 
 // Cleanup interval on unmount

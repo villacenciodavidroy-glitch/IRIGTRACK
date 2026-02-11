@@ -248,7 +248,7 @@
           <div style="font-size: 13px; font-weight: normal; margin-bottom: 8px;">Region XI</div>
         </div>
         
-        <img :src="logoImage" alt="NIA Logo" style="width: 50px; height: 50px; margin: 8px auto; display: block;" />
+        <img :src="logoUrl" alt="NIA Logo" style="width: 50px; height: 50px; margin: 8px auto; display: block;" />
         
         <div style="font-size: 16px; font-weight: bold; margin: 12px 0 3px 0; text-transform: uppercase; letter-spacing: 1px;">
           SUPPLY ITEM USAGE REPORT
@@ -585,7 +585,7 @@ import {
   Legend
 } from 'chart.js'
 import axiosClient from '../../axios'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 ChartJS.register(
   CategoryScale,
@@ -597,6 +597,7 @@ ChartJS.register(
 )
 
 const router = useRouter()
+const { logoUrl, fetchLogo } = useLogo()
 
 const goBack = () => {
   router.back()
@@ -1064,7 +1065,12 @@ watch([chartData, rankedSupplies], () => {
 }, { deep: true })
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   fetchSupplyUsage()
 })
 </script>

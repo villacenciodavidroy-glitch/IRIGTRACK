@@ -161,7 +161,22 @@ class ItemController extends Controller
             $itemService->handleImageUpload($newItem, $image);
         } 
 
-        $itemWithQrCode = $qrCodeService->generateQrCode($newItem);
+        // Decide QR code generation based on category.
+        // Requirement: items under category "Supply" MUST NOT have QR codes.
+        // Load category to inspect its name.
+        $newItem->load('category');
+
+        $itemWithQrCode = $newItem;
+
+        $categoryName = $newItem->category->category ?? null;
+        $isSupplyCategory = $categoryName && strcasecmp($categoryName, 'supply') === 0;
+
+        if (! $isSupplyCategory) {
+            // Only non‑Supply items should get QR codes.
+            $itemWithQrCode = $qrCodeService->generateQrCode($newItem);
+        } else {
+            \Log::info("Skipping QR code generation for Supply category item ID {$newItem->id}");
+        }
 
         // Refresh item to get latest data with relationships
         $newItem->refresh();

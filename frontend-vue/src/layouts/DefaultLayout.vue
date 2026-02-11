@@ -1566,14 +1566,17 @@ onMounted(async () => {
   startClock()
   fetchLogo()
 
-  // Fetch notifications for Admin only
-  if (isAdmin()) {
-    // Fetch unread count from database immediately (for badge)
+  // Fetch notifications + unread count for ALL authenticated users on mount
+  // so the header dropdown and badge are always populated without a full page refresh.
+  try {
     await fetchUnreadCount()
-    
-    // Fetch notifications when component mounts
-    await fetchNotifications(5) // Fetch only 5 for the dropdown
-    
+    await fetchNotifications(5) // Fetch only latest few for the dropdown
+  } catch (err) {
+    console.error('Error fetching initial notifications:', err)
+  }
+
+  // Admins additionally get the pending-requests banner logic
+  if (isAdmin()) {
     // Check for pending borrow requests and show banner after fetching notifications
     // Check multiple times to ensure banner shows if there are requests
     checkAndShowPendingRequestsBanner()
@@ -1620,38 +1623,41 @@ onMounted(async () => {
     bannerCheckInterval = setInterval(() => {
       checkAndShowPendingRequestsBanner()
     }, 2000) // Check every 2 seconds to ensure banner always shows
-    
-    // Refresh notifications periodically as fallback (less frequent now with real-time)
-    // Real-time updates should handle most cases, but this ensures we don't miss anything
-    const notificationRefreshInterval = setInterval(async () => {
-      console.log('🔄 Periodic notification refresh (fallback)...')
-      await fetchNotifications(5)
-      // Check banner multiple times after refresh
-      checkAndShowPendingRequestsBanner()
-      setTimeout(() => {
-        checkAndShowPendingRequestsBanner()
-      }, 50)
-      setTimeout(() => {
-        checkAndShowPendingRequestsBanner()
-      }, 100)
-      setTimeout(() => {
-        checkAndShowPendingRequestsBanner()
-      }, 300)
-    }, 60000) // Refresh every 60 seconds (reduced from 10s since real-time handles most updates)
-    
-    // Refresh unread count periodically (every 30 seconds) to keep badge updated
-    // Note: Real-time updates will handle most cases, but this is a backup
-    const unreadCountInterval = setInterval(async () => {
-      await refreshUnreadCount()
-      await fetchUnreadMessagesCount()
-    }, 30000) // 30 seconds
-    
-    // Store intervals for cleanup
-    window.notificationRefreshInterval = notificationRefreshInterval
-    window.unreadCountInterval = unreadCountInterval
   } else {
     console.log('⚠️ Not an admin user, skipping notification listener setup')
   }
+
+  // Refresh notifications periodically as a REAL-TIME fallback for ALL users.
+  // This ensures new notifications appear in the header without a manual page refresh,
+  // even if WebSockets/Echo are not working.
+  const notificationRefreshInterval = setInterval(async () => {
+    try {
+      // Only poll when tab is visible
+      if (document.visibilityState !== 'visible') return
+
+      // When on the full Notifications page, let that page handle its own polling
+      if (route.name === 'Notifications') return
+
+      console.log('🔄 Periodic notification refresh (fallback, all users)...')
+      await fetchNotifications(5)
+    } catch (err) {
+      console.error('Error refreshing notifications (fallback):', err)
+    }
+  }, 5000) // Every 5 seconds to feel real-time
+  
+  // Refresh unread count periodically (every 30 seconds) to keep badge updated for ALL users
+  const unreadCountInterval = setInterval(async () => {
+    try {
+      await refreshUnreadCount()
+      await fetchUnreadMessagesCount()
+    } catch (err) {
+      console.error('Error refreshing unread counts:', err)
+    }
+  }, 30000)
+  
+  // Store intervals for cleanup
+  window.notificationRefreshInterval = notificationRefreshInterval
+  window.unreadCountInterval = unreadCountInterval
   
   // Setup real-time listener for messages (all authenticated users)
   setTimeout(() => {

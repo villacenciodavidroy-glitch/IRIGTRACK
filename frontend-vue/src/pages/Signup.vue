@@ -1,20 +1,6 @@
 <template>
   <div>
-    <!-- Preloader -->
-    <div v-if="showPreloader" class="pre-loader">
-      <div class="pre-loader-box">
-        <div class="loader-logo">
-          <img :src="logoUrl" alt="" class="w-24 h-24" />
-        </div>
-        <div class="loader-progress" id="progress_div">
-          <div class="bar" :style="{ width: `${progress}%` }"></div>
-        </div>
-        <div class="percent" id="percent1">{{ progress }}%</div>
-        <div class="loading-text">{{ isLoading ? 'Creating account...' : 'Loading...' }}</div>
-      </div>
-    </div>
-
-    <!-- Main Registration Form -->
+    <!-- Main Registration Form (preloader removed) -->
     <div class="login-container min-h-screen relative flex items-center p-3 sm:p-4 md:p-6">
       <!-- Background Image -->
       <div class="absolute inset-0 bg-image"></div>
@@ -365,8 +351,6 @@ const { logoUrl, fetchLogo } = useLogo()
 const { locations, loading: locationsLoading, fetchLocations } = useLocations()
 
 const isLoading = ref(false)
-const progress = ref(0)
-const showPreloader = ref(true)
 const showPassword = ref(false)
 const showPasswordConfirmation = ref(false)
 const previewUrl = ref(null)
@@ -385,19 +369,6 @@ const formData = ref({
 })
 
 const errors = ref({})
-
-// Simulate initial page load
-const initializeLoader = () => {
-  let loadProgress = 0
-  const interval = setInterval(() => {
-    loadProgress += 1
-    progress.value = loadProgress
-    if (loadProgress >= 100) {
-      clearInterval(interval)
-      showPreloader.value = false
-    }
-  }, 30)
-}
 
 // Handle image upload
 const handleImageUpload = (event) => {
@@ -444,69 +415,56 @@ const clearImage = () => {
 // Register user
 const register = async () => {
   isLoading.value = true
-  showPreloader.value = true
-  progress.value = 0
   errors.value = {}
 
   // Optional fake delay
   await new Promise(resolve => setTimeout(resolve, 500))
 
-  let loadProgress = 0
-  const interval = setInterval(async () => {
-    loadProgress += 2
-    progress.value = loadProgress
+  try {
+    // Prepare form data
+    const formDataToSend = new FormData()
+    formDataToSend.append('fullname', formData.value.fullname)
+    if (formData.value.username) {
+      formDataToSend.append('username', formData.value.username)
+    }
+    formDataToSend.append('email', formData.value.email)
+    formDataToSend.append('location_id', formData.value.location_id)
+    formDataToSend.append('password', formData.value.password)
+    formDataToSend.append('password_confirmation', formData.value.password_confirmation)
+    if (formData.value.role) {
+      formDataToSend.append('role', formData.value.role)
+    }
+    if (formData.value.image) {
+      formDataToSend.append('image', formData.value.image)
+    }
 
-    if (loadProgress >= 100) {
-      clearInterval(interval)
+    // Send request (axios will handle Content-Type automatically for FormData)
+    const response = await axiosClient.post('/register', formDataToSend)
 
-      try {
-        // Prepare form data
-        const formDataToSend = new FormData()
-        formDataToSend.append('fullname', formData.value.fullname)
-        if (formData.value.username) {
-          formDataToSend.append('username', formData.value.username)
-        }
-        formDataToSend.append('email', formData.value.email)
-        formDataToSend.append('location_id', formData.value.location_id)
-        formDataToSend.append('password', formData.value.password)
-        formDataToSend.append('password_confirmation', formData.value.password_confirmation)
-        if (formData.value.role) {
-          formDataToSend.append('role', formData.value.role)
-        }
-        if (formData.value.image) {
-          formDataToSend.append('image', formData.value.image)
-        }
-
-        // Send request (axios will handle Content-Type automatically for FormData)
-        const response = await axiosClient.post('/register', formDataToSend)
-
-        if (response.data && response.data.success) {
-          successMessage.value = 'Account created successfully! You can now log in.'
-          showSuccessModal.value = true
-          
-          // Store token if provided (optional - may want to auto-login)
-          if (response.data.token) {
-            localStorage.setItem('token', response.data.token)
-            axiosClient.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
-          }
-        }
-      } catch (error) {
-        console.error('Registration error:', error)
-        if (error.response && error.response.data) {
-          if (error.response.data.errors) {
-            errors.value = error.response.data.errors
-          } else if (error.response.data.message) {
-            errors.value = { general: [error.response.data.message] }
-          }
-        } else {
-          errors.value = { general: ['An unexpected error occurred. Please try again.'] }
-        }
-      } finally {
-        isLoading.value = false
-        showPreloader.value = false
+    if (response.data && response.data.success) {
+      successMessage.value = 'Account created successfully! You can now log in.'
+      showSuccessModal.value = true
+      
+      // Store token if provided (optional - may want to auto-login)
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token)
+        axiosClient.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
       }
     }
-  }, 40)
+  } catch (error) {
+    console.error('Registration error:', error)
+    if (error.response && error.response.data) {
+      if (error.response.data.errors) {
+        errors.value = error.response.data.errors
+      } else if (error.response.data.message) {
+        errors.value = { general: [error.response.data.message] }
+      }
+    } else {
+      errors.value = { general: ['An unexpected error occurred. Please try again.'] }
+    }
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Go to login page
@@ -516,7 +474,6 @@ const goToLogin = () => {
 
 // Fetch locations on mount
 onMounted(async () => {
-  initializeLoader()
   fetchLogo()
   await fetchLocations(1, 1000) // Fetch all locations
 })

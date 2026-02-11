@@ -35,27 +35,34 @@ onActivated(async () => {
 })
 
 // Map API data to the format expected by the table
+// Exclude items with "Supply" / "Supplies" category from QR validation,
+// since Supply items do not need QR validation.
 const inventoryItems = computed(() => {
-  return items.value.map(item => ({
-    qrCode: item.qr_code_image || '/images/qr-sample.png',
-    image: item.image_path || '/images/default.jpg',
-    article: item.unit || '',
-    category: item.category || 'Inventory',
-    description: item.description || '',
-    propertyAccountCode: item.pac || '',
-    unitValue: item.unit_value || '',
-    dateAcquired: item.date_acquired || '',
-    poNumber: item.po_number || '',
-    location: item.location || '',
-    condition: item.condition || '',
-    issuedTo: item.issued_to || 'Not Assigned',
-    issued_to_code: item.issued_to_code || null,
-    actions: ['edit', 'delete'],
-    id: item.id, // Keep the original ID for reference
-    uuid: item.uuid, // Keep the UUID for API operations
-    quantity: item.quantity,
-    qrCodeVersion: item.qr_code_version || null // QR code validation year
-  }))
+  return items.value
+    .map(item => ({
+      qrCode: item.qr_code_image || '/images/qr-sample.png',
+      image: item.image_path || '/images/default.jpg',
+      article: item.unit || '',
+      category: item.category || 'Inventory',
+      description: item.description || '',
+      propertyAccountCode: item.pac || '',
+      unitValue: item.unit_value || '',
+      dateAcquired: item.date_acquired || '',
+      poNumber: item.po_number || '',
+      location: item.location || '',
+      condition: item.condition || '',
+      issuedTo: item.issued_to || 'Not Assigned',
+      issued_to_code: item.issued_to_code || null,
+      actions: ['edit', 'delete'],
+      id: item.id, // Keep the original ID for reference
+      uuid: item.uuid, // Keep the UUID for API operations
+      quantity: item.quantity,
+      qrCodeVersion: item.qr_code_version || null // QR code validation year
+    }))
+    .filter(mappedItem => {
+      const category = (mappedItem.category || '').toLowerCase().trim()
+      return category !== 'supply' && category !== 'supplies'
+    })
 })
 
 // Function to split name into parts (for multi-line display)

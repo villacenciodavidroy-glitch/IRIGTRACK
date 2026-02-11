@@ -3,9 +3,12 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosClient from '../../axios'
 import { useDebouncedRef } from '../../composables/useDebounce'
-import logoImage from '../../assets/logo.png'
+import useLogo from '../../composables/useLogo'
 
 const router = useRouter()
+
+// Shared logo (matches sidebar and settings)
+const { logoUrl, publicLogoUrl, logoDataUrl, fetchLogo } = useLogo()
 const transactions = ref([])
 const allTransactions = ref([])
 const loading = ref(false)
@@ -79,7 +82,12 @@ const fetchTransactions = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await fetchLogo()
+  } catch (e) {
+    // Ignore logo errors; fall back to default logo
+  }
   fetchTransactions()
   fetchAllTransactions()
 })
@@ -299,6 +307,10 @@ const printReport = () => {
   
   // Get all transactions for printing
   const transactionsToPrint = allTransactions.value.length > 0 ? allTransactions.value : transactions.value
+
+  // Use the same logo as the sidebar/settings.
+  // Prefer base64 data URL for reliable rendering inside print window.
+  const currentLogo = logoDataUrl.value || publicLogoUrl.value || ''
   
   const tableRows = transactionsToPrint.map((transaction, index) => `
     <tr>
@@ -432,7 +444,7 @@ const printReport = () => {
           <div class="region">Region XI</div>
         </div>
         
-        <img src="${logoImage}" alt="NIA Logo" class="logo" />
+        <img src="${currentLogo}" alt="NIA Logo" class="logo" />
         
         <div class="report-title">TRANSACTIONS REPORT</div>
         <div class="report-year">For the Year ${currentYear}</div>

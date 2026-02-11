@@ -33,7 +33,19 @@ try {
     encrypted: useTLS, // Only encrypt if not localhost
     // Add a dummy cluster to satisfy Pusher.js requirement
     // This is ignored when wsHost is set (Reverb mode)
-    cluster: pusherCluster || 'mt1'
+    cluster: pusherCluster || 'mt1',
+    // IMPORTANT: use backend API URL for private channel auth,
+    // not the Vite dev server URL, so we avoid 404s like
+    // POST http://localhost:5174/broadcasting/auth 404.
+    authEndpoint: `${apiBaseUrl.replace(/\/$/, '')}/broadcasting/auth`,
+    auth: {
+      headers: {
+        // Send the same bearer token we use for axios API calls
+        Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    }
   }
 
   // If using Pusher.com (not Reverb), remove wsHost/wsPort and use cluster only
@@ -117,6 +129,12 @@ try {
 // Update auth headers when token changes
 window.addEventListener('storage', (e) => {
   if (e.key === 'token' && window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
+    // Ensure auth + headers objects exist before assigning
+    if (!window.Echo.connector.pusher.config.auth) {
+      window.Echo.connector.pusher.config.auth = { headers: {} }
+    } else if (!window.Echo.connector.pusher.config.auth.headers) {
+      window.Echo.connector.pusher.config.auth.headers = {}
+    }
     window.Echo.connector.pusher.config.auth.headers.Authorization = `Bearer ${e.newValue || ''}`
   }
 })

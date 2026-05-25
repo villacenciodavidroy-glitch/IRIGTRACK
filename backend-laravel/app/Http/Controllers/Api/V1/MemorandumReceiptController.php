@@ -1748,8 +1748,65 @@ class MemorandumReceiptController extends Controller
                         continue;
                     }
 
-                    // Reassign the item
-                    $mr->reassign($reassignToType, $reassignToId, $admin->id, $remarks);
+                    // Resolve reassignment target and update item assignment
+                    $item = $mr->item;
+                    $newCode = null;
+                    $newType = null;
+                    $newId = null;
+
+                    if ($reassignToType === 'USER') {
+                        $newUser = User::findOrFail($reassignToId);
+                        if ($newUser->status !== 'ACTIVE') {
+                            throw new \Exception('Cannot reassign to inactive or resigned user.');
+                        }
+                        $newCode = $newUser->user_code;
+                        $newType = 'USER';
+                        $newId = $newUser->id;
+
+                        if ($item) {
+                            $item->user_id = $newUser->id;
+                            $item->location_id = null;
+                            $item->save();
+                        }
+                    } else {
+                        $newLocation = \App\Models\Location::findOrFail($reassignToId);
+                        if (!$newLocation->personnel) {
+                            throw new \Exception('Selected location has no personnel assigned.');
+                        }
+
+                        if (!$newLocation->personnel_code) {
+                            $newLocation->personnel_code = \App\Models\Location::generatePersonnelCode($newLocation->location);
+                            $newLocation->save();
+                        }
+
+                        $newCode = $newLocation->personnel_code;
+                        $newType = 'PERSONNEL';
+                        $newId = $newLocation->id;
+
+                        if ($item) {
+                            $item->location_id = $newLocation->id;
+                            $item->user_id = null;
+                            $item->save();
+                        }
+                    }
+
+                    // Close current MR as returned/reassigned
+                    $mr->reassignTo($newId, $newCode, $newType, $admin->id, $remarks);
+
+                    // Automatically create a new active MR for the selected assignee
+                    if ($item) {
+                        MemorandumReceipt::create([
+                            'item_id' => $item->id,
+                            'issued_to_user_id' => $newType === 'USER' ? $newId : null,
+                            'issued_to_location_id' => $newType === 'PERSONNEL' ? $newId : null,
+                            'issued_to_code' => $newCode,
+                            'issued_to_type' => $newType,
+                            'issued_by_user_code' => $admin->user_code ?? 'N/A',
+                            'issued_at' => now(),
+                            'status' => 'ISSUED'
+                        ]);
+                    }
+
                     $reassigned++;
                 } catch (\Exception $e) {
                     $failed++;

@@ -30,6 +30,50 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 class SupplyRequestController extends Controller
 {
     use LogsActivity;
+
+    /**
+     * Format a supply request line item for API responses.
+     */
+    private function formatSupplyRequestLineItem(SupplyRequestItem $requestItem, ?Item $itemObj): array
+    {
+        return [
+            'id' => $requestItem->id,
+            'item_id' => $requestItem->item_id,
+            'item_name' => $itemObj ? ($itemObj->unit ?? $itemObj->description ?? 'N/A') : 'N/A',
+            'item_description' => $itemObj ? ($itemObj->description ?? '') : '',
+            'item_quantity' => $itemObj ? ($itemObj->quantity ?? 0) : 0,
+            'quantity' => (int) ($requestItem->quantity ?? 0),
+            'defective_quantity' => $requestItem->getDefectiveQuantity(),
+            'approved_quantity' => $requestItem->getApprovedQuantity(),
+            'status' => $requestItem->status ?? SupplyRequestItem::STATUS_PENDING,
+            'rejection_reason' => $requestItem->rejection_reason,
+            'rejected_at' => $requestItem->rejected_at ? $requestItem->rejected_at->toISOString() : null,
+        ];
+    }
+
+    /**
+     * Sum line-item quantities for API responses.
+     */
+    private function computeRequestLineTotals(array $requestItems): array
+    {
+        $requested = 0;
+        $defective = 0;
+        $approved = 0;
+
+        foreach ($requestItems as $item) {
+            $requested += (int) ($item['quantity'] ?? 0);
+            $defective += (int) ($item['defective_quantity'] ?? 0);
+            $approved += (int) ($item['approved_quantity'] ?? 0);
+        }
+
+        return [
+            'total_requested' => $requested,
+            'total_defective' => $defective,
+            'total_approved' => $approved,
+            'has_defects' => $defective > 0,
+        ];
+    }
+
     /**
      * Get available supply stocks for user dashboard
      */
@@ -66,9 +110,44 @@ class SupplyRequestController extends Controller
             $perPage = $request->get('per_page', 12);
             $items = $query->paginate($perPage);
 
+            $defectsByItem = [];
+            $user = $request->user();
+            if ($user && Schema::hasTable('supply_request_items')) {
+                $defectRows = SupplyRequestItem::query()
+                    ->join('supply_requests', 'supply_requests.id', '=', 'supply_request_items.supply_request_id')
+                    ->where('supply_requests.requested_by_user_id', $user->id)
+                    ->where('supply_request_items.defective_quantity', '>', 0)
+                    ->select([
+                        'supply_request_items.item_id',
+                        DB::raw('SUM(supply_request_items.defective_quantity) as total_defective'),
+                        DB::raw('COUNT(*) as defect_reports'),
+                        DB::raw('MAX(supply_request_items.rejection_reason) as latest_defect_reason'),
+                    ])
+                    ->groupBy('supply_request_items.item_id')
+                    ->get();
+
+                foreach ($defectRows as $row) {
+                    $defectsByItem[(string) $row->item_id] = [
+                        'defective_quantity' => (int) $row->total_defective,
+                        'defect_reports' => (int) $row->defect_reports,
+                        'latest_defect_reason' => $row->latest_defect_reason,
+                    ];
+                }
+            }
+
+            $itemsData = collect($items->items())->map(function ($item) use ($defectsByItem) {
+                $data = $item->toArray();
+                $defect = $defectsByItem[(string) $item->uuid] ?? $defectsByItem[(string) $item->id] ?? null;
+                $data['user_defective_quantity'] = $defect['defective_quantity'] ?? 0;
+                $data['user_defect_reports'] = $defect['defect_reports'] ?? 0;
+                $data['latest_defect_reason'] = $defect['latest_defect_reason'] ?? null;
+                $data['has_user_defects'] = ($data['user_defective_quantity'] ?? 0) > 0;
+                return $data;
+            })->values()->all();
+
             return response()->json([
                 'success' => true,
-                'data' => $items->items(),
+                'data' => $itemsData,
                 'pagination' => [
                     'current_page' => $items->currentPage(),
                     'last_page' => $items->lastPage(),
@@ -306,15 +385,7 @@ class SupplyRequestController extends Controller
                     foreach ($request->items as $requestItem) {
                         $itemObj = $requestItem->item();
                         if ($itemObj) {
-                            $requestItems[] = [
-                                'id' => $requestItem->id,
-                                'item_id' => $requestItem->item_id,
-                                'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
-                                'item_quantity' => $itemObj->quantity ?? 0,
-                                'quantity' => $requestItem->quantity,
-                                'status' => $requestItem->status ?? 'pending',
-                                'rejection_reason' => $requestItem->rejection_reason,
-                            ];
+                            $requestItems[] = $this->formatSupplyRequestLineItem($requestItem, $itemObj);
                         }
                     }
                 } else {
@@ -325,6 +396,8 @@ class SupplyRequestController extends Controller
                         'item_name' => $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A',
                         'item_quantity' => $item ? ($item->quantity ?? 0) : 0,
                         'quantity' => $request->quantity,
+                        'defective_quantity' => 0,
+                        'approved_quantity' => (int) ($request->quantity ?? 0),
                         'status' => 'pending',
                         'rejection_reason' => null,
                     ];
@@ -332,6 +405,7 @@ class SupplyRequestController extends Controller
 
                 // For backward compatibility, keep main item_name and quantity
                 $mainItem = $requestItems[0] ?? null;
+                $lineTotals = $this->computeRequestLineTotals($requestItems);
 
                 return [
                     'id' => $request->id,
@@ -339,7 +413,11 @@ class SupplyRequestController extends Controller
                     'item_id' => $request->item_id,
                     'item_name' => $mainItem ? $mainItem['item_name'] : ($item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A'),
                     'item_quantity' => $mainItem ? $mainItem['item_quantity'] : ($item ? ($item->quantity ?? 0) : 0),
-                    'quantity' => $request->quantity, // Total quantity for backward compatibility
+                    'quantity' => $lineTotals['total_approved'] > 0 ? $lineTotals['total_approved'] : (int) ($request->quantity ?? 0),
+                    'total_requested' => $lineTotals['total_requested'],
+                    'total_defective' => $lineTotals['total_defective'],
+                    'total_approved' => $lineTotals['total_approved'],
+                    'has_defects' => $lineTotals['has_defects'],
                     'items' => $requestItems, // Array of all items
                     'items_count' => count($requestItems), // Number of items
                     'notes' => $request->notes,
@@ -435,15 +513,7 @@ class SupplyRequestController extends Controller
                     foreach ($request->items as $requestItem) {
                         $itemObj = $requestItem->item();
                         if ($itemObj) {
-                            $requestItems[] = [
-                                'id' => $requestItem->id,
-                                'item_id' => $requestItem->item_id,
-                                'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
-                                'item_quantity' => $itemObj->quantity ?? 0,
-                                'quantity' => $requestItem->quantity,
-                                'status' => $requestItem->status ?? 'pending',
-                                'rejection_reason' => $requestItem->rejection_reason,
-                            ];
+                            $requestItems[] = $this->formatSupplyRequestLineItem($requestItem, $itemObj);
                         }
                     }
                 } else {
@@ -454,6 +524,8 @@ class SupplyRequestController extends Controller
                         'item_name' => $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A',
                         'item_quantity' => $item ? ($item->quantity ?? 0) : 0,
                         'quantity' => $request->quantity,
+                        'defective_quantity' => 0,
+                        'approved_quantity' => (int) ($request->quantity ?? 0),
                         'status' => 'pending',
                         'rejection_reason' => null,
                     ];
@@ -472,18 +544,28 @@ class SupplyRequestController extends Controller
                         $approvalProofUrl = Storage::url($request->approval_proof);
                     }
                 }
-                $hasReceipt = in_array($request->status, ['approved', 'fulfilled']) && $approvalProofExists;
+                $hasReceipt = $approvalProofExists && in_array($request->status, [
+                    'approved',
+                    'fulfilled',
+                    'ready_for_pickup',
+                    'for_claiming',
+                ]);
+                $lineTotals = $this->computeRequestLineTotals($requestItems);
                 
                 return [
                     'id' => $request->id,
                     'request_number' => $request->request_number,
                     'item_id' => $request->item_id,
                     'item_name' => $mainItem ? $mainItem['item_name'] : ($item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A'),
-                    'item_description' => $mainItem ? $mainItem['item_name'] : ($item ? ($item->description ?? 'N/A') : 'N/A'),
+                    'item_description' => $mainItem ? ($mainItem['item_description'] ?? $mainItem['item_name']) : ($item ? ($item->description ?? 'N/A') : 'N/A'),
                     'item_quantity' => $mainItem ? $mainItem['item_quantity'] : ($item ? ($item->quantity ?? 0) : 0),
                     'approval_proof' => $approvalProofUrl,
                     'has_receipt' => $hasReceipt, // Helper field for mobile app to easily identify receipts
-                    'quantity' => $request->quantity, // Total quantity for backward compatibility
+                    'quantity' => $lineTotals['total_approved'] > 0 ? $lineTotals['total_approved'] : (int) ($request->quantity ?? 0),
+                    'total_requested' => $lineTotals['total_requested'],
+                    'total_defective' => $lineTotals['total_defective'],
+                    'total_approved' => $lineTotals['total_approved'],
+                    'has_defects' => $lineTotals['has_defects'],
                     'items' => $requestItems, // Array of all items
                     'items_count' => count($requestItems), // Number of items
                     'notes' => $request->notes,
@@ -1163,12 +1245,13 @@ class SupplyRequestController extends Controller
                             'message' => "Item not found for line item ID: {$ri->id}"
                         ], 404);
                     }
+                    $approvedQty = $ri->getApprovedQuantity();
                     $avail = (int) ($it->quantity ?? 0);
-                    if ($ri->quantity > $avail) {
+                    if ($approvedQty > $avail) {
                         $name = $it->unit ?? $it->description ?? 'N/A';
                         return response()->json([
                             'success' => false,
-                            'message' => "Insufficient stock for {$name}. Available: {$avail}, Requested: {$ri->quantity}"
+                            'message' => "Insufficient stock for {$name}. Available: {$avail}, Approved qty: {$approvedQty}"
                         ], 400);
                     }
                 }
@@ -1264,7 +1347,7 @@ class SupplyRequestController extends Controller
                                 $requestItems[] = [
                                     'item' => $itemObj,
                                     'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
-                                    'quantity' => $requestItem->quantity,
+                                    'quantity' => $requestItem->getApprovedQuantity(),
                                 ];
                             }
                         }
@@ -1372,24 +1455,26 @@ class SupplyRequestController extends Controller
                                 $approvalMessage .= "\n  Approver Role     : " . ucfirst($user->role ?? 'Admin');
                                 $approvalMessage .= "\n";
                                 $approvalMessage .= "\n  ──────────────────────────────────────────────────────";
-                                $approvalMessage .= "\n  Item Details:";
+                                $approvalMessage .= "\n  Item Details (Requested | Defective | Approved):";
                                 $approvalMessage .= "\n  ──────────────────────────────────────────────────────";
-                                
-                                // Display all items
-                                if (count($requestItems) > 1) {
-                                    foreach ($requestItems as $idx => $itemData) {
-                                        $approvalMessage .= "\n  Item " . ($idx + 1) . ":";
-                                        $approvalMessage .= "\n    Item Name         : {$itemData['item_name']}";
-                                        $approvalMessage .= "\n    Quantity          : {$itemData['quantity']}";
-                                        if ($idx < count($requestItems) - 1) {
-                                            $approvalMessage .= "\n";
-                                        }
+
+                                $receiptLines = $this->buildReceiptLineItems($supplyRequest);
+                                foreach ($receiptLines['items'] as $idx => $itemData) {
+                                    $approvalMessage .= "\n  Item " . ($idx + 1) . ":";
+                                    $approvalMessage .= "\n    Item Name         : {$itemData['item_name']}";
+                                    $approvalMessage .= "\n    Requested         : {$itemData['requested_quantity']}";
+                                    $approvalMessage .= "\n    Defective         : {$itemData['defective_quantity']}";
+                                    $approvalMessage .= "\n    Approved Qty      : {$itemData['approved_quantity']}";
+                                    $approvalMessage .= "\n    Status            : {$itemData['status']}";
+                                    if (!empty($itemData['rejection_reason'])) {
+                                        $approvalMessage .= "\n    Reason            : {$itemData['rejection_reason']}";
                                     }
-                                    $approvalMessage .= "\n  Total Quantity      : {$supplyRequest->quantity}";
-                                } else {
-                                    $approvalMessage .= "\n  Item Name         : {$itemNameForNotification}";
-                                    $approvalMessage .= "\n  Quantity          : {$supplyRequest->quantity}";
                                 }
+                                $approvalMessage .= "\n  ──────────────────────────────────────────────────────";
+                                $approvalMessage .= "\n  Totals:";
+                                $approvalMessage .= "\n    Requested         : {$receiptLines['totals']['requested']}";
+                                $approvalMessage .= "\n    Defective         : {$receiptLines['totals']['defective']}";
+                                $approvalMessage .= "\n    Approved Qty      : {$receiptLines['totals']['approved']}";
                                 
                                 $approvalMessage .= "\n";
                                 $approvalMessage .= "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
@@ -1968,21 +2053,28 @@ class SupplyRequestController extends Controller
                 ], 404);
             }
 
-            if ($lineItem->isRejected()) {
+            $validated = $request->validate([
+                'rejection_reason' => 'required|string|max:1000',
+                'defective_quantity' => 'required|integer|min:1',
+            ]);
+
+            $requestedQty = (int) ($lineItem->quantity ?? 0);
+            $defectiveQty = min((int) $validated['defective_quantity'], max(1, $requestedQty));
+
+            if ($requestedQty < 1) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'This item is already rejected'
+                    'message' => 'Invalid line item quantity'
                 ], 400);
             }
 
-            $validated = $request->validate([
-                'rejection_reason' => 'required|string|max:1000',
-            ]);
-
-            $lineItem->status = SupplyRequestItem::STATUS_REJECTED;
+            $lineItem->defective_quantity = $defectiveQty;
             $lineItem->rejection_reason = $validated['rejection_reason'];
             $lineItem->rejected_at = now();
             $lineItem->rejected_by = $user->id;
+            $lineItem->status = $defectiveQty >= $requestedQty
+                ? SupplyRequestItem::STATUS_REJECTED
+                : SupplyRequestItem::STATUS_PENDING;
             $lineItem->save();
 
             $itemObj = $lineItem->item();
@@ -2000,9 +2092,15 @@ class SupplyRequestController extends Controller
                     $rejectionReason = $validated['rejection_reason'];
                     
                     // Create notification message with rejection reason
-                    $notificationMessage = "Your supply request item \"{$itemName}\" (Quantity: {$lineItem->quantity}) has been rejected by {$rejecterName}.\n\n";
-                    $notificationMessage .= "Rejection Reason: {$rejectionReason}\n\n";
-                    $notificationMessage .= "Note: Other items in this request can still be processed.";
+                    $approvedQty = $lineItem->getApprovedQuantity();
+                    $notificationMessage = "Your supply request item \"{$itemName}\" has defective units reported by {$rejecterName}.\n\n";
+                    $notificationMessage .= "Requested: {$requestedQty} | Defective: {$defectiveQty} | Approved quantity: {$approvedQty}\n\n";
+                    $notificationMessage .= "Reason: {$rejectionReason}\n\n";
+                    if ($approvedQty > 0) {
+                        $notificationMessage .= "Note: Non-defective quantity can still be processed. Other items in this request are unaffected.";
+                    } else {
+                        $notificationMessage .= "Note: This line item was fully rejected. Other items in this request can still be processed.";
+                    }
                     
                     $notification = Notification::create([
                         'item_id' => $itemId,
@@ -2021,8 +2119,8 @@ class SupplyRequestController extends Controller
                     }
                     
                     // Create message in supply request messages thread
-                    $rejectionMessage = "Item \"{$itemName}\" (Quantity: {$lineItem->quantity}) has been rejected.\n\n";
-                    $rejectionMessage .= "Rejection Reason:\n{$rejectionReason}\n\n";
+                    $rejectionMessage = "Item \"{$itemName}\" — Requested: {$requestedQty}, Defective: {$defectiveQty}, Approved qty: {$approvedQty}.\n\n";
+                    $rejectionMessage .= "Reason:\n{$rejectionReason}\n\n";
                     $rejectionMessage .= "Rejected By: {$rejecterName}";
                     if ($user->role) {
                         $rejectionMessage .= " (" . ucfirst($user->role) . ")";
@@ -2050,19 +2148,26 @@ class SupplyRequestController extends Controller
             try {
                 $rejecterName = $user->fullname ?? $user->username ?? $user->email ?? 'User';
                 $rejectionReason = $validated['rejection_reason'] ?? 'No reason provided';
-                $description = "Rejected item '{$itemName}' (Quantity: {$lineItem->quantity}) from supply request ID: {$supplyRequest->id} by {$rejecterName}. Reason: " . substr($rejectionReason, 0, 100);
+                $description = "Marked {$defectiveQty} defective of {$requestedQty} for '{$itemName}' (supply request ID: {$supplyRequest->id}) by {$rejecterName}. Reason: " . substr($rejectionReason, 0, 100);
                 $this->logActivity($request, 'Rejected Supply Request Item', $description);
             } catch (\Exception $e) {
                 Log::warning('Failed to log item rejection activity: ' . $e->getMessage());
             }
 
+            $successMessage = $defectiveQty >= $requestedQty
+                ? "Item \"{$itemName}\" fully rejected ({$defectiveQty} defective)."
+                : "Recorded {$defectiveQty} defective of {$requestedQty} for \"{$itemName}\". {$approvedQty} unit(s) can still be approved.";
+
             return response()->json([
                 'success' => true,
-                'message' => "Item \"{$itemName}\" rejected. Remaining items can still be processed.",
+                'message' => $successMessage,
                 'data' => [
                     'id' => $lineItem->id,
                     'item_id' => $lineItem->item_id,
                     'status' => $lineItem->status,
+                    'quantity' => $lineItem->quantity,
+                    'defective_quantity' => $lineItem->getDefectiveQuantity(),
+                    'approved_quantity' => $lineItem->getApprovedQuantity(),
                     'rejection_reason' => $lineItem->rejection_reason,
                 ]
             ]);
@@ -2135,14 +2240,15 @@ class SupplyRequestController extends Controller
                 ], 404);
             }
 
-            if (!$lineItem->isRejected()) {
+            if (!$lineItem->isRejected() && !$lineItem->hasDefectiveUnits()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'This item is not rejected'
+                    'message' => 'This item has no defective units recorded'
                 ], 400);
             }
 
             $lineItem->status = SupplyRequestItem::STATUS_PENDING;
+            $lineItem->defective_quantity = 0;
             $lineItem->rejection_reason = null;
             $lineItem->rejected_at = null;
             $lineItem->rejected_by = null;
@@ -2564,10 +2670,11 @@ class SupplyRequestController extends Controller
                         continue;
                     }
                     
+                    $approvedQty = $requestItem->getApprovedQuantity();
                     $currentQuantity = $item->quantity ?? 0;
-                    if ($requestItem->quantity > $currentQuantity) {
+                    if ($approvedQty > $currentQuantity) {
                         $itemName = $item->unit ?? $item->description ?? "Item {$requestItem->item_id}";
-                        $insufficientItems[] = "{$itemName}: Available {$currentQuantity}, Requested {$requestItem->quantity}";
+                        $insufficientItems[] = "{$itemName}: Available {$currentQuantity}, Approved qty {$approvedQty}";
                     }
                 }
                 
@@ -2610,7 +2717,7 @@ class SupplyRequestController extends Controller
                         }
                         
                         $currentQuantity = $item->quantity ?? 0;
-                        $requestedQuantity = $requestItem->quantity;
+                        $requestedQuantity = $requestItem->getApprovedQuantity();
                         $newQuantity = $currentQuantity - $requestedQuantity;
                         
                         if ($newQuantity < 0) {
@@ -2645,7 +2752,7 @@ class SupplyRequestController extends Controller
                     // Combine item names for transaction record
                     $itemName = implode(', ', $deductedItems);
                     // Calculate total quantity for multiple items
-                    $totalQuantity = $requestItems->sum('quantity');
+                    $totalQuantity = $requestItems->sum(fn ($ri) => $ri->getApprovedQuantity());
                 } else {
                     // Single item fulfillment (original logic)
                     $newQuantity = $currentQuantity - $supplyRequest->quantity;
@@ -4044,6 +4151,24 @@ class SupplyRequestController extends Controller
                 ], 404);
             }
 
+            // Regenerate receipt so PDF reflects current defective/rejected line items
+            if ($supplyRequest->approved_at && $supplyRequest->approved_by) {
+                try {
+                    $approver = User::find($supplyRequest->approved_by);
+                    if ($approver) {
+                        $supplyRequest->load(['items', 'requestedBy']);
+                        if (Storage::disk('public')->exists($supplyRequest->approval_proof)) {
+                            Storage::disk('public')->delete($supplyRequest->approval_proof);
+                        }
+                        $receiptPath = $this->generateApprovalReceipt($supplyRequest, $approver);
+                        $supplyRequest->approval_proof = $receiptPath;
+                        $supplyRequest->saveQuietly();
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Receipt regeneration failed, serving stored file: ' . $e->getMessage());
+                }
+            }
+
             // Check if file exists
             if (!Storage::disk('public')->exists($supplyRequest->approval_proof)) {
                 return response()->json([
@@ -4070,6 +4195,85 @@ class SupplyRequestController extends Controller
     }
 
     /**
+     * Build line items for receipt PDF (includes defective / rejected quantities).
+     */
+    private function buildReceiptLineItems(SupplyRequest $supplyRequest): array
+    {
+        $lines = [];
+        $totals = [
+            'requested' => 0,
+            'defective' => 0,
+            'approved' => 0,
+        ];
+
+        if (Schema::hasTable('supply_request_items')) {
+            $supplyRequest->loadMissing('items');
+            if ($supplyRequest->items && $supplyRequest->items->count() > 0) {
+                foreach ($supplyRequest->items as $requestItem) {
+                    $itemObj = $requestItem->item();
+                    if (!$itemObj) {
+                        continue;
+                    }
+
+                    $requested = (int) ($requestItem->quantity ?? 0);
+                    $defective = $requestItem->getDefectiveQuantity();
+                    $approved = $requestItem->getApprovedQuantity();
+                    $fullyRejected = $requestItem->isFullyRejected();
+
+                    if ($fullyRejected) {
+                        $status = 'REJECTED';
+                        $rowClass = 'rejected';
+                    } elseif ($defective > 0) {
+                        $status = 'PARTIAL DEFECT';
+                        $rowClass = 'partial';
+                    } else {
+                        $status = 'APPROVED';
+                        $rowClass = 'approved';
+                    }
+
+                    $lines[] = [
+                        'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
+                        'item_description' => $itemObj->description ?? '',
+                        'requested_quantity' => $requested,
+                        'defective_quantity' => $defective,
+                        'approved_quantity' => $approved,
+                        'quantity' => $approved, // backward compat
+                        'status' => $status,
+                        'row_class' => $rowClass,
+                        'rejection_reason' => $requestItem->rejection_reason ?? '',
+                    ];
+
+                    $totals['requested'] += $requested;
+                    $totals['defective'] += $defective;
+                    $totals['approved'] += $approved;
+                }
+
+                return ['items' => $lines, 'totals' => $totals];
+            }
+        }
+
+        $item = $supplyRequest->item();
+        if ($item) {
+            $requested = (int) ($supplyRequest->quantity ?? 0);
+            $lines[] = [
+                'item_name' => $item->unit ?? $item->description ?? 'N/A',
+                'item_description' => $item->description ?? '',
+                'requested_quantity' => $requested,
+                'defective_quantity' => 0,
+                'approved_quantity' => $requested,
+                'quantity' => $requested,
+                'status' => 'APPROVED',
+                'row_class' => 'approved',
+                'rejection_reason' => '',
+            ];
+            $totals['requested'] = $requested;
+            $totals['approved'] = $requested;
+        }
+
+        return ['items' => $lines, 'totals' => $totals];
+    }
+
+    /**
      * Generate approval receipt PDF
      */
     private function generateApprovalReceipt($supplyRequest, $approver)
@@ -4077,39 +4281,17 @@ class SupplyRequestController extends Controller
         try {
             // Load relationships including items for multi-item support
             $supplyRequest->load(['requestedBy', 'items']);
-            $item = $supplyRequest->item();
             $requestingUser = $supplyRequest->requestedBy;
-            
-            // Get all items for this request (multi-item support) — only non-rejected
-            $requestItems = [];
-            if (Schema::hasTable('supply_request_items') && $supplyRequest->relationLoaded('items') && $supplyRequest->items->count() > 0) {
-                foreach ($supplyRequest->items as $requestItem) {
-                    if ($requestItem->isRejected()) {
-                        continue;
-                    }
-                    $itemObj = $requestItem->item();
-                    if ($itemObj) {
-                        $requestItems[] = [
-                            'item_name' => $itemObj->unit ?? $itemObj->description ?? 'N/A',
-                            'item_description' => $itemObj->description ?? '',
-                            'quantity' => $requestItem->quantity,
-                        ];
-                    }
-                }
-            } else {
-                if ($item) {
-                    $requestItems[] = [
-                        'item_name' => $item->unit ?? $item->description ?? 'N/A',
-                        'item_description' => $item->description ?? '',
-                        'quantity' => $supplyRequest->quantity,
-                    ];
-                }
-            }
-            
+
+            $receiptLines = $this->buildReceiptLineItems($supplyRequest);
+            $requestItems = $receiptLines['items'];
+            $lineTotals = $receiptLines['totals'];
+
             // Get first item for backward compatibility
             $firstItem = $requestItems[0] ?? null;
             $itemName = $firstItem ? $firstItem['item_name'] : 'N/A';
             $itemDescription = $firstItem ? $firstItem['item_description'] : '';
+            $approvedTotalQty = $lineTotals['approved'] > 0 ? $lineTotals['approved'] : (int) ($supplyRequest->quantity ?? 0);
             
             $requestingUserName = $requestingUser ? ($requestingUser->fullname ?? $requestingUser->username ?? 'Unknown') : 'Unknown';
             $requestingUserEmail = $requestingUser ? ($requestingUser->email ?? '') : '';
@@ -4132,7 +4314,9 @@ class SupplyRequestController extends Controller
                 'receipt_number' => $supplyRequest->request_number,
                 'request_id' => $supplyRequest->id,
                 'item_name' => $itemName,
-                'quantity' => $supplyRequest->quantity,
+                'quantity' => $approvedTotalQty,
+                'requested_quantity' => $lineTotals['requested'],
+                'defective_quantity' => $lineTotals['defective'],
                 'approved_date' => $currentDate,
                 'approved_time' => $currentTime,
                 'approver_name' => $approverName,
@@ -4171,9 +4355,12 @@ class SupplyRequestController extends Controller
                 'request_number' => $supplyRequest->request_number,
                 'item_name' => $itemName,
                 'item_description' => $itemDescription,
-                'quantity' => $supplyRequest->quantity,
-                'items' => $requestItems, // Array of all items
-                'items_count' => count($requestItems), // Number of items
+                'quantity' => $approvedTotalQty,
+                'total_requested' => $lineTotals['requested'],
+                'total_defective' => $lineTotals['defective'],
+                'total_approved' => $approvedTotalQty,
+                'items' => $requestItems,
+                'items_count' => count($requestItems),
                 'notes' => $supplyRequest->notes,
                 'requesting_user_name' => $requestingUserName,
                 'requesting_user_email' => $requestingUserEmail,
@@ -4520,6 +4707,60 @@ class SupplyRequestController extends Controller
             padding: 20px;
             margin-bottom: 25px;
         }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 9.5pt;
+        }
+        .items-table th {
+            background: #1e40af;
+            color: #ffffff;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8.5pt;
+            padding: 8px 6px;
+            border: 1px solid #1e3a8a;
+            text-align: center;
+        }
+        .items-table td {
+            border: 1px solid #94a3b8;
+            padding: 7px 6px;
+            vertical-align: top;
+            color: #000000;
+        }
+        .items-table tr.approved td {
+            background: #ffffff;
+        }
+        .items-table tr.partial td {
+            background: #fffbeb;
+        }
+        .items-table tr.rejected td {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .items-table tr.totals td {
+            background: #e0e7ff;
+            font-weight: bold;
+            border-top: 2px solid #1e40af;
+        }
+        .items-table .col-num { width: 5%; text-align: center; }
+        .items-table .col-qty { width: 10%; text-align: center; }
+        .items-table .col-status { width: 14%; text-align: center; font-size: 8pt; font-weight: bold; }
+        .defect-summary {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #f59e0b;
+            background: #fffbeb;
+            font-size: 9.5pt;
+        }
+        .defect-summary-title {
+            font-weight: bold;
+            color: #92400e;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            font-size: 9pt;
+        }
     </style>
 </head>
 <body>
@@ -4576,54 +4817,78 @@ class SupplyRequestController extends Controller
     <!-- Request Details Section -->
     <div class="section">
         <div class="section-header">Request Information</div>
-        <div class="section-content">
-            <table class="info-table">';
-        
-        // Display all items if multiple, otherwise single item
-        if (!empty($data['items']) && count($data['items']) > 1) {
-            // Multiple items
+        <div class="section-content">';
+
+        if (!empty($data['items'])) {
+            $html .= '
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th class="col-num">#</th>
+                        <th>Item</th>
+                        <th>Description</th>
+                        <th class="col-qty">Requested</th>
+                        <th class="col-qty">Defective</th>
+                        <th class="col-qty">Approved</th>
+                        <th class="col-status">Status</th>
+                    </tr>
+                </thead>
+                <tbody>';
+
             foreach ($data['items'] as $idx => $itemData) {
+                $rowClass = htmlspecialchars($itemData['row_class'] ?? 'approved');
                 $html .= '
-                <tr class="info-row">
-                    <td class="info-label">Item ' . ($idx + 1) . ':</td>
-                    <td class="info-value"><strong>' . htmlspecialchars($itemData['item_name']) . '</strong></td>
-                </tr>';
-                
-                if (!empty($itemData['item_description'])) {
+                    <tr class="' . $rowClass . '">
+                        <td class="col-num">' . ($idx + 1) . '</td>
+                        <td><strong>' . htmlspecialchars($itemData['item_name']) . '</strong></td>
+                        <td>' . htmlspecialchars($itemData['item_description'] ?? '') . '</td>
+                        <td class="col-qty">' . (int) ($itemData['requested_quantity'] ?? $itemData['quantity'] ?? 0) . '</td>
+                        <td class="col-qty">' . (int) ($itemData['defective_quantity'] ?? 0) . '</td>
+                        <td class="col-qty">' . (int) ($itemData['approved_quantity'] ?? $itemData['quantity'] ?? 0) . '</td>
+                        <td class="col-status">' . htmlspecialchars($itemData['status'] ?? 'APPROVED') . '</td>
+                    </tr>';
+
+                if (!empty($itemData['rejection_reason']) && (int) ($itemData['defective_quantity'] ?? 0) > 0) {
                     $html .= '
-                <tr class="info-row">
-                    <td class="info-label">Description:</td>
-                    <td class="info-value">' . htmlspecialchars($itemData['item_description']) . '</td>
-                </tr>';
-                }
-                
-                $html .= '
-                <tr class="info-row">
-                    <td class="info-label">Quantity:</td>
-                    <td class="info-value"><strong>' . htmlspecialchars($itemData['quantity']) . '</strong></td>
-                </tr>';
-                
-                if ($idx < count($data['items']) - 1) {
-                    $html .= '
-                <tr class="info-row">
-                    <td colspan="2" style="padding: 10px 0; border-bottom: 1px dashed #cbd5e1;"></td>
-                </tr>';
+                    <tr class="' . $rowClass . '">
+                        <td></td>
+                        <td colspan="6" style="font-size:8.5pt;font-style:italic;">Reason: ' . htmlspecialchars($itemData['rejection_reason']) . '</td>
+                    </tr>';
                 }
             }
-            
+
+            $totalRequested = (int) ($data['total_requested'] ?? 0);
+            $totalDefective = (int) ($data['total_defective'] ?? 0);
+            $totalApproved = (int) ($data['total_approved'] ?? $data['quantity'] ?? 0);
+
             $html .= '
-                <tr class="info-row">
-                    <td class="info-label">Total Quantity:</td>
-                    <td class="info-value"><strong>' . htmlspecialchars($data['quantity']) . '</strong></td>
-                </tr>';
+                    <tr class="totals">
+                        <td colspan="3" style="text-align:right;">TOTALS</td>
+                        <td class="col-qty">' . $totalRequested . '</td>
+                        <td class="col-qty">' . $totalDefective . '</td>
+                        <td class="col-qty">' . $totalApproved . '</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>';
+
+            if ($totalDefective > 0) {
+                $html .= '
+            <div class="defect-summary">
+                <div class="defect-summary-title">Defective / Rejected Units</div>
+                <p>Total defective units reported: <strong>' . $totalDefective . '</strong> of <strong>' . $totalRequested . '</strong> requested.</p>
+                <p>Quantity approved for pickup/issue: <strong>' . $totalApproved . '</strong>.</p>
+                <p style="margin-top:6px;font-size:8.5pt;">Items marked REJECTED or PARTIAL DEFECT were reviewed by Supply. Only the approved quantity is issuable.</p>
+            </div>';
+            }
         } else {
-            // Single item (backward compatible)
             $html .= '
+            <table class="info-table">
                 <tr class="info-row">
                     <td class="info-label">Item Name:</td>
                     <td class="info-value"><strong>' . htmlspecialchars($data['item_name']) . '</strong></td>
                 </tr>';
-            
+
             if (!empty($data['item_description'])) {
                 $html .= '
                 <tr class="info-row">
@@ -4631,24 +4896,26 @@ class SupplyRequestController extends Controller
                     <td class="info-value">' . htmlspecialchars($data['item_description']) . '</td>
                 </tr>';
             }
-            
+
             $html .= '
                 <tr class="info-row">
-                    <td class="info-label">Quantity:</td>
-                    <td class="info-value"><strong>' . htmlspecialchars($data['quantity']) . '</strong></td>
-                </tr>';
+                    <td class="info-label">Approved Qty:</td>
+                    <td class="info-value"><strong>' . htmlspecialchars((string) ($data['quantity'] ?? 0)) . '</strong></td>
+                </tr>
+            </table>';
         }
-        
+
         if (!empty($data['notes'])) {
             $html .= '
+            <table class="info-table" style="margin-top:12px;">
                 <tr class="info-row">
-                    <td class="info-label">Notes:</td>
+                    <td class="info-label">Request Notes:</td>
                     <td class="info-value">' . htmlspecialchars($data['notes']) . '</td>
-                </tr>';
+                </tr>
+            </table>';
         }
-        
+
         $html .= '
-            </table>
         </div>
     </div>
     
@@ -4770,13 +5037,16 @@ class SupplyRequestController extends Controller
             }
 
             // Load relationships
-            $supplyRequest->load(['requestedBy']);
-            $item = $supplyRequest->item();
-            
-            $itemName = $item ? ($item->unit ?? $item->description ?? 'N/A') : 'N/A';
+            $supplyRequest->load(['requestedBy', 'items']);
+            $receiptLines = $this->buildReceiptLineItems($supplyRequest);
+            $firstLine = $receiptLines['items'][0] ?? null;
+            $itemName = $firstLine ? $firstLine['item_name'] : 'N/A';
             $requestingUserName = $supplyRequest->requestedBy ? ($supplyRequest->requestedBy->fullname ?? $supplyRequest->requestedBy->username ?? 'Unknown') : 'Unknown';
             $approver = $supplyRequest->approver;
             $approverName = $approver ? ($approver->fullname ?? $approver->username ?? 'Admin') : 'Admin';
+            $approvedTotal = $receiptLines['totals']['approved'] > 0
+                ? $receiptLines['totals']['approved']
+                : (int) ($supplyRequest->quantity ?? 0);
 
             return response()->json([
                 'success' => true,
@@ -4784,12 +5054,21 @@ class SupplyRequestController extends Controller
                     'receipt_number' => $supplyRequest->request_number,
                     'status' => $supplyRequest->status,
                     'item_name' => $itemName,
-                    'quantity' => $supplyRequest->quantity,
+                    'quantity' => $approvedTotal,
+                    'total_requested' => $receiptLines['totals']['requested'],
+                    'total_defective' => $receiptLines['totals']['defective'],
+                    'total_approved' => $approvedTotal,
+                    'items' => $receiptLines['items'],
                     'requested_by' => $requestingUserName,
                     'approved_by' => $approverName,
                     'approved_at' => $supplyRequest->approved_at ? $supplyRequest->approved_at->format('F d, Y h:i A') : null,
                     'created_at' => $supplyRequest->created_at->format('F d, Y h:i A'),
-                    'is_valid' => $supplyRequest->status === 'approved' || $supplyRequest->status === 'fulfilled',
+                    'is_valid' => in_array($supplyRequest->status, [
+                        'approved',
+                        'fulfilled',
+                        'ready_for_pickup',
+                        'for_claiming',
+                    ], true),
                     'verification_date' => now()->format('F d, Y h:i A')
                 ]
             ]);

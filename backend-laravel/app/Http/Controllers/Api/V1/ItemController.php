@@ -75,13 +75,15 @@ class ItemController extends Controller
                 'condition',
                 'condition_number',
                 'user',
+                'user.location',
                 'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
+                'latestMemorandumReceipt.issuedToUser.location',
                 'latestMemorandumReceipt.issuedToLocation'
             ])->paginate($perPage, ['*'], 'page', $page);
             
             return response()->json([
                 'success' => true,
-                'data' => new ItemCollection($items->items()),
+                'data' => ItemResource::collection($items->items()),
                 'pagination' => [
                     'current_page' => $items->currentPage(),
                     'last_page' => $items->lastPage(),
@@ -118,7 +120,9 @@ class ItemController extends Controller
                 'condition',
                 'condition_number',
                 'user',
+                'user.location',
                 'latestMemorandumReceipt.issuedToUser', // Load latest MR for MR number display
+                'latestMemorandumReceipt.issuedToUser.location',
                 'latestMemorandumReceipt.issuedToLocation'
             ])->paginate($perPage, ['*'], 'page', $page);
             

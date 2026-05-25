@@ -8,6 +8,7 @@ import useUsers from '../composables/useUsers'
 import useFormLabels from '../composables/useFormLabels'
 import axiosClient from '../axios'
 import SuccessModal from '../components/SuccessModal.vue'
+import useSuccessModal from '../composables/useSuccessModal'
 import { useDebouncedRef } from '../composables/useDebounce'
 
 const router = useRouter()
@@ -684,10 +685,16 @@ const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
 const deleteReason = ref('')
 
-// State for success modal
-const showSuccessModal = ref(false)
-const successMessage = ref('')
-const successModalType = ref('success')
+// Reusable alert / success modal (replaces browser alert())
+const {
+  isOpen: showSuccessModal,
+  message: successMessage,
+  type: successModalType,
+  title: successModalTitle,
+  buttonText: successModalButtonText,
+  show: showAlertModal,
+  close: closeSuccessModal
+} = useSuccessModal()
 
 // Open delete modal
 const openDeleteModal = (item) => {
@@ -824,12 +831,7 @@ const fetchReturnedItems = async () => {
   
   loadingReturnedItems.value = true
   try {
-    // Check baseURL to determine correct path
-    const baseURL = axiosClient.defaults.baseURL || '/api'
-    const path = baseURL.includes('/v1') 
-      ? '/memorandum-receipts/returned/available-for-reissue'
-      : '/v1/memorandum-receipts/returned/available-for-reissue'
-    const response = await axiosClient.get(path)
+    const response = await axiosClient.get('/memorandum-receipts/returned/available-for-reissue')
     console.log('Returned items API response:', response.data)
     if (response.data.success) {
       returnedItems.value = response.data.data || []
@@ -862,6 +864,15 @@ const closeReturnedItemsModal = () => {
 
 // Open reissue modal
 const openReissueModal = async (item) => {
+  if (!item?.id) {
+    showAlertModal({
+      message: 'Invalid item record. Cannot reissue.',
+      type: 'error',
+      title: 'Cannot Reissue'
+    })
+    return
+  }
+
   selectedItemForReissue.value = item
   reissueForm.value = {
     location_id: null,
@@ -869,16 +880,19 @@ const openReissueModal = async (item) => {
     selectedLocationId: null,
     remarks: ''
   }
-  
-  // Fetch locations and users if not already loaded
-  if (locations.value.length === 0) {
-    await fetchLocations(1, 1000)
-  }
-  if (users.value.length === 0) {
-    await fetchusers()
-  }
-  
+
   showReissueModal.value = true
+
+  try {
+    if (!Array.isArray(locations.value) || locations.value.length === 0) {
+      await fetchLocations(1, 1000)
+    }
+    if (!Array.isArray(users.value) || users.value.length === 0) {
+      await fetchusers()
+    }
+  } catch (error) {
+    console.error('Error loading reissue form data:', error)
+  }
 }
 
 // Close reissue modal
@@ -901,7 +915,11 @@ const reissueItem = async () => {
   const selectedValue = reissueForm.value.selectedLocationId
   
   if (!selectedValue || selectedValue === 'null' || selectedValue === '') {
-    alert('Please select a Personnel or User in the "Issued To" field')
+    showAlertModal({
+      message: 'Please select a Personnel or User in the "Issued To" field.',
+      type: 'warning',
+      title: 'Required Field'
+    })
     return
   }
   
@@ -919,29 +937,37 @@ const reissueItem = async () => {
   
   reissueLoading.value = true
   try {
-    const baseURL = axiosClient.defaults.baseURL || '/api'
-    const path = baseURL.includes('/v1')
-      ? `/memorandum-receipts/${selectedItemForReissue.value.id}/reissue`
-      : `/v1/memorandum-receipts/${selectedItemForReissue.value.id}/reissue`
-    
-    const response = await axiosClient.post(path, {
-      new_location_id: newLocationId,
-      new_user_id: newUserId,
-      remarks: reissueForm.value.remarks || null
-    })
+    const response = await axiosClient.post(
+      `/memorandum-receipts/${selectedItemForReissue.value.id}/reissue`,
+      {
+        new_location_id: newLocationId,
+        new_user_id: newUserId,
+        remarks: reissueForm.value.remarks || null
+      }
+    )
     
     if (response.data.success) {
-      // Refresh returned items list
       await fetchReturnedItems()
-      // Close modals
+      await fetchitems(false, 10000)
       closeReissueModal()
-      alert('Item reissued successfully!')
+      showAlertModal({
+        message: 'Item reissued successfully!',
+        type: 'success'
+      })
     } else {
-      alert(response.data.message || 'Failed to reissue item')
+      showAlertModal({
+        message: response.data.message || 'Failed to reissue item.',
+        type: 'error',
+        title: 'Reissue Failed'
+      })
     }
   } catch (error) {
     console.error('Error reissuing item:', error)
-    alert(error.response?.data?.message || 'Failed to reissue item')
+    showAlertModal({
+      message: error.response?.data?.message || 'Failed to reissue item.',
+      type: 'error',
+      title: 'Reissue Failed'
+    })
   } finally {
     reissueLoading.value = false
   }
@@ -949,26 +975,27 @@ const reissueItem = async () => {
 
 // Computed property for filtered users (active only)
 const activeUsers = computed(() => {
-  return users.value.filter(user => user.status === 'ACTIVE')
+  const list = Array.isArray(users.value) ? users.value : []
+  return list.filter(user => user.status === 'ACTIVE')
 })
 
 // Computed property for locations with personnel
 const locationsWithPersonnel = computed(() => {
-  return locations.value.filter(loc => loc.personnel && loc.personnel.trim() !== '')
+  const list = Array.isArray(locations.value) ? locations.value : []
+  return list.filter(loc => loc.personnel && String(loc.personnel).trim() !== '')
 })
 
 // Handle location selection - auto-fill personnel
 const handleLocationChange = (event) => {
   const locationId = event.target.value ? Number(event.target.value) : null
-  reissueForm.location_id = locationId
-  
+  reissueForm.value.location_id = locationId
+
   if (locationId) {
-    // Auto-select the personnel for this location
-    reissueForm.selectedLocationId = String(locationId)
-    reissueForm.user_id = null // Clear user_id since we're using location personnel
+    reissueForm.value.selectedLocationId = String(locationId)
+    reissueForm.value.user_id = null
   } else {
-    reissueForm.selectedLocationId = null
-    reissueForm.user_id = null
+    reissueForm.value.selectedLocationId = null
+    reissueForm.value.user_id = null
   }
 }
 
@@ -999,26 +1026,23 @@ const handleLocationChangeForReissue = () => {
 // Handle personnel change
 const handlePersonnelChange = (event) => {
   const selectedValue = event.target.value
-  
+
   if (!selectedValue || selectedValue === 'null' || selectedValue === '') {
-    reissueForm.selectedLocationId = null
-    reissueForm.user_id = null
-    reissueForm.location_id = null
+    reissueForm.value.selectedLocationId = null
+    reissueForm.value.user_id = null
+    reissueForm.value.location_id = null
     return
   }
-  
-  // Check if it's a user (starts with "USER-") or location (number string)
+
   if (selectedValue.startsWith('USER-')) {
-    // It's a user
-    reissueForm.selectedLocationId = selectedValue
-    reissueForm.user_id = Number(selectedValue.replace('USER-', ''))
-    reissueForm.location_id = null
+    reissueForm.value.selectedLocationId = selectedValue
+    reissueForm.value.user_id = Number(selectedValue.replace('USER-', ''))
+    reissueForm.value.location_id = null
   } else {
-    // It's a location/personnel
     const locationId = Number(selectedValue)
-    reissueForm.selectedLocationId = String(locationId)
-    reissueForm.location_id = locationId
-    reissueForm.user_id = null
+    reissueForm.value.selectedLocationId = String(locationId)
+    reissueForm.value.location_id = locationId
+    reissueForm.value.user_id = null
   }
 }
 
@@ -1042,10 +1066,10 @@ const deleteItem = async () => {
     
     console.log('Delete response:', response.data)
     
-    // Show success message
-    successMessage.value = response.data?.message || 'Item deleted successfully'
-    successModalType.value = 'success'
-    showSuccessModal.value = true
+    showAlertModal({
+      message: response.data?.message || 'Item deleted successfully',
+      type: 'success'
+    })
     
     // Refresh the items list
     await fetchitems(false, 10000)
@@ -1055,13 +1079,12 @@ const deleteItem = async () => {
     
     // Show error message
     if (error.response?.data?.message) {
-      successMessage.value = error.response.data.message
-      successModalType.value = 'error'
-      showSuccessModal.value = true
+      showAlertModal({ message: error.response.data.message, type: 'error' })
     } else {
-      successMessage.value = 'Failed to delete item. Please try again.'
-      successModalType.value = 'error'
-      showSuccessModal.value = true
+      showAlertModal({
+        message: 'Failed to delete item. Please try again.',
+        type: 'error'
+      })
     }
   } finally {
     deleteLoading.value = false
@@ -1070,12 +1093,6 @@ const deleteItem = async () => {
   }
 }
 
-// Close success modal
-const closeSuccessModal = () => {
-  showSuccessModal.value = false
-  successMessage.value = ''
-  successModalType.value = 'success'
-}
 </script>
 
 <template>
@@ -1114,7 +1131,7 @@ const closeSuccessModal = () => {
     <!-- Returned Items Modal -->
     <div
       v-if="showReturnedItems && isAdmin()"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[55] p-4"
       @click.self="closeReturnedItemsModal"
     >
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -1188,7 +1205,8 @@ const closeSuccessModal = () => {
                   </td>
                   <td class="px-4 py-3 whitespace-nowrap text-sm">
                     <button
-                      @click="openReissueModal(returnedItem)"
+                      type="button"
+                      @click.stop="openReissueModal(returnedItem)"
                       class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                     >
                       Reissue
@@ -2373,9 +2391,9 @@ const closeSuccessModal = () => {
     <!-- Success Modal -->
     <SuccessModal
       :isOpen="showSuccessModal"
-      :title="successModalType === 'success' ? 'Success' : 'Error'"
+      :title="successModalTitle"
       :message="successMessage"
-      buttonText="Continue"
+      :buttonText="successModalButtonText"
       :type="successModalType"
       @confirm="closeSuccessModal"
       @close="closeSuccessModal"

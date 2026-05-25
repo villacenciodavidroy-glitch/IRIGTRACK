@@ -3,6 +3,18 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axiosClient from '../axios'
 import { useDebouncedRef } from '../composables/useDebounce'
+import {
+  getLineApprovedQty,
+  getLineDefectiveQty,
+  getLineRequestedQty,
+  isItemRejected,
+  hasDefectiveUnits,
+  getTotalApprovedQuantity,
+  getTotalDefectiveQuantity,
+  buildDefectMapFromRequests,
+  getSupplyDefectInfo,
+  getSupplyDefectiveQty
+} from '../composables/useSupplyRequestLineItems'
 
 const router = useRouter()
 const route = useRoute()
@@ -784,28 +796,44 @@ const closeCancelModal = () => {
   }
 }
 
-// Calculate total quantity excluding rejected items
-const getTotalQuantity = (request) => {
-  if (!request) return 0
-  if (request.items && request.items.length > 0) {
-    return request.items
-      .filter((item) => (item.status || 'pending') !== 'rejected')
-      .reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)
-  }
-  // For single-item requests, check if rejected
-  if (request.items && request.items.length === 1) {
-    const item = request.items[0]
-    if ((item.status || 'pending') === 'rejected') {
-      return 0
-    }
-  }
-  return parseInt(request.quantity) || 0
-}
+const getTotalQuantity = getTotalApprovedQuantity
 
-// Check if an item is rejected
-const isItemRejected = (item) => {
-  return item && (item.status || 'pending') === 'rejected'
-}
+const defectMapFromRequests = computed(() => buildDefectMapFromRequests(myRequests.value))
+
+const itemsWithDefectsSummary = computed(() => {
+  const seen = new Set()
+  const list = []
+
+  for (const supply of supplies.value) {
+    const info = getSupplyDefectInfo(supply, defectMapFromRequests.value)
+    if (!info || info.totalDefective <= 0) continue
+    const key = supply.uuid || supply.id
+    if (seen.has(key)) continue
+    seen.add(key)
+    list.push({
+      key,
+      name: supply.unit || info.itemName,
+      defective: info.totalDefective,
+      reasons: info.reasons
+    })
+  }
+
+  for (const [key, info] of Object.entries(defectMapFromRequests.value)) {
+    if (seen.has(key)) continue
+    if (!info?.totalDefective) continue
+    seen.add(key)
+    list.push({
+      key,
+      name: info.itemName,
+      defective: info.totalDefective,
+      reasons: info.reasons
+    })
+  }
+
+  return list.sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const supplyHasDefects = (supply) => getSupplyDefectiveQty(supply, defectMapFromRequests.value) > 0
 
 // Cancel pending request
 const cancelRequest = async () => {
@@ -1081,9 +1109,8 @@ const setupRequestRealtimeListener = () => {
     // Listen for request status updates (for user's own requests)
     requestsChannel.listen('.SupplyRequestUpdated', (data) => {
       console.log('🔄 Supply request updated via WebSocket:', data)
-      fetchMyRequests(true) // Silent refresh
-      // Only refresh supplies if quantity might have changed (approval/fulfillment)
-      // For general updates, supplies don't need to refresh
+      fetchMyRequests(true)
+      fetchSupplies(true) // Defect badges may have changed
     })
     
     // Listen for request approval
@@ -1096,8 +1123,8 @@ const setupRequestRealtimeListener = () => {
     // Listen for request rejection
     requestsChannel.listen('.SupplyRequestRejected', (data) => {
       console.log('❌ Supply request rejected via WebSocket:', data)
-      fetchMyRequests(true) // Silent refresh
-      // Rejection doesn't change supplies, no need to refresh
+      fetchMyRequests(true)
+      fetchSupplies(true)
     })
     
     // Listen for request fulfillment
@@ -1141,8 +1168,8 @@ onMounted(() => {
   // Real-time listeners handle updates, polling is just a backup
   requestPollingInterval.value = setInterval(async () => {
     if (document.visibilityState === 'visible') {
-      await fetchMyRequests(true) // Silent refresh - only poll requests, not supplies
-      // Supplies are refreshed via real-time listeners when requests are approved/fulfilled
+      await fetchMyRequests(true)
+      await fetchSupplies(true) // Refresh defect badges on catalog
     }
   }, 30000) // Poll every 30 seconds instead of 5 (slower since real-time is primary)
 })
@@ -1423,15 +1450,47 @@ watch(requestStatusFilter, () => {
               
       <!-- Enhanced Supplies Grid/Table -->
       <div v-else class="space-y-4">
+        <!-- Defective items summary (from your requests) -->
+        <div
+          v-if="itemsWithDefectsSummary.length > 0"
+          class="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl p-4 shadow-sm"
+        >
+          <div class="flex items-start gap-3">
+            <div class="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex-shrink-0">
+              <span class="material-icons-outlined text-amber-700 dark:text-amber-300">report_problem</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-sm font-bold text-amber-900 dark:text-amber-100 mb-1">
+                Items with defective units on your requests
+              </h3>
+              <p class="text-xs text-amber-800 dark:text-amber-200 mb-3">
+                Supply reported defects on these items. See <strong>My Request</strong> for full details.
+              </p>
+              <ul class="flex flex-wrap gap-2">
+                <li
+                  v-for="entry in itemsWithDefectsSummary"
+                  :key="entry.key"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 dark:bg-gray-800/80 border border-amber-200 dark:border-amber-600 text-xs font-semibold text-amber-900 dark:text-amber-100"
+                >
+                  <span class="material-icons-outlined text-sm text-amber-600">inventory_2</span>
+                  {{ entry.name }} — {{ entry.defective }} defective
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         <!-- Grid View for Supplies -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
             v-for="supply in supplies"
             :key="supply.id"
             class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
-            :class="supply.quantity > 0 
-              ? 'border-emerald-200 dark:border-emerald-700 hover:border-emerald-400 dark:hover:border-emerald-500' 
-              : 'border-gray-200 dark:border-gray-700 opacity-75'"
+            :class="supplyHasDefects(supply)
+              ? 'border-amber-300 dark:border-amber-600 hover:border-amber-400 dark:hover:border-amber-500'
+              : supply.quantity > 0 
+                ? 'border-emerald-200 dark:border-emerald-700 hover:border-emerald-400 dark:hover:border-emerald-500' 
+                : 'border-gray-200 dark:border-gray-700 opacity-75'"
           >
             <!-- Card Header -->
             <div class="p-5 border-b border-gray-100 dark:border-gray-700">
@@ -1442,6 +1501,12 @@ watch(requestStatusFilter, () => {
                       <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-xl">inventory_2</span>
                     </div>
                     <h3 class="text-lg font-bold text-gray-900 dark:text-white truncate">{{ supply.unit }}</h3>
+                    <span
+                      v-if="supplyHasDefects(supply)"
+                      class="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"
+                    >
+                      Defect
+                    </span>
                   </div>
                   <p v-if="supply.description" class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
                     {{ supply.description }}
@@ -1452,6 +1517,30 @@ watch(requestStatusFilter, () => {
 
             <!-- Card Body -->
             <div class="p-5 space-y-4">
+              <!-- Defective units on user's requests -->
+              <div
+                v-if="supplyHasDefects(supply)"
+                class="p-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/25"
+              >
+                <div class="flex items-start gap-2">
+                  <span class="material-icons-outlined text-amber-600 dark:text-amber-400 text-lg flex-shrink-0">warning</span>
+                  <div class="min-w-0">
+                    <p class="text-sm font-bold text-amber-900 dark:text-amber-100">
+                      {{ getSupplyDefectiveQty(supply, defectMapFromRequests) }} defective on your request(s)
+                    </p>
+                    <p
+                      v-if="getSupplyDefectInfo(supply, defectMapFromRequests)?.reasons?.length"
+                      class="text-xs text-amber-800 dark:text-amber-200 mt-0.5 line-clamp-2"
+                    >
+                      {{ getSupplyDefectInfo(supply, defectMapFromRequests).reasons.join(' · ') }}
+                    </p>
+                    <p class="text-xs text-amber-700/90 dark:text-amber-300/90 mt-1">
+                      Open <strong>My Request</strong> to see quantities and status.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <!-- Stock Information -->
               <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <div class="flex items-center gap-2">
@@ -1904,12 +1993,34 @@ watch(requestStatusFilter, () => {
                 :class="index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-700/30'"
               >
                 <td class="px-6 py-4">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-3">
-                    <div v-for="(item, idx) in request.items" :key="idx" class="border-l-4 border-emerald-300 dark:border-emerald-700 pl-3 pb-3 last:pb-0 last:border-b-0">
-                      <div class="flex items-center gap-2 mb-1">
+                  <div v-if="request.items && request.items.length > 0" class="space-y-3">
+                    <div
+                      v-for="(item, idx) in request.items"
+                      :key="idx"
+                      class="border-l-4 pl-3 pb-3 last:pb-0 last:border-b-0"
+                      :class="isItemRejected(item)
+                        ? 'border-red-400 dark:border-red-600'
+                        : hasDefectiveUnits(item)
+                          ? 'border-amber-400 dark:border-amber-600'
+                          : 'border-emerald-300 dark:border-emerald-700'"
+                    >
+                      <div class="flex items-center gap-2 mb-1 flex-wrap">
                         <span class="material-icons-outlined text-emerald-600 dark:text-emerald-400 text-sm">inventory_2</span>
                         <div class="text-sm font-bold text-gray-900 dark:text-white">{{ item.item_name }}</div>
+                        <span v-if="hasDefectiveUnits(item)" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                          {{ getLineDefectiveQty(item) }} defective
+                        </span>
+                        <span v-else-if="isItemRejected(item)" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
+                          Rejected
+                        </span>
                       </div>
+                      <p v-if="hasDefectiveUnits(item)" class="text-xs text-amber-700 dark:text-amber-300 mb-1">
+                        Requested {{ getLineRequestedQty(item) }} · {{ getLineDefectiveQty(item) }} defective · {{ getLineApprovedQty(item) }} approved qty
+                        <span v-if="item.rejection_reason" class="block italic text-amber-600/90 dark:text-amber-400/90">{{ item.rejection_reason }}</span>
+                      </p>
+                      <p v-else-if="isItemRejected(item)" class="text-xs text-red-600 dark:text-red-400 mb-1 italic">
+                        {{ item.rejection_reason || 'Fully rejected as defective' }}
+                      </p>
                       <div class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                         <span class="material-icons-outlined text-xs">warehouse</span>
                         <span>Stock: <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ item.item_quantity }}</span></span>
@@ -1927,15 +2038,17 @@ watch(requestStatusFilter, () => {
                   </div>
                 </td>
                 <td class="px-6 py-4">
-                  <div v-if="request.items && request.items.length > 1" class="space-y-2">
-                    <div v-for="(item, idx) in request.items" :key="idx" 
-                         :class="['text-sm font-semibold', isItemRejected(item) 
-                           ? 'text-red-600 dark:text-red-400 line-through' 
-                           : 'text-gray-900 dark:text-white']">
-                      {{ item.quantity }}
+                  <div v-if="request.items && request.items.length > 0" class="space-y-2">
+                    <div v-for="(item, idx) in request.items" :key="idx" class="text-sm">
+                      <div :class="['font-semibold', isItemRejected(item) ? 'text-red-600 dark:text-red-400 line-through' : 'text-gray-900 dark:text-white']">
+                        {{ getLineRequestedQty(item) }}
+                      </div>
+                      <div v-if="hasDefectiveUnits(item)" class="text-xs text-amber-700 dark:text-amber-300">
+                        −{{ getLineDefectiveQty(item) }} defective
+                      </div>
                     </div>
                     <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400 pt-2 mt-2 border-t-2 border-emerald-200 dark:border-emerald-700">
-                      Total: {{ getTotalQuantity(request) }}
+                      Approved total: {{ getTotalQuantity(request) }}
                     </div>
                   </div>
                   <div v-else class="text-lg font-bold" 
@@ -1959,6 +2072,12 @@ watch(requestStatusFilter, () => {
                         ? (request.pickup_scheduled_at ? 'Ready for Pickup' : 'Awaiting Pickup Schedule') 
                         : request.status === 'for_claiming' ? 'For Claiming'
                         : request.status === 'fulfilled' ? 'Completed' : request.status }}
+                  </span>
+                  <span
+                    v-if="getTotalDefectiveQuantity(request) > 0"
+                    class="mt-1.5 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 block w-fit"
+                  >
+                    {{ getTotalDefectiveQuantity(request) }} defective unit(s)
                   </span>
                 </td>
                 <td class="px-6 py-4">

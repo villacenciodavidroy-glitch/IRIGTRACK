@@ -1,6 +1,13 @@
 import { ref, onMounted, watch } from 'vue'
 import axiosClient from '../axios' // or wherever your axiosClient is
 
+/** Unwrap Laravel ResourceCollection payloads ({ data: [...] }) to a plain array */
+const normalizeListPayload = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.data)) return payload.data
+  return []
+}
+
 export default function useLocations(formData = null) {
   const locations = ref([])
   const pagination = ref({
@@ -23,7 +30,7 @@ export default function useLocations(formData = null) {
         }
       })
       if (response.data && response.data.data) {
-        locations.value = response.data.data
+        locations.value = normalizeListPayload(response.data.data)
         if (response.data.pagination) {
           pagination.value = response.data.pagination
         }

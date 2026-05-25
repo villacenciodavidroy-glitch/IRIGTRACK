@@ -44,14 +44,21 @@ export default function useLogo() {
       // Build a data URL version for safe use in print windows
       try {
         const finalUrl = logoUrl.value || defaultLogo
-        const response = await fetch(finalUrl, { cache: 'no-store' })
-        const blob = await response.blob()
-        logoDataUrl.value = await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result)
-          reader.onerror = reject
-          reader.readAsDataURL(blob)
-        })
+        const resolvedUrl = new URL(finalUrl, window.location.origin)
+
+        // Avoid cross-origin fetch for data-url conversion to prevent CORS errors.
+        if (resolvedUrl.origin === window.location.origin) {
+          const response = await fetch(resolvedUrl.href, { cache: 'no-store' })
+          const blob = await response.blob()
+          logoDataUrl.value = await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+        } else {
+          logoDataUrl.value = null
+        }
       } catch {
         // If conversion fails, fall back to normal URL
         logoDataUrl.value = null

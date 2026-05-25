@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class MemorandumReceipt extends Model
 {
+    private static ?array $mrColumnsCache = null;
 
     protected $fillable = [
         'item_id',
@@ -111,24 +113,50 @@ class MemorandumReceipt extends Model
      */
     public function reassignTo($newId, $newCode, $type = 'USER', $processedByUserId = null, $remarks = null)
     {
+        $columns = $this->getMrColumns();
+
         if ($type === 'USER') {
-            $this->reassigned_to_user_id = $newId;
-            $this->reassigned_to_location_id = null;
+            if (in_array('reassigned_to_user_id', $columns, true)) {
+                $this->reassigned_to_user_id = $newId;
+            }
+            if (in_array('reassigned_to_location_id', $columns, true)) {
+                $this->reassigned_to_location_id = null;
+            }
         } else {
-            $this->reassigned_to_location_id = $newId;
-            $this->reassigned_to_user_id = null;
+            if (in_array('reassigned_to_location_id', $columns, true)) {
+                $this->reassigned_to_location_id = $newId;
+            }
+            if (in_array('reassigned_to_user_id', $columns, true)) {
+                $this->reassigned_to_user_id = null;
+            }
         }
-        $this->reassigned_to_code = $newCode;
-        $this->reassigned_to_type = $type;
+        if (in_array('reassigned_to_code', $columns, true)) {
+            $this->reassigned_to_code = $newCode;
+        } elseif (in_array('reassigned_to_user_code', $columns, true)) {
+            // Backward compatibility for older schemas that still use this column name.
+            $this->reassigned_to_user_code = $newCode;
+        }
+        if (in_array('reassigned_to_type', $columns, true)) {
+            $this->reassigned_to_type = $type;
+        }
         $this->status = 'RETURNED';
         $this->returned_at = now();
-        if ($processedByUserId) {
+        if ($processedByUserId && in_array('processed_by_user_id', $columns, true)) {
             $this->processed_by_user_id = $processedByUserId;
         }
         if ($remarks) {
             $this->remarks = $remarks;
         }
         $this->save();
+    }
+
+    private function getMrColumns(): array
+    {
+        if (self::$mrColumnsCache === null) {
+            self::$mrColumnsCache = Schema::getColumnListing($this->getTable());
+        }
+
+        return self::$mrColumnsCache;
     }
 
     /**

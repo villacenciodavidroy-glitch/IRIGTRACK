@@ -1,27 +1,9 @@
 import {createRouter, createWebHistory} from "vue-router"
 import DefaultLayout from "./layouts/DefaultLayout.vue"
-import Dashboard from "./pages/Dashboard.vue"
-// import Inventory from "./pages/Inventory.vue"
 import Login from "./pages/Login.vue"
 import Signup from "./pages/Signup.vue"
 import NotFound from "./pages/NotFound.vue"
-import Inventory from "./pages/Inventory.vue"
-import Admin from "./pages/Admin.vue"
-import Analytics from "./pages/Analytics.vue"
-import AddItem from "./pages/AddItem.vue"
-import AddAccount from './pages/AddAccount.vue'
-import EditAccount from './pages/EditAccount.vue'
-import Reporting from './pages/reports/index.vue'
-import DesktopMonitoring from './pages/reports/desktop.vue'
-import ServiceableItems from './pages/reports/serviceable-items.vue'
-import SuppliesOverview from './pages/SuppliesOverview.vue'
-import UsageOverview from './pages/UsageOverview.vue'
-import QRGeneration from './pages/QRGeneration.vue'
-import ActivityLog from './pages/ActivityLog.vue'
-import Profile from './pages/ProfileView.vue'
-import DeletedItems from './pages/DeletedItems.vue'
-import MaintenanceRecords from './pages/MaintenanceRecords.vue'
-import Notifications from './pages/Notifications.vue'
+import { getCachedUserRole } from './composables/useAuth'
 import axiosClient from './axios'
 
 const routes = [
@@ -36,17 +18,17 @@ const routes = [
             {
                 path: 'dashboard',
                 name: 'Dashboard',
-                component: Dashboard
+                component: () => import('./pages/Dashboard.vue')
             },
             {
                 path: 'profile',
                 name: 'Profile',
-                component: Profile
+                component: () => import('./pages/ProfileView.vue')
             },
             {
                 path: 'activity-log',
                 name: 'ActivityLog',
-                component: ActivityLog
+                component: () => import('./pages/ActivityLog.vue')
             },
             {
                 path: 'history',
@@ -59,19 +41,19 @@ const routes = [
                     {
                         path: 'deleted-items',
                         name: 'DeletedItems',
-                        component: DeletedItems
+                        component: () => import('./pages/DeletedItems.vue')
                     },
                     {
                         path: 'maintenance-records',
                         name: 'MaintenanceRecords',
-                        component: MaintenanceRecords
+                        component: () => import('./pages/MaintenanceRecords.vue')
                     }
                 ]
             },
             {
                 path: 'inventory',
                 name: 'Inventory',
-                component: Inventory
+                component: () => import('./pages/Inventory.vue')
             },
             {
                 path: 'categories',
@@ -86,12 +68,12 @@ const routes = [
             {
                 path: 'add-item',
                 name: 'AddItem',
-                component: AddItem
+                component: () => import('./pages/AddItem.vue')
             },
             {
                 path: 'admin',
                 name: 'Admin',
-                component: Admin
+                component: () => import('./pages/Admin.vue')
             },
             {
                 path: 'settings',
@@ -112,7 +94,7 @@ const routes = [
             {
                 path: 'settings/activity-log',
                 name: 'SettingsActivityLog',
-                component: ActivityLog
+                component: () => import('./pages/ActivityLog.vue')
             },
             {
                 path: 'personnel-management',
@@ -121,42 +103,42 @@ const routes = [
             },{
                 path: 'analytics',
                 name: 'Analytics',
-                component: Analytics
+                component: () => import('./pages/Analytics.vue')
             },
             {
                 path: 'supplies',
                 name: 'SuppliesOverview',
-                component: SuppliesOverview
+                component: () => import('./pages/SuppliesOverview.vue')
             },
             {
                 path: 'usage',
                 name: 'UsageOverview',
-                component: UsageOverview
+                component: () => import('./pages/UsageOverview.vue')
             },
             {
                 path: 'add-account',
                 name: 'AddAccount',
-                component: AddAccount
+                component: () => import('./pages/AddAccount.vue')
             },
             {
                 path: 'edit-account/:id',
                 name: 'EditAccount',
-                component: EditAccount
+                component: () => import('./pages/EditAccount.vue')
             },
             {
                 path: 'reporting',
                 name: 'Reporting',
-                component: Reporting
+                component: () => import('./pages/reports/index.vue')
             },
             {
                 path: 'reports/desktop/:type?',
                 name: 'DesktopMonitoring',
-                component: DesktopMonitoring
+                component: () => import('./pages/reports/desktop.vue')
             },
             {
                 path: 'reports/serviceable-items',
                 name: 'ServiceableItems',
-                component: ServiceableItems
+                component: () => import('./pages/reports/serviceable-items.vue')
             },
             {
                 path: 'reports/monitoring-assets',
@@ -191,7 +173,7 @@ const routes = [
             {
                 path: 'QRGeneration',
                 name: 'QRGeneration',
-                component: QRGeneration
+                component: () => import('./pages/QRGeneration.vue')
             },
             {
                 path: 'edit-item/:uuid',
@@ -201,7 +183,7 @@ const routes = [
             {
                 path: 'notifications',
                 name: 'Notifications',
-                component: Notifications
+                component: () => import('./pages/Notifications.vue')
             },
             {
                 path: 'transactions',
@@ -333,100 +315,67 @@ router.beforeEach(async (to, from, next) => {
         return
     }
     
+    const cachedRole = getCachedUserRole()
+
     // Redirect User role from Dashboard to Supply Requests
-    if (to.name === 'Dashboard') {
-        try {
-            const response = await axiosClient.get('/user')
-            if (response.data) {
-                const userRole = (response.data.role || '').toLowerCase()
-                if (userRole === 'user') {
-                    next('/supply-requests')
-                    return
-                }
-            }
-        } catch (error) {
-            // If error checking user, continue normally
-            console.error('Error checking user role for dashboard redirect:', error)
-        }
+    if (to.name === 'Dashboard' && cachedRole === 'user') {
+        next('/supply-requests')
+        return
     }
-    
+
     // Check if route requires admin access
     if (adminRoutes.includes(to.name)) {
-        try {
-            // Fetch current user to check role using axiosClient
-            const response = await axiosClient.get('/user')
-            
-            if (response.data) {
-                const user = response.data
-                const role = (user.role || '').toLowerCase()
-                
+        if (cachedRole && cachedRole !== 'admin' && cachedRole !== 'super_admin') {
+            next('/dashboard')
+            return
+        }
+        if (!cachedRole) {
+            try {
+                const response = await axiosClient.get('/user')
+                const role = (response.data?.role || '').toLowerCase()
+                if (response.data) {
+                    localStorage.setItem('user', JSON.stringify(response.data))
+                }
                 if (role !== 'admin' && role !== 'super_admin') {
-                    // Not an admin, redirect to dashboard
                     next('/dashboard')
                     return
                 }
-            } else {
-                // No user data, redirect to login
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                next({
-                    name: 'Login',
-                    query: { redirect: to.fullPath }
-                })
-                return
+            } catch (error) {
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    localStorage.removeItem('token')
+                    localStorage.removeItem('user')
+                    next({ name: 'Login', query: { redirect: to.fullPath } })
+                    return
+                }
             }
-        } catch (error) {
-            console.error('Error checking user role:', error)
-            // On error (401/403), redirect to login
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                next({
-                    name: 'Login',
-                    query: { redirect: to.fullPath }
-                })
-                return
-            }
-            // For other errors, still check but allow with warning
-            next()
         }
     }
-    
+
     // Check if route requires supply or admin access
     if (supplyRoutes.includes(to.name)) {
-        try {
-            const response = await axiosClient.get('/user')
-            
-            if (response.data) {
-                const user = response.data
-                const role = (user.role || '').toLowerCase()
-                
+        if (cachedRole && !['supply', 'admin', 'super_admin'].includes(cachedRole)) {
+            next('/dashboard')
+            return
+        }
+        if (!cachedRole) {
+            try {
+                const response = await axiosClient.get('/user')
+                const role = (response.data?.role || '').toLowerCase()
+                if (response.data) {
+                    localStorage.setItem('user', JSON.stringify(response.data))
+                }
                 if (!['supply', 'admin', 'super_admin'].includes(role)) {
-                    // Not supply or admin, redirect to dashboard
                     next('/dashboard')
                     return
                 }
-            } else {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                next({
-                    name: 'Login',
-                    query: { redirect: to.fullPath }
-                })
-                return
+            } catch (error) {
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    localStorage.removeItem('token')
+                    localStorage.removeItem('user')
+                    next({ name: 'Login', query: { redirect: to.fullPath } })
+                    return
+                }
             }
-        } catch (error) {
-            console.error('Error checking user role:', error)
-            if (error.response?.status === 401 || error.response?.status === 403) {
-                localStorage.removeItem('token')
-                localStorage.removeItem('user')
-                next({
-                    name: 'Login',
-                    query: { redirect: to.fullPath }
-                })
-                return
-            }
-            next()
         }
     }
     

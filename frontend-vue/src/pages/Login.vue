@@ -169,9 +169,6 @@ const login = async () => {
   isLoading.value = true
   errors.value = {}
 
-  // Optional fake delay
-  await new Promise(resolve => setTimeout(resolve, 500))
-
   try {
     const response = await axiosClient.post('/login', data.value)
     if (response.status === 200) {
@@ -179,8 +176,11 @@ const login = async () => {
         localStorage.setItem('token', response.data.token)
         axiosClient.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
       }
-      if (response.data.user && response.data.user.id) {
-        localStorage.setItem('userId', response.data.user.id)
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user))
+        if (response.data.user.id) {
+          localStorage.setItem('userId', response.data.user.id)
+        }
       }
       await router.push('/dashboard')
     }

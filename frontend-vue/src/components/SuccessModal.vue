@@ -123,7 +123,7 @@ const { icon, iconColor, iconBg, buttonClass } = getIconAndColors()
   <!-- Modal Backdrop -->
   <div
     v-if="isOpen"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]"
     @click="handleClose"
   >
     <!-- Modal Content -->

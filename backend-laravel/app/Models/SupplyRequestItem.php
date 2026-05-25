@@ -16,6 +16,7 @@ class SupplyRequestItem extends Model
         'supply_request_id',
         'item_id',
         'quantity',
+        'defective_quantity',
         'status',
         'rejection_reason',
         'rejected_at',
@@ -24,15 +25,46 @@ class SupplyRequestItem extends Model
 
     protected $casts = [
         'rejected_at' => 'datetime',
+        'defective_quantity' => 'integer',
+        'quantity' => 'integer',
     ];
 
     /** Item status: pending (default), rejected */
     public const STATUS_PENDING = 'pending';
     public const STATUS_REJECTED = 'rejected';
 
+    public function getDefectiveQuantity(): int
+    {
+        return max(0, (int) ($this->defective_quantity ?? 0));
+    }
+
+    public function getApprovedQuantity(): int
+    {
+        if ($this->isFullyRejected()) {
+            return 0;
+        }
+
+        return max(0, (int) ($this->quantity ?? 0) - $this->getDefectiveQuantity());
+    }
+
+    public function isFullyRejected(): bool
+    {
+        if (($this->status ?? self::STATUS_PENDING) === self::STATUS_REJECTED) {
+            return true;
+        }
+
+        $requested = (int) ($this->quantity ?? 0);
+        return $requested > 0 && $this->getDefectiveQuantity() >= $requested;
+    }
+
+    public function hasDefectiveUnits(): bool
+    {
+        return $this->getDefectiveQuantity() > 0 && !$this->isFullyRejected();
+    }
+
     public function isRejected(): bool
     {
-        return ($this->status ?? self::STATUS_PENDING) === self::STATUS_REJECTED;
+        return $this->isFullyRejected();
     }
 
     /**

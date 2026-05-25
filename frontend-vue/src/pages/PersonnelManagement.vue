@@ -290,10 +290,10 @@
       </div>
     </div>
 
-    <!-- Clearance Modal -->
+    <!-- Clearance Modal (z-[60] so it stacks above Issued Items modal when opened from View Items) -->
     <div
       v-if="showClearanceModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
       @click.self="closeClearanceModal"
     >
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -439,52 +439,207 @@
     <!-- Reassign Modal -->
     <div
       v-if="showReassignModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
       @click.self="closeReassignModal"
     >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-xl font-bold text-gray-900 dark:text-white">
-            {{ selectedItem?.id === 'BULK' ? `Reassign ${selectedItem.mr_ids?.length || 0} Items` : 'Reassign Item' }}
-          </h2>
-          <p v-if="selectedItem?.id === 'BULK'" class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            All selected items will be reassigned to the same personnel
-          </p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col border-2 border-green-500/20">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-5 border-b-2 border-green-800 flex items-center justify-between shadow-lg">
+          <div class="flex items-center gap-4">
+            <div class="p-2.5 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+              <span class="material-icons-outlined text-white text-2xl">swap_horiz</span>
+            </div>
+            <div>
+              <h2 class="text-2xl font-bold text-white leading-tight">
+                {{ selectedItem?.id === 'BULK' ? `Reassign ${selectedItem.mr_ids?.length || 0} Items` : 'Reassign Item' }}
+              </h2>
+              <p class="text-sm text-green-100 mt-0.5">Item unit/sections and personnel assignment</p>
+            </div>
+          </div>
+          <button
+            @click="closeReassignModal"
+            class="p-2 text-white hover:bg-white/30 rounded-lg transition-all duration-200 hover:scale-110"
+            :disabled="processingItem || processingBulk"
+          >
+            <span class="material-icons-outlined text-2xl">close</span>
+          </button>
         </div>
-        <div class="p-6">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Personnel
-            </label>
-            <select
-              v-model="reassignToUserId"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-emerald-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">Select...</option>
-              <option
-                v-for="user in activeUsers"
-                :key="`${user.type}-${user.id}`"
-                :value="user.type === 'USER' ? `USER-${user.id}` : `PERSONNEL-${user.id}`"
-              >
-                {{ user.fullname }} ({{ user.code || user.user_code || user.personnel_code }}) - {{ user.location || 'N/A' }} [{{ user.status || 'ACTIVE' }}] {{ user.type === 'PERSONNEL' ? '(Personnel)' : '' }}
-              </option>
-            </select>
+
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+          <!-- Item Details Section -->
+          <div
+            v-if="selectedItem?.id !== 'BULK'"
+            class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden"
+          >
+            <div class="bg-gray-50 dark:bg-gray-700/50 px-6 py-3 border-b border-gray-200 dark:border-gray-600">
+              <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                <span class="material-icons-outlined text-green-600 dark:text-green-400 text-xl">info</span>
+                Item Details
+              </h3>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Item</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItem?.item?.unit || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Serial Number</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItem?.item?.serial_number || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Model</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ selectedItem?.item?.model || 'N/A' }}</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Previous Assignee</span>
+                  <span class="text-base font-semibold text-gray-900 dark:text-white">{{ reassignPreviousAssignee }}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="flex justify-end gap-2">
-            <button
-              @click="closeReassignModal"
-              class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              @click="confirmReassign"
-              class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-              :disabled="!reassignToUserId || processingItem"
-            >
-              {{ processingItem ? 'Processing...' : 'Reassign' }}
-            </button>
+          <div
+            v-else
+            class="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-amber-200 dark:border-amber-700 overflow-hidden"
+          >
+            <div class="bg-amber-50 dark:bg-amber-900/30 px-6 py-3 border-b border-amber-200 dark:border-amber-700">
+              <p class="text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                <span class="material-icons-outlined text-base">info</span>
+                All {{ selectedItem.mr_ids?.length || 0 }} selected items will be reassigned to the same personnel.
+              </p>
+            </div>
           </div>
+
+          <!-- Assignment Form Section -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 border-b-2 border-green-800 shadow-md">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-white/25 backdrop-blur-sm rounded-lg shadow-md">
+                  <span class="material-icons-outlined text-white text-xl">location_on</span>
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-white">Assignment & Unit/Sections</h3>
+                  <p class="text-xs text-green-100">Item unit/sections and personnel assignment</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-6 space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Unit/Sections -->
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Unit/Sections <span class="text-red-500 font-bold">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 z-10 pointer-events-none">
+                      <span class="material-icons-outlined text-xl">location_on</span>
+                    </span>
+                    <select
+                      v-model.number="reassignForm.location_id"
+                      class="w-full pl-12 pr-10 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 appearance-none cursor-pointer hover:border-green-400"
+                      @change="handleReassignLocationChange"
+                    >
+                      <option :value="null" class="bg-gray-100 dark:bg-gray-800">Select Unit/Section</option>
+                      <option
+                        v-for="location in locationsWithPersonnel"
+                        :key="location.id"
+                        :value="Number(location.id)"
+                        class="bg-white dark:bg-gray-700"
+                      >
+                        {{ location.location }} ({{ location.personnel }})
+                      </option>
+                    </select>
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <span class="material-icons-outlined">arrow_drop_down</span>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Issued To -->
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Issued To <span class="text-red-500 font-bold">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 z-10 pointer-events-none">
+                      <span class="material-icons-outlined text-xl">person</span>
+                    </span>
+                    <select
+                      v-model="reassignForm.issuedTo"
+                      class="w-full pl-12 pr-10 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 appearance-none cursor-pointer hover:border-green-400"
+                      @change="handleReassignIssuedToChange"
+                    >
+                      <option value="" class="bg-gray-100 dark:bg-gray-800">Select Personnel or User</option>
+                      <optgroup label="Personnel (No Account)">
+                        <option
+                          v-for="person in activePersonnelOptions"
+                          :key="`PERSONNEL-${person.id}`"
+                          :value="`PERSONNEL-${person.id}`"
+                          class="bg-white dark:bg-gray-700"
+                        >
+                          {{ person.code || person.personnel_code || 'N/A' }} - {{ getUserAssignmentLabel(person) }} (Personnel)
+                        </option>
+                      </optgroup>
+                      <optgroup label="Users (With Account)">
+                        <option
+                          v-for="user in activeUserOptions"
+                          :key="`USER-${user.id}`"
+                          :value="`USER-${user.id}`"
+                          class="bg-white dark:bg-gray-700"
+                        >
+                          {{ user.code || user.user_code || 'N/A' }} - {{ getUserAssignmentLabel(user) }} (User Account)
+                        </option>
+                      </optgroup>
+                    </select>
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <span class="material-icons-outlined">arrow_drop_down</span>
+                    </span>
+                  </div>
+                  <p
+                    v-if="reassignForm.location_id && reassignForm.issuedTo && reassignForm.issuedTo !== `PERSONNEL-${reassignForm.location_id}`"
+                    class="text-xs text-blue-600 dark:text-blue-400 mt-1 flex items-center gap-1"
+                  >
+                    <span class="material-icons-outlined text-sm">info</span>
+                    <span>You can select a different personnel if needed</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Remarks -->
+              <div class="space-y-2">
+                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Remarks <span class="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  v-model="reassignForm.remarks"
+                  rows="4"
+                  class="w-full px-4 py-3 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all duration-200 resize-none"
+                  placeholder="Enter any remarks about this reassignment..."
+                ></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t-2 border-gray-200 dark:border-gray-700 flex justify-end gap-3 shadow-lg">
+          <button
+            @click="closeReassignModal"
+            class="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200 font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="processingItem || processingBulk"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmReassign"
+            :disabled="!reassignForm.issuedTo || processingItem || processingBulk"
+            class="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all duration-200 font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <span v-if="processingItem || processingBulk" class="material-icons-outlined animate-spin text-xl">refresh</span>
+            <span v-else class="material-icons-outlined text-xl">check_circle</span>
+            <span>{{ processingItem || processingBulk ? 'Processing...' : 'Reassign' }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -812,7 +967,7 @@
     <!-- Lost/Damaged Modal -->
     <div
       v-if="showLostDamagedModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]"
       @click.self="closeLostDamagedModal"
     >
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -926,6 +1081,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axiosClient from '../axios'
+import useLocations from '../composables/useLocations'
 
 const personnel = ref([])
 const searchQuery = ref('')
@@ -939,6 +1095,7 @@ const showLostDamagedModal = ref(false)
 const showIssuedItemsModal = ref(false)
 const showRecoveryModal = ref(false)
 const selectedPersonnel = ref(null)
+const lastClearancePersonnel = ref(null)
 const pendingItems = ref([])
 const allIssuedItems = ref([])
 const issuedItemsStatusFilter = ref('ALL')
@@ -951,7 +1108,12 @@ const recoveryForm = ref({
   recovery_date: new Date().toISOString().split('T')[0]
 })
 const recoveryLoading = ref(false)
-const reassignToUserId = ref('')
+const { locations, fetchLocations } = useLocations()
+const reassignForm = ref({
+  location_id: null,
+  issuedTo: '',
+  remarks: ''
+})
 const lostDamagedRemarks = ref('')
 const lostDamagedStatus = ref('')
 const lostDamagedReportedBy = ref('')
@@ -1063,7 +1225,8 @@ const fetchActiveUsers = async () => {
     const activeUsersList = users.filter(u => u.status === 'ACTIVE').map(u => ({
       ...u,
       type: 'USER',
-      code: u.user_code
+      code: u.user_code,
+      location: getUserAssignmentLabel(u)
     }))
     
     // Fetch locations with personnel
@@ -1087,11 +1250,87 @@ const fetchActiveUsers = async () => {
   }
 }
 
+const getUserAssignmentLabel = (user) => {
+  if (!user) return 'N/A'
+
+  // Most common fields used across this project for unit/section assignment
+  const directLocation =
+    user.location_name ||
+    user.unit_section ||
+    user.unit_sections ||
+    user.assigned_location ||
+    null
+
+  // location can come as a string or object
+  const locationFromObject =
+    typeof user.location === 'string'
+      ? user.location
+      : user.location?.location || user.location?.name || null
+
+  return directLocation || locationFromObject || 'N/A'
+}
+
 const resignedWithPendingItems = computed(() => {
   return personnel.value.filter(p => 
     p.status === 'RESIGNED' && p.pending_items_count > 0
   )
 })
+
+const activePersonnelOptions = computed(() => {
+  return activeUsers.value.filter(user => user.type === 'PERSONNEL')
+})
+
+const activeUserOptions = computed(() => {
+  return activeUsers.value.filter(user => user.type === 'USER')
+})
+
+const locationsWithPersonnel = computed(() => {
+  return locations.value.filter(loc => loc.personnel && loc.personnel.trim() !== '')
+})
+
+const reassignPreviousAssignee = computed(() => {
+  const person = selectedPersonnel.value || lastClearancePersonnel.value
+  if (!person) return 'N/A'
+  return person.code || person.user_code || person.personnel_code || 'N/A'
+})
+
+const resetReassignForm = () => {
+  reassignForm.value = {
+    location_id: null,
+    issuedTo: '',
+    remarks: ''
+  }
+}
+
+const handleReassignLocationChange = () => {
+  const locationId = reassignForm.value.location_id
+  if (locationId) {
+    reassignForm.value.issuedTo = `PERSONNEL-${locationId}`
+  } else {
+    reassignForm.value.issuedTo = ''
+  }
+}
+
+const handleReassignIssuedToChange = () => {
+  const selectedValue = reassignForm.value.issuedTo
+  if (!selectedValue) {
+    reassignForm.value.location_id = null
+    return
+  }
+  if (selectedValue.startsWith('USER-')) {
+    reassignForm.value.location_id = null
+  } else if (selectedValue.startsWith('PERSONNEL-')) {
+    const locationId = parseInt(selectedValue.replace('PERSONNEL-', ''), 10)
+    reassignForm.value.location_id = Number.isInteger(locationId) ? locationId : null
+  }
+}
+
+const ensureReassignModalData = async () => {
+  await fetchActiveUsers()
+  if (locations.value.length === 0) {
+    await fetchLocations(1, 1000)
+  }
+}
 
 const filteredPersonnel = computed(() => {
   let filtered = personnel.value
@@ -1159,7 +1398,9 @@ const openIssuedItemsModal = async (person) => {
 
 const closeIssuedItemsModal = () => {
   showIssuedItemsModal.value = false
-  selectedPersonnel.value = null
+  if (!showClearanceModal.value) {
+    selectedPersonnel.value = null
+  }
   allIssuedItems.value = []
   issuedItemsStatusFilter.value = 'ALL' // Reset filter when closing
 }
@@ -1175,8 +1416,14 @@ const filteredIssuedItems = computed(() => {
 })
 
 const openClearanceModal = async (person) => {
+  if (!person || !person.id || !person.type) {
+    showMessage('Personnel context was lost. Please reopen clearance.', 'error')
+    return
+  }
+
   // Reset all states first
   selectedPersonnel.value = person
+  lastClearancePersonnel.value = person
   selectedItems.value = [] // Reset selections
   processingItem.value = null // Reset processing state
   processingBulk.value = false // Reset bulk processing state
@@ -1204,6 +1451,7 @@ const openClearanceModal = async (person) => {
 const closeClearanceModal = () => {
   showClearanceModal.value = false
   selectedPersonnel.value = null
+  lastClearancePersonnel.value = null
   pendingItems.value = []
   selectedItems.value = []
 }
@@ -1287,14 +1535,14 @@ const bulkReturnItems = async () => {
   }
 }
 
-const openBulkReassignModal = () => {
+const openBulkReassignModal = async () => {
   if (selectedItems.value.length === 0) {
     showMessage('Please select at least one item', 'error')
     return
   }
   selectedItem.value = { id: 'BULK', mr_ids: selectedItems.value }
-  reassignToUserId.value = ''
-  fetchActiveUsers()
+  resetReassignForm()
+  await ensureReassignModalData()
   showReassignModal.value = true
 }
 
@@ -1422,37 +1670,45 @@ const returnItem = async (item) => {
   }
 }
 
-const openReassignModal = (item) => {
+const openReassignModal = async (item) => {
   selectedItem.value = item
-  reassignToUserId.value = ''
-  fetchActiveUsers()
+  resetReassignForm()
+  await ensureReassignModalData()
   showReassignModal.value = true
 }
 
 const closeReassignModal = () => {
   showReassignModal.value = false
   selectedItem.value = null
-  reassignToUserId.value = ''
+  resetReassignForm()
 }
 
 const confirmReassign = async () => {
+  const currentPersonnel = selectedPersonnel.value || lastClearancePersonnel.value
+  if (!currentPersonnel || !currentPersonnel.id || !currentPersonnel.type) {
+    showMessage('Personnel context was lost. Please reopen clearance.', 'error')
+    return
+  }
+
   // Handle bulk reassign
   if (selectedItem.value && selectedItem.value.id === 'BULK' && selectedItem.value.mr_ids) {
-    if (!reassignToUserId.value) {
-      showMessage('Please select a personnel to reassign to', 'error')
+    if (!reassignForm.value.issuedTo) {
+      showMessage('Please select personnel or user in Issued To', 'error')
       return
     }
 
-    const [type, id] = reassignToUserId.value.split('-')
+    const [type, id] = reassignForm.value.issuedTo.split('-')
+    const remarks = reassignForm.value.remarks.trim()
+      || `Bulk reassigned during clearance for ${currentPersonnel.fullname}`
     processingBulk.value = true
     try {
       const response = await axiosClient.post(
-        `/memorandum-receipts/user/${selectedPersonnel.value.id}/bulk-reassign`,
+        `/memorandum-receipts/user/${currentPersonnel.id}/bulk-reassign`,
         {
           mr_ids: selectedItem.value.mr_ids,
           reassign_to_type: type,
           reassign_to_id: parseInt(id),
-          remarks: `Bulk reassigned during clearance for ${selectedPersonnel.value.fullname}`
+          remarks
         }
       )
       
@@ -1460,7 +1716,7 @@ const confirmReassign = async () => {
         showMessage(response.data.message, 'success')
         selectedItems.value = []
         closeReassignModal()
-        await openClearanceModal(selectedPersonnel.value)
+        await openClearanceModal(currentPersonnel)
         await fetchPersonnel()
       }
     } catch (error) {
@@ -1472,12 +1728,19 @@ const confirmReassign = async () => {
   }
 
   // Handle single item reassign
-  if (!selectedItem.value || !reassignToUserId.value) {
-    showMessage('Please select a personnel to reassign to', 'error')
+  if (!selectedItem.value || !reassignForm.value.issuedTo) {
+    showMessage('Please select personnel or user in Issued To', 'error')
     return
   }
 
-  const [type, id] = reassignToUserId.value.split('-')
+  const [type, id] = reassignForm.value.issuedTo.split('-')
+  const remarks = reassignForm.value.remarks.trim() || null
+  const parsedId = parseInt(id, 10)
+
+  if (!['USER', 'PERSONNEL'].includes(type) || !Number.isInteger(parsedId) || parsedId <= 0) {
+    showMessage('Invalid reassignment target selected. Please reselect personnel.', 'error')
+    return
+  }
   
   // For items without MR records, update item directly
   if (!selectedItem.value.id) {
@@ -1502,7 +1765,7 @@ const confirmReassign = async () => {
       if (response.data) {
         showMessage('Item reassigned successfully', 'success')
         closeReassignModal()
-        await openClearanceModal(selectedPersonnel.value)
+        await openClearanceModal(currentPersonnel)
         await fetchPersonnel()
       }
     } catch (error) {
@@ -1515,36 +1778,47 @@ const confirmReassign = async () => {
   }
   
   // Item has MR record - use MR endpoint
+  if (selectedItem.value.status && selectedItem.value.status !== 'ISSUED') {
+    showMessage(`Item cannot be reassigned because it is already ${selectedItem.value.status}.`, 'error')
+    return
+  }
+
   processingItem.value = selectedItem.value.id
   try {
+    const payload = { remarks }
+    if (type === 'PERSONNEL') {
+      payload.new_location_id = parsedId
+    } else {
+      payload.new_user_id = parsedId
+    }
+
     const response = await axiosClient.post(
       `/memorandum-receipts/${selectedItem.value.id}/reassign`,
-      {
-        reassign_to_type: type,
-        reassign_to_id: parseInt(id),
-        remarks: `Reassigned during clearance`
-      }
+      payload
     )
     
     if (response.data.success) {
       showMessage('Item reassigned successfully', 'success')
       closeReassignModal()
-      await openClearanceModal(selectedPersonnel.value)
+      await openClearanceModal(currentPersonnel)
       await fetchPersonnel()
     }
   } catch (error) {
-    showMessage(error.response?.data?.message || 'Failed to reassign item', 'error')
+    const validationErrors = error.response?.data?.errors
+      ? Object.values(error.response.data.errors).flat().join(' ')
+      : ''
+    showMessage(validationErrors || error.response?.data?.message || 'Failed to reassign item', 'error')
   } finally {
     processingItem.value = null
   }
 }
 
 const confirmReassignOld = async () => {
-  if (!reassignToUserId.value) return
+  if (!reassignForm.value.issuedTo) return
 
   processingItem.value = selectedItem.value.id
   try {
-    const [type, id] = reassignToUserId.value.split('-')
+    const [type, id] = reassignForm.value.issuedTo.split('-')
     const payload = {}
     
     if (type === 'PERSONNEL') {

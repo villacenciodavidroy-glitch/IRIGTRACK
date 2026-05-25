@@ -4,6 +4,14 @@ import { useRouter, useRoute } from 'vue-router'
 import axiosClient from '../axios'
 import { useDebouncedRef } from '../composables/useDebounce'
 import useAuth from '../composables/useAuth'
+import {
+  getLineApprovedQty,
+  getLineDefectiveQty,
+  getLineRequestedQty,
+  isItemRejected,
+  hasDefectiveUnits,
+  getTotalApprovedQuantity
+} from '../composables/useSupplyRequestLineItems'
 
 const { isAdmin, fetchCurrentUser, user: currentUser } = useAuth()
 
@@ -72,6 +80,7 @@ const rejectForm = ref({
 const showRejectItemModal = ref(false)
 const rejectItemTarget = ref(null) // { requestId, item }
 const rejectItemReason = ref('')
+const rejectItemDefectiveQty = ref(1)
 const rejectingItem = ref(false)
 const admins = ref([])
 const supplyAccounts = ref([])
@@ -771,40 +780,20 @@ const isMultiItemApprove = () => {
 const approveModalNonRejectedItems = () => {
   const r = requestToApprove.value
   if (!r?.items?.length) return []
-  return r.items.filter((i) => (i.status || 'pending') !== 'rejected')
+  return r.items.filter((i) => getLineApprovedQty(i) > 0)
 }
 
 const allItemsRejectedInApproveModal = () => {
   return isMultiItemApprove() && approveModalNonRejectedItems().length === 0
 }
 
-// Calculate total quantity excluding rejected items
-const getTotalQuantity = (request) => {
-  if (!request) return 0
-  if (request.items && request.items.length > 0) {
-    return request.items
-      .filter((item) => (item.status || 'pending') !== 'rejected')
-      .reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)
-  }
-  // For single-item requests, check if rejected
-  if (request.items && request.items.length === 1) {
-    const item = request.items[0]
-    if ((item.status || 'pending') === 'rejected') {
-      return 0
-    }
-  }
-  return parseInt(request.quantity) || 0
-}
-
-// Check if an item is rejected
-const isItemRejected = (item) => {
-  return item && (item.status || 'pending') === 'rejected'
-}
+const getTotalQuantity = getTotalApprovedQuantity
 
 const openRejectItemModal = (item) => {
   if (!requestToApprove.value) return
   rejectItemTarget.value = { requestId: requestToApprove.value.id, item }
-  rejectItemReason.value = ''
+  rejectItemReason.value = item.rejection_reason || ''
+  rejectItemDefectiveQty.value = getLineDefectiveQty(item) || 1
   showRejectItemModal.value = true
 }
 
@@ -812,24 +801,42 @@ const closeRejectItemModal = () => {
   showRejectItemModal.value = false
   rejectItemTarget.value = null
   rejectItemReason.value = ''
+  rejectItemDefectiveQty.value = 1
 }
+
+const rejectItemMaxQty = computed(() => {
+  const item = rejectItemTarget.value?.item
+  return item ? getLineRequestedQty(item) : 1
+})
 
 const rejectItem = async () => {
   const t = rejectItemTarget.value
+  const defectiveQty = parseInt(rejectItemDefectiveQty.value, 10) || 0
+  const maxQty = rejectItemMaxQty.value
+
   if (!t?.requestId || !t?.item?.id || !rejectItemReason.value.trim()) {
     showSimpleBanner('Please provide a reason (e.g. Defective)', 'error', true, 4000)
     return
   }
+  if (defectiveQty < 1 || defectiveQty > maxQty) {
+    showSimpleBanner(`Defective quantity must be between 1 and ${maxQty}`, 'error', true, 4000)
+    return
+  }
+
   rejectingItem.value = true
   try {
     const res = await axiosClient.post(`/supply-requests/${t.requestId}/items/${t.item.id}/reject`, {
-      rejection_reason: rejectItemReason.value.trim()
+      rejection_reason: rejectItemReason.value.trim(),
+      defective_quantity: defectiveQty
     })
     if (res.data.success) {
       const idx = requestToApprove.value?.items?.findIndex((i) => i.id === t.item.id)
       if (idx !== undefined && idx >= 0 && requestToApprove.value.items) {
-        requestToApprove.value.items[idx].status = 'rejected'
+        const data = res.data.data || {}
+        requestToApprove.value.items[idx].status = data.status ?? (defectiveQty >= maxQty ? 'rejected' : 'pending')
         requestToApprove.value.items[idx].rejection_reason = rejectItemReason.value.trim()
+        requestToApprove.value.items[idx].defective_quantity = data.defective_quantity ?? defectiveQty
+        requestToApprove.value.items[idx].approved_quantity = data.approved_quantity
       }
       showSimpleBanner(res.data.message || 'Item rejected. Remaining items can still be processed.', 'success', true, 4000)
       closeRejectItemModal()
@@ -853,6 +860,8 @@ const unrejectItem = async (item) => {
       if (idx !== undefined && idx >= 0 && requestToApprove.value.items) {
         requestToApprove.value.items[idx].status = 'pending'
         requestToApprove.value.items[idx].rejection_reason = null
+        requestToApprove.value.items[idx].defective_quantity = 0
+        requestToApprove.value.items[idx].approved_quantity = getLineRequestedQty(requestToApprove.value.items[idx])
       }
       showSimpleBanner(res.data.message || 'Item restored.', 'success', true, 3000)
     } else {
@@ -2330,8 +2339,15 @@ watch(requestsNeedingAction, () => {
                   <span v-if="isItemRejected(item)" class="px-2 py-0.5 text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">
                     Rejected
                   </span>
+                  <span v-else-if="hasDefectiveUnits(item)" class="px-2 py-0.5 text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 rounded">
+                    {{ getLineDefectiveQty(item) }} defective
+                  </span>
                 </div>
-                <div v-if="isItemRejected(item) && item.rejection_reason" class="text-xs text-red-600 dark:text-red-400 mb-2 italic">
+                <div v-if="hasDefectiveUnits(item)" class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                  {{ getLineDefectiveQty(item) }} defective of {{ getLineRequestedQty(item) }} · {{ getLineApprovedQty(item) }} to approve
+                  <span v-if="item.rejection_reason" class="italic"> — {{ item.rejection_reason }}</span>
+                </div>
+                <div v-else-if="isItemRejected(item) && item.rejection_reason" class="text-xs text-red-600 dark:text-red-400 mb-2 italic">
                   Reason: {{ item.rejection_reason }}
                 </div>
                 <div class="flex items-center justify-between">
@@ -2902,23 +2918,27 @@ watch(requestsNeedingAction, () => {
                       <span class="material-icons-outlined text-gray-400 dark:text-gray-500 text-sm">person</span>
                       <span><strong>Requested by:</strong> {{ requestToApprove.requested_by_user?.name || requestToApprove.user?.name || 'N/A' }}</span>
                     </div>
-                    <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">Reject defective items below. Only non-rejected items will be approved.</p>
+                    <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">Mark defective units per item (quantity required). Only non-defective quantity will be approved.</p>
                     <div class="space-y-2 max-h-48 overflow-y-auto">
                       <div
                         v-for="(it, idx) in requestToApprove.items"
                         :key="it.id || idx"
                         class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg border"
-                        :class="(it.status || 'pending') === 'rejected' ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-600'"
+                        :class="isItemRejected(it) ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/20' : hasDefectiveUnits(it) ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/20' : 'border-gray-200 dark:border-gray-600'"
                       >
                         <div class="min-w-0 flex-1">
                           <span class="font-medium">{{ it.item_name || 'N/A' }}</span>
-                          <span class="text-gray-500 dark:text-gray-400 ml-1">× {{ it.quantity }}</span>
-                          <p v-if="(it.status || 'pending') === 'rejected'" class="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                            Rejected: {{ it.rejection_reason || 'Defective' }}
+                          <span class="text-gray-500 dark:text-gray-400 ml-1">× {{ getLineRequestedQty(it) }}</span>
+                          <p v-if="hasDefectiveUnits(it)" class="text-xs text-amber-700 dark:text-amber-300 mt-0.5 font-medium">
+                            {{ getLineDefectiveQty(it) }} defective · {{ getLineApprovedQty(it) }} to approve
+                            <span v-if="it.rejection_reason"> — {{ it.rejection_reason }}</span>
+                          </p>
+                          <p v-else-if="isItemRejected(it)" class="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                            Fully rejected: {{ it.rejection_reason || 'Defective' }}
                           </p>
                         </div>
                         <div class="flex items-center gap-1 flex-shrink-0">
-                          <template v-if="(it.status || 'pending') === 'rejected'">
+                          <template v-if="isItemRejected(it) || hasDefectiveUnits(it)">
                             <button
                               type="button"
                               @click="unrejectItem(it)"
@@ -2927,16 +2947,15 @@ watch(requestsNeedingAction, () => {
                               Undo
                             </button>
                           </template>
-                          <template v-else>
-                            <button
-                              type="button"
-                              @click="openRejectItemModal(it)"
-                              class="px-2 py-1 text-xs font-medium rounded bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1"
-                            >
-                              <span class="material-icons-outlined text-sm">report_problem</span>
-                              Reject (defective)
-                            </button>
-                          </template>
+                          <button
+                            v-if="!isItemRejected(it)"
+                            type="button"
+                            @click="openRejectItemModal(it)"
+                            class="px-2 py-1 text-xs font-medium rounded bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 flex items-center gap-1"
+                          >
+                            <span class="material-icons-outlined text-sm">report_problem</span>
+                            {{ hasDefectiveUnits(it) ? 'Edit defects' : 'Mark defective' }}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2981,9 +3000,22 @@ watch(requestsNeedingAction, () => {
     <Transition name="modal-fade">
       <div v-if="showRejectItemModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRejectItemModal">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-md p-6">
-          <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Reject item (defective)</h4>
+          <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Mark defective units</h4>
           <p v-if="rejectItemTarget?.item" class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            {{ rejectItemTarget.item.item_name }} × {{ rejectItemTarget.item.quantity }}
+            {{ rejectItemTarget.item.item_name }} — requested: {{ rejectItemMaxQty }}
+          </p>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Defective quantity <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model.number="rejectItemDefectiveQty"
+            type="number"
+            min="1"
+            :max="rejectItemMaxQty"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-3"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            {{ Math.max(0, rejectItemMaxQty - (parseInt(rejectItemDefectiveQty, 10) || 0)) }} unit(s) will remain for approval if you accept this request.
           </p>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason <span class="text-red-500">*</span></label>
           <input
@@ -3004,7 +3036,7 @@ watch(requestsNeedingAction, () => {
             <button
               type="button"
               @click="rejectItem"
-              :disabled="rejectingItem || !rejectItemReason.trim()"
+              :disabled="rejectingItem || !rejectItemReason.trim() || !rejectItemDefectiveQty || rejectItemDefectiveQty < 1 || rejectItemDefectiveQty > rejectItemMaxQty"
               class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <span v-if="rejectingItem" class="material-icons-outlined text-lg animate-spin">refresh</span>

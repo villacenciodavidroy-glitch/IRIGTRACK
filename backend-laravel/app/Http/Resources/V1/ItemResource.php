@@ -32,10 +32,37 @@ class ItemResource extends JsonResource
             }
         }
         
-        // Safely get location name
+        // Safely get location name (priority: latest MR assignee location for reassigned items)
         $locationName = null;
-        if ($this->whenLoaded('location') && $this->location) {
+        if ($this->whenLoaded('latestMemorandumReceipt') && $this->latestMemorandumReceipt) {
+            if (
+                $this->latestMemorandumReceipt->issued_to_type === 'PERSONNEL' &&
+                $this->latestMemorandumReceipt->relationLoaded('issuedToLocation') &&
+                $this->latestMemorandumReceipt->issuedToLocation
+            ) {
+                $locationName = $this->latestMemorandumReceipt->issuedToLocation->location ?? null;
+            } elseif (
+                $this->latestMemorandumReceipt->issued_to_type === 'USER' &&
+                $this->latestMemorandumReceipt->relationLoaded('issuedToUser') &&
+                $this->latestMemorandumReceipt->issuedToUser &&
+                $this->latestMemorandumReceipt->issuedToUser->relationLoaded('location') &&
+                $this->latestMemorandumReceipt->issuedToUser->location
+            ) {
+                $locationName = $this->latestMemorandumReceipt->issuedToUser->location->location ?? null;
+            }
+        }
+
+        if (!$locationName && $this->whenLoaded('location') && $this->location) {
             $locationName = $this->location->location;
+        } elseif (
+            !$locationName &&
+            $this->whenLoaded('user') &&
+            $this->user &&
+            $this->user->relationLoaded('location') &&
+            $this->user->location
+        ) {
+            // Fallback for items assigned to users: show the user's unit/section.
+            $locationName = $this->user->location->location ?? null;
         }
         
         // Safely get condition
@@ -54,17 +81,45 @@ class ItemResource extends JsonResource
             $conditionStatus = $this->condition_number->condition_status;
         }
         
-        // Get issued_to: priority is location personnel, fallback to user fullname with user_code
+        // Get issued_to: priority is latest MR assignee (matches unit/section display), then item location/user
         $issuedTo = null;
         $issuedToCode = null;
         $issuedToUserStatus = null;
         $issuedToType = null;
-        
-        if ($this->whenLoaded('location') && $this->location && $this->location->personnel) {
+
+        if ($this->whenLoaded('latestMemorandumReceipt') && $this->latestMemorandumReceipt) {
+            $mr = $this->latestMemorandumReceipt;
+            $activeStatuses = ['ISSUED', 'LOST', 'DAMAGED'];
+
+            if (in_array($mr->status, $activeStatuses, true)) {
+                if ($mr->issued_to_type === 'USER') {
+                    if ($mr->relationLoaded('issuedToUser') && $mr->issuedToUser) {
+                        $issuedTo = $mr->issuedToUser->fullname;
+                        $issuedToCode = $mr->issued_to_code ?? $mr->issuedToUser->user_code;
+                        $issuedToType = 'USER';
+                        $issuedToUserStatus = $mr->issuedToUser->status ?? 'ACTIVE';
+                    }
+                } elseif ($mr->issued_to_type === 'PERSONNEL') {
+                    if ($mr->relationLoaded('issuedToLocation') && $mr->issuedToLocation) {
+                        $issuedTo = $mr->issuedToLocation->personnel;
+                        $issuedToCode = $mr->issued_to_code ?? $mr->issuedToLocation->personnel_code;
+                        $issuedToType = 'PERSONNEL';
+                    }
+                    // Fallback when location has unit/section but personnel name is empty
+                    if (!$issuedTo && $mr->issued_to_code) {
+                        $issuedTo = $mr->issued_to_code;
+                        $issuedToCode = $mr->issued_to_code;
+                        $issuedToType = 'PERSONNEL';
+                    }
+                }
+            }
+        }
+
+        if (!$issuedTo && $this->whenLoaded('location') && $this->location && $this->location->personnel) {
             $issuedTo = $this->location->personnel;
             $issuedToCode = $this->location->personnel_code;
             $issuedToType = 'PERSONNEL';
-        } elseif ($this->whenLoaded('user') && $this->user) {
+        } elseif (!$issuedTo && $this->whenLoaded('user') && $this->user) {
             $issuedTo = $this->user->fullname;
             $issuedToCode = $this->user->user_code;
             $issuedToType = 'USER';
